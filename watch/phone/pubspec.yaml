@@ -50,6 +50,7 @@ dependencies:
   porcupine_flutter: ^3.0.6
   flutter_tts: ^4.2.3
   shared_preferences: ^2.5.3
+  flutter_dotenv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -75,6 +76,7 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
+    - .env
     - assets/models/red-point.ppn
     - assets/models/blue-point.ppn # hey chicky
     - assets/models/picovoice_android.ppn

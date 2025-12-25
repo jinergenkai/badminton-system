@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:porcupine_flutter/porcupine_manager.dart';
 import 'package:porcupine_flutter/porcupine_error.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class VoiceService {
   PorcupineManager? _porcupineManager;
@@ -16,9 +17,9 @@ class VoiceService {
   Stream<bool> get listeningStream => _listeningController.stream;
   bool get isListening => _isListening;
 
-  // TODO: Get your FREE AccessKey from https://console.picovoice.ai/
-  static const String accessKey =
-      '3ZsjB+Lqz9YvUxjiPBL8lktSfYU27+Dy3HXQlzObXf+9PhpXizlbkw==';
+  // Load AccessKey from .env file
+  static String get accessKey =>
+      dotenv.env['PICOVOICE_ACCESS_KEY'] ?? 'YOUR_ACCESS_KEY_HERE';
 
   // Wake word model files - must be mutable list for Porcupine
   static final List<String> keywordPaths = [
@@ -55,7 +56,7 @@ class VoiceService {
       _porcupineManager = await PorcupineManager.fromKeywordPaths(
         accessKey,
         keywordPaths,
-        sensitivities: [0.3, 0.3],
+        sensitivities: [0.1, 0.1],
         (keywordIndex) {
           // keywordIndex tells us which wake word was detected
           print('🎤 [Voice] ✨ WAKE WORD DETECTED! Index: $keywordIndex');

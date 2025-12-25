@@ -25,7 +25,7 @@ class TtsService {
 
       // Cấu hình TTS
       await _flutterTts.setLanguage(_currentLanguage);
-      await _flutterTts.setSpeechRate(0.4); // Chậm để nghe rõ
+      await _flutterTts.setSpeechRate(0.6); // Chậm để nghe rõ
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
 
