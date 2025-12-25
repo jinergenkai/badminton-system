@@ -1,9 +1,11 @@
 import 'package:get/get.dart';
 import '../models/game_state.dart';
 import '../services/voice_service.dart';
+import '../services/tts_service.dart';
 
 class ScoreController extends GetxController {
   final VoiceService _voiceService = VoiceService();
+  final TtsService _ttsService = TtsService();
 
   final Rx<GameState> _gameState = GameState().obs;
   final RxString lastCommand = ''.obs;
@@ -23,6 +25,7 @@ class ScoreController extends GetxController {
   void onInit() {
     super.onInit();
     _initializeVoiceService();
+    _ttsService.initialize();
   }
 
   Future<void> _initializeVoiceService() async {
@@ -54,17 +57,17 @@ class ScoreController extends GetxController {
     if (upperCommand.contains('A') ||
         upperCommand.contains('ONE') ||
         upperCommand == '1') {
-      incrementTeamA();
+      incrementTeamA(fromVoice: true);
     } else if (upperCommand.contains('B') ||
         upperCommand.contains('TWO') ||
         upperCommand == '2') {
-      incrementTeamB();
+      incrementTeamB(fromVoice: true);
     } else if (upperCommand.contains('RESET')) {
       resetGame();
     }
   }
 
-  void incrementTeamA() {
+  void incrementTeamA({bool fromVoice = false}) {
     if (!gameState.isGameActive) return;
 
     _gameState.value = gameState.copyWith(
@@ -72,16 +75,34 @@ class ScoreController extends GetxController {
       history: [...gameState.history, 'Team A scored'],
     );
 
+    // Đọc điểm nếu ghi điểm bằng voice
+    if (fromVoice) {
+      _ttsService.announceScore(
+        gameState.teamAScore,
+        gameState.teamBScore,
+        'A',
+      );
+    }
+
     _checkGameEnd();
   }
 
-  void incrementTeamB() {
+  void incrementTeamB({bool fromVoice = false}) {
     if (!gameState.isGameActive) return;
 
     _gameState.value = gameState.copyWith(
       teamBScore: gameState.teamBScore + 1,
       history: [...gameState.history, 'Team B scored'],
     );
+
+    // Đọc điểm nếu ghi điểm bằng voice
+    if (fromVoice) {
+      _ttsService.announceScore(
+        gameState.teamAScore,
+        gameState.teamBScore,
+        'B',
+      );
+    }
 
     _checkGameEnd();
   }
@@ -107,6 +128,10 @@ class ScoreController extends GetxController {
   void _checkGameEnd() {
     if (gameState.hasWinner) {
       _gameState.value = gameState.copyWith(isGameActive: false);
+
+      // Đọc người thắng
+      _ttsService.announceWinner(gameState.winner);
+
       Get.snackbar(
         'Game Over! 🏸',
         '${gameState.winner} Wins!',
@@ -146,6 +171,7 @@ class ScoreController extends GetxController {
   @override
   void onClose() {
     _voiceService.dispose();
+    _ttsService.dispose();
     super.onClose();
   }
 }
