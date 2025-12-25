@@ -49,6 +49,7 @@ dependencies:
   flutter_animate: ^4.5.0
   porcupine_flutter: ^3.0.6
   flutter_tts: ^4.2.3
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:

@@ -18,7 +18,7 @@ class VoiceService {
 
   // TODO: Get your FREE AccessKey from https://console.picovoice.ai/
   static const String accessKey =
-      '';
+      '3ZsjB+Lqz9YvUxjiPBL8lktSfYU27+Dy3HXQlzObXf+9PhpXizlbkw==';
 
   // Wake word model files - must be mutable list for Porcupine
   static final List<String> keywordPaths = [

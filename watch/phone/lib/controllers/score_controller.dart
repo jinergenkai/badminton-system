@@ -14,6 +14,9 @@ class ScoreController extends GetxController {
   // Expose the observable for Obx to track
   Rx<GameState> get gameStateObservable => _gameState;
 
+  // Expose TTS service for settings
+  TtsService get ttsService => _ttsService;
+
   // Convenience getters for direct access (non-reactive)
   GameState get gameState => _gameState.value;
   int get teamAScore => gameState.teamAScore;
@@ -166,6 +169,20 @@ class ScoreController extends GetxController {
 
   void simulateVoiceCommand(String command) {
     _voiceService.manualCommand(command);
+  }
+
+  Future<void> changeLanguage(String languageCode) async {
+    await _ttsService.setLanguage(languageCode);
+    Get.snackbar(
+      '🌍 Language Changed',
+      'Voice announcements in ${TtsService.supportedLanguages[languageCode]}',
+      snackPosition: SnackPosition.BOTTOM,
+      duration: const Duration(seconds: 2),
+    );
+  }
+
+  void testTts() {
+    _ttsService.testSpeech();
   }
 
   @override

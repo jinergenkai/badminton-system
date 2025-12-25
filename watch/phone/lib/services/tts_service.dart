@@ -1,27 +1,57 @@
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class TtsService {
   final FlutterTts _flutterTts = FlutterTts();
   bool _isInitialized = false;
+  String _currentLanguage = 'en-US'; // Default
+
+  // Ngôn ngữ hỗ trợ
+  static const Map<String, String> supportedLanguages = {
+    'en-US': 'English',
+    'vi-VN': 'Tiếng Việt',
+    'zh-CN': '中文',
+    'ja-JP': '日本語',
+    'ko-KR': '한국어',
+  };
 
   Future<void> initialize() async {
     try {
       print('🔊 [TTS] Initializing Text-to-Speech...');
 
+      // Load saved language
+      final prefs = await SharedPreferences.getInstance();
+      _currentLanguage = prefs.getString('tts_language') ?? 'en-US';
+
       // Cấu hình TTS
-      await _flutterTts.setLanguage("en-US");
-      await _flutterTts.setSpeechRate(
-        0.5,
-      ); // Tốc độ nói (0.5 = chậm, 1.0 = bình thường)
-      await _flutterTts.setVolume(1.0); // Âm lượng (0.0 - 1.0)
-      await _flutterTts.setPitch(1.0); // Cao độ
+      await _flutterTts.setLanguage(_currentLanguage);
+      await _flutterTts.setSpeechRate(0.4); // Chậm để nghe rõ
+      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setPitch(1.0);
 
       _isInitialized = true;
-      print('🔊 [TTS] ✅ Text-to-Speech ready!');
+      print('🔊 [TTS] ✅ Ready! Language: $_currentLanguage');
     } catch (e) {
       print('🔊 [TTS] ❌ Error initializing: $e');
     }
   }
+
+  Future<void> setLanguage(String languageCode) async {
+    try {
+      _currentLanguage = languageCode;
+      await _flutterTts.setLanguage(languageCode);
+
+      // Save preference
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('tts_language', languageCode);
+
+      print('🔊 [TTS] Language changed to: $languageCode');
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error setting language: $e');
+    }
+  }
+
+  String get currentLanguage => _currentLanguage;
 
   Future<void> announceScore(
     int teamAScore,
@@ -33,14 +63,8 @@ class TtsService {
     }
 
     try {
-      // Tạo câu thông báo
-      String announcement;
-
-      if (scoringTeam == 'A') {
-        announcement = "Red scores! $teamAScore to $teamBScore";
-      } else {
-        announcement = "Blue scores! $teamAScore to $teamBScore";
-      }
+      // Chỉ đọc 2 số, chậm rãi
+      String announcement = "$teamAScore, $teamBScore";
 
       print('🔊 [TTS] 📢 Announcing: "$announcement"');
 
@@ -55,11 +79,34 @@ class TtsService {
     if (!_isInitialized) return;
 
     try {
-      String announcement = "$winner wins the game!";
+      // Đọc người thắng theo ngôn ngữ
+      String announcement;
+      if (_currentLanguage.startsWith('vi')) {
+        announcement = winner == 'Team A' ? 'Đội A thắng' : 'Đội B thắng';
+      } else {
+        announcement = "$winner wins";
+      }
+
       print('🔊 [TTS] 🏆 Announcing: "$announcement"');
       await _flutterTts.speak(announcement);
     } catch (e) {
       print('🔊 [TTS] ❌ Error: $e');
+    }
+  }
+
+  Future<void> testSpeech() async {
+    if (!_isInitialized) await initialize();
+
+    if (_currentLanguage.startsWith('vi')) {
+      await _flutterTts.speak("Xin chào");
+    } else if (_currentLanguage.startsWith('zh')) {
+      await _flutterTts.speak("你好");
+    } else if (_currentLanguage.startsWith('ja')) {
+      await _flutterTts.speak("こんにちは");
+    } else if (_currentLanguage.startsWith('ko')) {
+      await _flutterTts.speak("안녕하세요");
+    } else {
+      await _flutterTts.speak("Hello");
     }
   }
 
