@@ -87,7 +87,7 @@ class ScoreScreen extends StatelessWidget {
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
                                 child: TeamCard(
-                                  teamName: 'TEAM A',
+                                  teamName: 'GAU GAU',
                                   score: state.teamAScore,
                                   primaryColor: Colors.blue[600]!,
                                   accentColor: Colors.cyan[400]!,
@@ -135,7 +135,7 @@ class ScoreScreen extends StatelessWidget {
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
                                 child: TeamCard(
-                                  teamName: 'TEAM B',
+                                  teamName: 'MEO MEO',
                                   score: state.teamBScore,
                                   primaryColor: Colors.orange[600]!,
                                   accentColor: Colors.amber[400]!,

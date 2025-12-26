@@ -107,7 +107,7 @@ class ForegroundService {
 
   // Helper to format score text
   static String _getScoreText(int teamAScore, int teamBScore) {
-    return 'G: $teamAScore  |  Meow Meow: $teamBScore';
+    return 'Gau Gau: $teamAScore  |  Meo Meo: $teamBScore';
   }
 }
 

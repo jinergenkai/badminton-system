@@ -67,7 +67,7 @@ class WinDialog extends StatelessWidget {
 
             // Winner Text
             Text(
-              winner == 'Team A' ? 'G WINS!' : 'MEOW MEOW WINS!',
+              winner == 'Team A' ? 'GAU GAU WINS!' : 'MEO MEO WINS!',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.w900,
