@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../models/game_state.dart';
 import '../services/voice_service.dart';
 import '../services/tts_service.dart';
+import '../services/foreground_service.dart';
 import '../widgets/win_dialog.dart';
 
 class ScoreController extends GetxController {
@@ -38,6 +39,20 @@ class ScoreController extends GetxController {
     super.onInit();
     _initializeVoiceService();
     _ttsService.initialize();
+    _initializeForegroundService();
+  }
+
+  Future<void> _initializeForegroundService() async {
+    try {
+      await ForegroundService.initialize();
+      await ForegroundService.start(
+        teamAScore: gameState.teamAScore,
+        teamBScore: gameState.teamBScore,
+      );
+      print('🔔 [Controller] Foreground service started');
+    } catch (e) {
+      print('🔔 [Controller] Error starting foreground service: $e');
+    }
   }
 
   Future<void> _initializeVoiceService() async {
@@ -118,6 +133,12 @@ class ScoreController extends GetxController {
       _startCooldown();
     }
 
+    // Update foreground notification
+    ForegroundService.updateScores(
+      teamAScore: gameState.teamAScore,
+      teamBScore: gameState.teamBScore,
+    );
+
     _checkGameEnd();
   }
 
@@ -139,6 +160,12 @@ class ScoreController extends GetxController {
       // Start cooldown after voice scoring
       _startCooldown();
     }
+
+    // Update foreground notification
+    ForegroundService.updateScores(
+      teamAScore: gameState.teamAScore,
+      teamBScore: gameState.teamBScore,
+    );
 
     _checkGameEnd();
   }
@@ -225,6 +252,9 @@ class ScoreController extends GetxController {
     _cooldownTimer?.cancel();
     isCooldownActive.value = false;
     cooldownProgress.value = 0.0;
+
+    // Update foreground notification
+    ForegroundService.updateScores(teamAScore: 0, teamBScore: 0);
   }
 
   void startNewGame() {
@@ -281,6 +311,7 @@ class ScoreController extends GetxController {
     _cooldownTimer?.cancel();
     _voiceService.dispose();
     _ttsService.dispose();
+    ForegroundService.stop();
     super.onClose();
   }
 }

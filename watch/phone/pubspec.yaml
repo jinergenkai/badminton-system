@@ -51,6 +51,7 @@ dependencies:
   flutter_tts: ^4.2.3
   shared_preferences: ^2.5.3
   flutter_dotenv: ^6.0.0
+  flutter_foreground_task: ^8.11.0
 
 dev_dependencies:
   flutter_test:
