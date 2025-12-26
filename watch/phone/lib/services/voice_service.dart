@@ -23,9 +23,8 @@ class VoiceService {
 
   // Wake word model files - must be mutable list for Porcupine
   static final List<String> keywordPaths = [
-    // 'assets/models/red-point.ppn', // Index 0 = Team A (Red)
-    'assets/models/picovoice_android.ppn', // Index 0 = Team A (Red)
-    'assets/models/blue-point.ppn', // Index 1 = Team B (Blue)
+    'assets/models/red-point.ppn', // Index 0 = Team A (Red)
+    'assets/models/meow-meow_en_android_v4_0_0.ppn',
   ];
 
   Future<bool> requestPermissions() async {
@@ -56,7 +55,7 @@ class VoiceService {
       _porcupineManager = await PorcupineManager.fromKeywordPaths(
         accessKey,
         keywordPaths,
-        sensitivities: [0.1, 0.1],
+        sensitivities: [1, 1],
         (keywordIndex) {
           // keywordIndex tells us which wake word was detected
           print('🎤 [Voice] ✨ WAKE WORD DETECTED! Index: $keywordIndex');

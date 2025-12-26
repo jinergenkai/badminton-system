@@ -75,19 +75,45 @@ class TtsService {
     }
   }
 
-  Future<void> announceWinner(String winner) async {
+  Future<void> announceWinner(
+    String winner,
+    int teamAScore,
+    int teamBScore,
+  ) async {
     if (!_isInitialized) return;
 
     try {
-      // Đọc người thắng theo ngôn ngữ
+      // Đọc người thắng kèm tỉ số theo ngôn ngữ
       String announcement;
       if (_currentLanguage.startsWith('vi')) {
-        announcement = winner == 'Team A' ? 'Đội A thắng' : 'Đội B thắng';
+        announcement = winner == 'Team A'
+            ? 'G thắng $teamAScore $teamBScore'
+            : 'Meow Meow thắng $teamBScore $teamAScore';
       } else {
-        announcement = "$winner wins";
+        announcement = winner == 'Team A'
+            ? "$winner wins $teamAScore $teamBScore"
+            : "$winner wins $teamBScore $teamAScore";
       }
 
       print('🔊 [TTS] 🏆 Announcing: "$announcement"');
+      await _flutterTts.speak(announcement);
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error: $e');
+    }
+  }
+
+  Future<void> announceNewBattle() async {
+    if (!_isInitialized) await initialize();
+
+    try {
+      String announcement;
+      if (_currentLanguage.startsWith('vi')) {
+        announcement = 'Trận mới bắt đầu!';
+      } else {
+        announcement = "New battle begins!";
+      }
+
+      print('🔊 [TTS] 🆕 Announcing: "$announcement"');
       await _flutterTts.speak(announcement);
     } catch (e) {
       print('🔊 [TTS] ❌ Error: $e');

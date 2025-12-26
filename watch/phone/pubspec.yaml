@@ -39,7 +39,7 @@ dependencies:
   get: ^4.6.6
   
   # Voice Recognition
-  picovoice_flutter: ^3.0.3
+  # picovoice_flutter: ^3.0.3
   
   # Permissions
   permission_handler: ^11.3.1
@@ -47,7 +47,7 @@ dependencies:
   # UI Enhancements
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.0
-  porcupine_flutter: ^3.0.6
+  porcupine_flutter: ^4.0.0
   flutter_tts: ^4.2.3
   shared_preferences: ^2.5.3
   flutter_dotenv: ^6.0.0
@@ -78,8 +78,11 @@ flutter:
   assets:
     - .env
     - assets/models/red-point.ppn
-    - assets/models/blue-point.ppn # hey chicky
+    - assets/models/blue-point_en_android_v4_0_0.ppn
     - assets/models/picovoice_android.ppn
+    - assets/models/meow-meow_en_android_v4_0_0.ppn
+    - assets/models/hey-go-go_en_android_v4_0_0.ppn
+
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
