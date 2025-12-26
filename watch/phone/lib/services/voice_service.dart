@@ -23,7 +23,7 @@ class VoiceService {
 
   // Wake word model files - must be mutable list for Porcupine
   static final List<String> keywordPaths = [
-    'assets/models/red-point.ppn', // Index 0 = Team A (Red)
+    'assets/models/hey-go-go_en_android_v4_0_0.ppn',
     'assets/models/meow-meow_en_android_v4_0_0.ppn',
   ];
 

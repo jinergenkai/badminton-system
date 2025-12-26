@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:get/get.dart';
 import '../models/game_state.dart';
 import '../services/voice_service.dart';
@@ -12,6 +13,12 @@ class ScoreController extends GetxController {
   final RxString lastCommand = ''.obs;
   final RxBool isVoiceActive = false.obs;
   final RxBool isGameEnded = false.obs;
+
+  // Cooldown to prevent rapid scoring
+  final RxBool isCooldownActive = false.obs;
+  final RxDouble cooldownProgress = 0.0.obs;
+  final int cooldownDurationMs = 5000;
+  Timer? _cooldownTimer;
 
   // Expose the observable for Obx to track
   Rx<GameState> get gameStateObservable => _gameState;
@@ -72,6 +79,12 @@ class ScoreController extends GetxController {
       }
     }
 
+    // Block scoring during cooldown
+    if (isCooldownActive.value) {
+      print('⏳ [Score] Cooldown active - ignoring command: $command');
+      return;
+    }
+
     // Normal gameplay
     if (upperCommand.contains('A') ||
         upperCommand.contains('ONE') ||
@@ -101,6 +114,8 @@ class ScoreController extends GetxController {
         gameState.teamBScore,
         'A',
       );
+      // Start cooldown after voice scoring
+      _startCooldown();
     }
 
     _checkGameEnd();
@@ -121,6 +136,8 @@ class ScoreController extends GetxController {
         gameState.teamBScore,
         'B',
       );
+      // Start cooldown after voice scoring
+      _startCooldown();
     }
 
     _checkGameEnd();
@@ -173,10 +190,41 @@ class ScoreController extends GetxController {
     );
   }
 
+  void _startCooldown() {
+    _cooldownTimer?.cancel();
+    isCooldownActive.value = true;
+    cooldownProgress.value = 1.0;
+
+    print('⏳ [Score] Starting ${cooldownDurationMs}ms cooldown');
+
+    const updateIntervalMs =
+        50; // Update progress every 50ms for smooth animation
+    final steps = cooldownDurationMs ~/ updateIntervalMs;
+    var currentStep = 0;
+
+    _cooldownTimer = Timer.periodic(
+      const Duration(milliseconds: updateIntervalMs),
+      (timer) {
+        currentStep++;
+        cooldownProgress.value = 1.0 - (currentStep / steps);
+
+        if (currentStep >= steps) {
+          timer.cancel();
+          isCooldownActive.value = false;
+          cooldownProgress.value = 0.0;
+          print('✅ [Score] Cooldown finished');
+        }
+      },
+    );
+  }
+
   void resetGame() {
     _gameState.value = GameState();
     lastCommand.value = '';
     isGameEnded.value = false;
+    _cooldownTimer?.cancel();
+    isCooldownActive.value = false;
+    cooldownProgress.value = 0.0;
   }
 
   void startNewGame() {
@@ -230,6 +278,7 @@ class ScoreController extends GetxController {
 
   @override
   void onClose() {
+    _cooldownTimer?.cancel();
     _voiceService.dispose();
     _ttsService.dispose();
     super.onClose();

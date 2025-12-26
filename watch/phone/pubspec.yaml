@@ -83,7 +83,6 @@ flutter:
     - assets/models/meow-meow_en_android_v4_0_0.ppn
     - assets/models/hey-go-go_en_android_v4_0_0.ppn
 
-
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
 

@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../controllers/score_controller.dart';
 import '../widgets/team_card.dart';
 import '../widgets/voice_indicator.dart';
+import '../widgets/cooldown_bar.dart';
 import '../services/tts_service.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -62,22 +63,24 @@ class ScoreScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-      
+
                 const SizedBox(height: 8),
-      
+
                 // Score Display
                 Expanded(
                   child: Obx(() {
                     // Access the observable to trigger updates
                     final state = controller.gameStateObservable.value;
-      
+
                     return LayoutBuilder(
                       builder: (context, constraints) {
                         final isPortrait =
                             constraints.maxWidth < constraints.maxHeight;
-      
+
                         return Flex(
-                          direction: isPortrait ? Axis.vertical : Axis.horizontal,
+                          direction: isPortrait
+                              ? Axis.vertical
+                              : Axis.horizontal,
                           children: [
                             // Team A Card
                             Expanded(
@@ -94,11 +97,13 @@ class ScoreScreen extends StatelessWidget {
                                 ),
                               ),
                             ),
-      
+
                             // VS Divider
                             if (isPortrait)
                               Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
                                 child: Text(
                                   'VS',
                                   style: TextStyle(
@@ -124,7 +129,7 @@ class ScoreScreen extends StatelessWidget {
                                   ),
                                 ),
                               ),
-      
+
                             // Team B Card
                             Expanded(
                               child: Padding(
@@ -146,7 +151,15 @@ class ScoreScreen extends StatelessWidget {
                     );
                   }),
                 ),
-      
+
+                // Cooldown Progress Bar
+                Obx(
+                  () => CooldownBar(
+                    isActive: controller.isCooldownActive.value,
+                    progress: controller.cooldownProgress.value,
+                  ),
+                ),
+
                 // Voice Indicator
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),

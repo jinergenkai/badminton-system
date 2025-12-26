@@ -47,7 +47,7 @@ class WinDialog extends StatelessWidget {
             // Trophy Icon
             Icon(Icons.emoji_events, size: 80, color: Colors.amber[300])
                 .animate(onPlay: (controller) => controller.repeat())
-                .shimmer(duration: 2000.ms)
+                .shimmer(duration: 5000.ms)
                 .shake(hz: 2, curve: Curves.easeInOut),
 
             const SizedBox(height: 16),

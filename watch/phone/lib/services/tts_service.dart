@@ -87,7 +87,7 @@ class TtsService {
       String announcement;
       if (_currentLanguage.startsWith('vi')) {
         announcement = winner == 'Team A'
-            ? 'G thắng $teamAScore $teamBScore'
+            ? 'Gâu Gâu thắng $teamAScore $teamBScore'
             : 'Meow Meow thắng $teamBScore $teamAScore';
       } else {
         announcement = winner == 'Team A'
