@@ -53,6 +53,28 @@ dependencies:
   flutter_dotenv: ^6.0.0
   flutter_foreground_task: ^8.11.0
 
+  # Database
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  # UI Enhancements - Phase 2
+  glassmorphism: ^3.0.0
+  shimmer: ^3.0.0
+  confetti: ^0.7.0
+  lottie: ^3.0.0
+
+  # Settings UI
+  settings_ui: ^2.0.2
+
+  # Color Picker
+  flex_color_picker: ^3.4.1
+
+  # Utilities
+  uuid: ^4.5.1
+
+  # WearOS Integration
+  wear: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -63,6 +85,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
+
+  # Code generation for Hive
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.8
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

@@ -120,6 +120,17 @@ class TtsService {
     }
   }
 
+  /// Speak any text
+  Future<void> speak(String text) async {
+    if (!_isInitialized) await initialize();
+
+    try {
+      await _flutterTts.speak(text);
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error speaking: $e');
+    }
+  }
+
   Future<void> testSpeech() async {
     if (!_isInitialized) await initialize();
 

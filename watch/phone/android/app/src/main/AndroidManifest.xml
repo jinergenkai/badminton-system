@@ -13,6 +13,11 @@
         android:label="voice_counter"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+
+        <!-- WearOS metadata for phone-watch communication -->
+        <meta-data
+            android:name="com.google.android.wearable.standalone"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

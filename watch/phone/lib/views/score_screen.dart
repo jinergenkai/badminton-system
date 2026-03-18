@@ -6,6 +6,8 @@ import '../widgets/voice_indicator.dart';
 import '../widgets/cooldown_bar.dart';
 import '../services/tts_service.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'history_screen.dart';
+import 'settings_screen.dart';
 
 class ScoreScreen extends StatelessWidget {
   const ScoreScreen({super.key});
@@ -87,7 +89,7 @@ class ScoreScreen extends StatelessWidget {
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
                                 child: TeamCard(
-                                  teamName: 'GAU GAU',
+                                  teamName: state.teamAName,
                                   score: state.teamAScore,
                                   primaryColor: Colors.blue[600]!,
                                   accentColor: Colors.cyan[400]!,
@@ -135,7 +137,7 @@ class ScoreScreen extends StatelessWidget {
                               child: Padding(
                                 padding: const EdgeInsets.all(12),
                                 child: TeamCard(
-                                  teamName: 'MEO MEO',
+                                  teamName: state.teamBName,
                                   score: state.teamBScore,
                                   primaryColor: Colors.orange[600]!,
                                   accentColor: Colors.amber[400]!,
@@ -269,12 +271,48 @@ class ScoreScreen extends StatelessWidget {
             }),
             const SizedBox(height: 12),
             _buildMenuButton(
+              icon: Icons.history,
+              label: 'Match History',
+              color: Colors.purple,
+              onTap: () {
+                Navigator.pop(context);
+                Get.to(() => const HistoryScreen());
+              },
+            ),
+            const SizedBox(height: 12),
+            Obx(() {
+              final state = controller.gameStateObservable.value;
+              return state.canUndo
+                  ? _buildMenuButton(
+                      icon: Icons.undo,
+                      label: 'Undo Last Action',
+                      color: Colors.red,
+                      onTap: () {
+                        controller.undo();
+                        Navigator.pop(context);
+                      },
+                    )
+                  : const SizedBox.shrink();
+            }),
+            if (controller.gameStateObservable.value.canUndo)
+              const SizedBox(height: 12),
+            _buildMenuButton(
               icon: Icons.language,
               label: 'Voice Language',
               color: Colors.green,
               onTap: () {
                 Navigator.pop(context);
                 _showLanguageSettings(context, controller);
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildMenuButton(
+              icon: Icons.settings,
+              label: 'Settings',
+              color: Colors.teal,
+              onTap: () {
+                Navigator.pop(context);
+                Get.to(() => const SettingsScreen());
               },
             ),
             const SizedBox(height: 24),

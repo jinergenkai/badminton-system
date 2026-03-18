@@ -1,10 +1,15 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:confetti/confetti.dart';
 
-class WinDialog extends StatelessWidget {
+class WinDialog extends StatefulWidget {
   final String winner;
   final int teamAScore;
   final int teamBScore;
+  final String teamAName;
+  final String teamBName;
   final VoidCallback onNewGame;
 
   const WinDialog({
@@ -12,19 +17,70 @@ class WinDialog extends StatelessWidget {
     required this.winner,
     required this.teamAScore,
     required this.teamBScore,
+    required this.teamAName,
+    required this.teamBName,
     required this.onNewGame,
   });
 
   @override
+  State<WinDialog> createState() => _WinDialogState();
+}
+
+class _WinDialogState extends State<WinDialog> {
+  late ConfettiController _confettiController;
+
+  @override
+  void initState() {
+    super.initState();
+    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+    // Trigger confetti and haptic feedback
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _confettiController.play();
+      HapticFeedback.heavyImpact();
+    });
+  }
+
+  @override
+  void dispose() {
+    _confettiController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final isTeamA = winner == 'Team A';
-    final winnerScore = isTeamA ? teamAScore : teamBScore;
-    final loserScore = isTeamA ? teamBScore : teamAScore;
+    final isTeamA = widget.winner == 'Team A';
+    final winnerScore = isTeamA ? widget.teamAScore : widget.teamBScore;
+    final loserScore = isTeamA ? widget.teamBScore : widget.teamAScore;
     final winnerColor = isTeamA ? Colors.blue : Colors.orange;
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      child: Container(
+    return Stack(
+      children: [
+        // Confetti Layer
+        Align(
+          alignment: Alignment.topCenter,
+          child: ConfettiWidget(
+            confettiController: _confettiController,
+            blastDirectionality: BlastDirectionality.explosive,
+            shouldLoop: false,
+            colors: const [
+              Colors.green,
+              Colors.blue,
+              Colors.pink,
+              Colors.orange,
+              Colors.purple,
+              Colors.yellow,
+            ],
+            createParticlePath: _drawStar,
+            numberOfParticles: 30,
+            gravity: 0.3,
+            emissionFrequency: 0.05,
+          ),
+        ),
+
+        // Dialog
+        Dialog(
+          backgroundColor: Colors.transparent,
+          child: Container(
         padding: const EdgeInsets.all(28),
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -67,7 +123,9 @@ class WinDialog extends StatelessWidget {
 
             // Winner Text
             Text(
-              winner == 'Team A' ? 'GAU GAU WINS!' : 'MEO MEO WINS!',
+              widget.winner == 'Team A'
+                  ? '${widget.teamAName} WINS!'
+                  : '${widget.teamBName} WINS!',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.w900,
@@ -172,7 +230,10 @@ class WinDialog extends StatelessWidget {
 
             // Manual Button
             ElevatedButton(
-              onPressed: onNewGame,
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                widget.onNewGame();
+              },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.white,
                 foregroundColor: winnerColor[900],
@@ -196,6 +257,31 @@ class WinDialog extends StatelessWidget {
           ],
         ),
       ),
+        ),
+      ],
     );
+  }
+
+  Path _drawStar(Size size) {
+    double degToRad(double deg) => deg * (pi / 180.0);
+
+    const numberOfPoints = 5;
+    final halfWidth = size.width / 2;
+    final externalRadius = halfWidth;
+    final internalRadius = halfWidth / 2.5;
+    final degreesPerStep = degToRad(360 / numberOfPoints);
+    final halfDegreesPerStep = degreesPerStep / 2;
+    final path = Path();
+    final fullAngle = degToRad(360);
+    path.moveTo(size.width, halfWidth);
+
+    for (double step = 0; step < fullAngle; step += degreesPerStep) {
+      path.lineTo(halfWidth + externalRadius * cos(step),
+          halfWidth + externalRadius * sin(step));
+      path.lineTo(halfWidth + internalRadius * cos(step + halfDegreesPerStep),
+          halfWidth + internalRadius * sin(step + halfDegreesPerStep));
+    }
+    path.close();
+    return path;
   }
 }
