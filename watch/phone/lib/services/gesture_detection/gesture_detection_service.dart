@@ -37,6 +37,15 @@ class GestureDetectionService {
   bool _debugMode = false;
   bool _processingFrame = false;
 
+  // Throttle: only process one frame every 100 ms (~10 fps max).
+  // Keeps the main isolate free for UI rendering between detections.
+  static const int _frameIntervalMs = 100;
+  int _lastProcessMs = 0;
+
+  // UI update throttle: only push to stream when something visible changed.
+  HandGesture _lastEmittedGesture = HandGesture.none;
+  double _lastEmittedHold = 0.0;
+
   final _frameDataController =
       StreamController<GestureFrameData>.broadcast();
   final _gestureEventController =
@@ -56,22 +65,17 @@ class GestureDetectionService {
   }) async {
     if (_isRunning) return;
 
-    // Request camera permission
     final status = await Permission.camera.request();
-    if (!status.isGranted) {
-      throw Exception('Camera permission denied');
-    }
+    if (!status.isGranted) throw Exception('Camera permission denied');
 
     _debugMode = debugMode;
 
-    // Initialize hand landmarker
     _handLandmarker = HandLandmarkerPlugin.create(
       numHands: 1,
-      minHandDetectionConfidence: 0.7,
+      minHandDetectionConfidence: 0.6,
       delegate: HandLandmarkerDelegate.GPU,
     );
 
-    // Select camera
     final cameras = await availableCameras();
     if (cameras.isEmpty) throw Exception('No cameras available');
 
@@ -87,7 +91,7 @@ class GestureDetectionService {
 
     _controller = CameraController(
       selected,
-      ResolutionPreset.medium,
+      ResolutionPreset.low, // 320×240 — enough for hand detection, much faster JNI
       enableAudio: false,
       imageFormatGroup: ImageFormatGroup.yuv420,
     );
@@ -95,10 +99,16 @@ class GestureDetectionService {
 
     _isRunning = true;
     _fps.current = 0;
+    _lastProcessMs = 0;
 
-    // Start image stream — skip frames when still processing the previous one
     await _controller!.startImageStream((CameraImage image) {
       if (!_isRunning || _processingFrame) return;
+
+      // Time-based throttle — skip frames to stay ≤ 10 fps
+      final nowMs = DateTime.now().millisecondsSinceEpoch;
+      if (nowMs - _lastProcessMs < _frameIntervalMs) return;
+      _lastProcessMs = nowMs;
+
       _processingFrame = true;
       _processFrame(image);
     });
@@ -115,26 +125,28 @@ class GestureDetectionService {
       Map<String, bool> fingerStates = {};
 
       if (primary != null) {
-        // Normalize landmark coordinates to canonical portrait space before
-        // classification. Raw landmarks from detect() are in the ORIGINAL
-        // UNROTATED sensor coordinate space (landscape for sensorOrientation=90),
-        // so the x/y axes do NOT map to portrait up/down directly.
-        // We remap so that "up in portrait" always = small canonical y,
-        // enabling the y-based finger-extension checks to work correctly.
         final canonical = _toCanonical(primary.landmarks, _sensorOrientation);
         gesture = _classifier.classify(canonical);
         fingerStates = _classifier.getFingerStates(canonical);
       }
 
       final event = _smoother.update(gesture);
+      final holdProgress = _smoother.holdProgress;
 
-      // Always emit frame data — status indicator uses it in both modes
-      if (!_frameDataController.isClosed) {
+      // Only push UI update when gesture or hold progress changed meaningfully.
+      // Avoids rebuilding widgets on every frame when nothing visible changed.
+      final gestureChanged = gesture != _lastEmittedGesture;
+      final holdChanged = (holdProgress - _lastEmittedHold).abs() > 0.02;
+
+      if ((gestureChanged || holdChanged || event != null) &&
+          !_frameDataController.isClosed) {
+        _lastEmittedGesture = gesture;
+        _lastEmittedHold = holdProgress;
         _frameDataController.add(GestureFrameData(
           hands: hands,
           classifiedGesture: gesture,
           stability: _smoother.stability,
-          holdProgress: _smoother.holdProgress,
+          holdProgress: holdProgress,
           fps: _fps.current,
           fingerStates: fingerStates,
         ));
@@ -150,27 +162,13 @@ class GestureDetectionService {
     }
   }
 
-  /// Remap landmarks from the raw sensor coordinate space to canonical
-  /// portrait space where "up on screen" always corresponds to small y.
+  /// Remap from raw sensor space to canonical portrait space (up = small y).
   ///
-  /// The canvas painter rotates by [sensorOrientation]° to display correctly.
-  /// Each rotation below is the inverse coordinate transform for that rotation:
-  ///
-  ///  0°  → identity          (portrait: -y is up in original landscape y)
-  ///  90° → (x,y) → (y, 1-x) (portrait: +x is up in original landscape)
-  /// 180° → (x,y) → (1-x, 1-y)
-  /// 270° → (x,y) → (1-y, x)
+  ///   0°:  canonical_y = lm.y        (identity)
+  ///  90°:  canonical_y = lm.x        (canvas -x → screen up)
+  /// 180°:  canonical_y = 1 - lm.y
+  /// 270°:  canonical_y = 1 - lm.x   (canvas +x → screen up)
   List<Landmark> _toCanonical(List<Landmark> lms, int sensorOrientation) {
-    // Each case maps raw sensor coords to canonical portrait space
-    // where canonical_y = 0 is screen top, 1 is screen bottom.
-    //
-    // Derivation: canvas.rotate(θ°) maps canvas +x → screen direction.
-    // "screen UP" tells us which raw coordinate equals small canonical_y.
-    //
-    //   0°:  canvas -y → up  →  canonical_y = lm.y        (identity)
-    //  90°:  canvas -x → up  →  canonical_y = lm.x        (swap x↔y)
-    // 180°:  canvas +y → up  →  canonical_y = 1 - lm.y
-    // 270°:  canvas +x → up  →  canonical_y = 1 - lm.x
     switch (sensorOrientation) {
       case 90:
         return lms.map((l) => Landmark(l.y, l.x, l.z)).toList();
@@ -178,7 +176,7 @@ class GestureDetectionService {
         return lms.map((l) => Landmark(1.0 - l.x, 1.0 - l.y, l.z)).toList();
       case 270:
         return lms.map((l) => Landmark(l.y, 1.0 - l.x, l.z)).toList();
-      default: // 0°
+      default:
         return lms;
     }
   }
@@ -211,11 +209,11 @@ class GestureDetectionService {
     _handLandmarker?.dispose();
     _handLandmarker = null;
     _smoother.resetCooldown();
+    _lastEmittedGesture = HandGesture.none;
+    _lastEmittedHold = 0.0;
   }
 
-  void setDebugMode(bool debug) {
-    _debugMode = debug;
-  }
+  void setDebugMode(bool debug) => _debugMode = debug;
 
   Future<void> switchCamera(CameraLensDirection direction) async {
     await stop();

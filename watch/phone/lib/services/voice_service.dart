@@ -57,7 +57,7 @@ class VoiceService {
       _porcupineManager = await PorcupineManager.fromKeywordPaths(
         accessKey,
         keywordPaths,
-        sensitivities: [0.8, 0.8],
+        sensitivities: [1, 1],
         (keywordIndex) {
           // keywordIndex tells us which wake word was detected
           print('🎤 [Voice] ✨ WAKE WORD DETECTED! Index: $keywordIndex');

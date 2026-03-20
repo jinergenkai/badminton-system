@@ -3,11 +3,11 @@ import 'models/hand_gesture.dart';
 import 'models/gesture_event.dart';
 
 class GestureSmoother {
-  static const int windowSize = 10;
-  static const double stabilityThreshold = 0.7;
-  static const Duration holdDuration = Duration(seconds: 2);
-  static const Duration holdDurationUndo = Duration(milliseconds: 2500);
-  static const Duration cooldownAfterTrigger = Duration(seconds: 3);
+  static const int windowSize = 6;           // was 10 — faster consensus
+  static const double stabilityThreshold = 0.65; // was 0.7 — slightly looser
+  static const Duration holdDuration = Duration(milliseconds: 800);  // was 2000ms
+  static const Duration holdDurationUndo = Duration(milliseconds: 1200); // was 2500ms
+  static const Duration cooldownAfterTrigger = Duration(milliseconds: 1500); // was 3000ms
 
   final Queue<HandGesture> _window = Queue();
   HandGesture? _currentStableGesture;
@@ -21,7 +21,6 @@ class GestureSmoother {
 
     final dominant = _getDominantGesture();
 
-    // Cooldown check — suppress input after a trigger
     if (_lastTriggerTime != null &&
         DateTime.now().difference(_lastTriggerTime!) < cooldownAfterTrigger) {
       return null;
@@ -29,11 +28,11 @@ class GestureSmoother {
 
     if (dominant != null && dominant != HandGesture.none) {
       if (dominant == _currentStableGesture) {
-        final requiredHold = (dominant == HandGesture.openPalm)
+        final required = (dominant == HandGesture.openPalm)
             ? holdDurationUndo
             : holdDuration;
         if (_holdStartTime != null &&
-            DateTime.now().difference(_holdStartTime!) >= requiredHold) {
+            DateTime.now().difference(_holdStartTime!) >= required) {
           _lastTriggerTime = DateTime.now();
           final event = GestureEvent(
             gesture: dominant,
@@ -44,7 +43,6 @@ class GestureSmoother {
           return event;
         }
       } else {
-        // New stable gesture — start hold timer
         _currentStableGesture = dominant;
         _holdStartTime = DateTime.now();
       }
@@ -55,18 +53,15 @@ class GestureSmoother {
     return null;
   }
 
-  /// Progress 0.0–1.0 of current hold timer (for UI ring indicator)
   double get holdProgress {
     if (_currentStableGesture == null || _holdStartTime == null) return 0.0;
-    final requiredHold = (_currentStableGesture == HandGesture.openPalm)
+    final required = (_currentStableGesture == HandGesture.openPalm)
         ? holdDurationUndo
         : holdDuration;
     final elapsed = DateTime.now().difference(_holdStartTime!);
-    return (elapsed.inMilliseconds / requiredHold.inMilliseconds)
-        .clamp(0.0, 1.0);
+    return (elapsed.inMilliseconds / required.inMilliseconds).clamp(0.0, 1.0);
   }
 
-  /// Fraction of frames in window matching dominant gesture
   double get stability {
     if (_window.isEmpty) return 0.0;
     final dominant = _getDominantGesture();
