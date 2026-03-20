@@ -298,8 +298,11 @@ class ScoreController extends GetxController {
 
     _gameState.value = previousState.copyWith(stateStack: stack);
 
-    // Announce undo
-    _ttsService.speak('Undo');
+    // Announce undo with restored score
+    _ttsService.announceUndo(
+      previousState.teamAScore,
+      previousState.teamBScore,
+    );
 
     print('↩️ [Undo] Restored to: ${previousState.teamAScore}-${previousState.teamBScore}');
   }

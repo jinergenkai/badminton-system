@@ -63,12 +63,21 @@ class TtsService {
     }
 
     try {
-      // Chỉ đọc 2 số, chậm rãi
-      String announcement = "$teamAScore, $teamBScore";
+      String announcement;
+      if (teamAScore == teamBScore) {
+        // Same score — say "X all"
+        if (_currentLanguage.startsWith('vi')) {
+          announcement = "$teamAScore đều";
+        } else {
+          announcement = "$teamAScore all";
+        }
+      } else {
+        // Leading team's score first
+        announcement = "$teamAScore, $teamBScore";
+      }
 
       print('🔊 [TTS] 📢 Announcing: "$announcement"');
 
-      // Đọc điểm
       await _flutterTts.speak(announcement);
     } catch (e) {
       print('🔊 [TTS] ❌ Error speaking: $e');
@@ -117,6 +126,28 @@ class TtsService {
       await _flutterTts.speak(announcement);
     } catch (e) {
       print('🔊 [TTS] ❌ Error: $e');
+    }
+  }
+
+  Future<void> announceUndo(int teamAScore, int teamBScore) async {
+    if (!_isInitialized) await initialize();
+
+    try {
+      String announcement;
+      if (teamAScore == teamBScore) {
+        announcement = _currentLanguage.startsWith('vi')
+            ? "Hoàn tác, $teamAScore đều"
+            : "Undo, $teamAScore all";
+      } else {
+        announcement = _currentLanguage.startsWith('vi')
+            ? "Hoàn tác, $teamAScore $teamBScore"
+            : "Undo, $teamAScore $teamBScore";
+      }
+
+      print('🔊 [TTS] ↩️ Announcing: "$announcement"');
+      await _flutterTts.speak(announcement);
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error speaking: $e');
     }
   }
 
