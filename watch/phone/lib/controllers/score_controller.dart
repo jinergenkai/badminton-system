@@ -9,6 +9,9 @@ import '../services/tts_service.dart';
 import '../services/foreground_service.dart';
 import '../services/database_service.dart';
 import '../services/watch_connectivity_service.dart';
+import '../services/gesture_detection/gesture_detection_service.dart';
+import '../services/gesture_detection/models/gesture_event.dart';
+import '../services/gesture_detection/models/hand_gesture.dart';
 import '../widgets/win_dialog.dart';
 
 class ScoreController extends GetxController {
@@ -16,6 +19,14 @@ class ScoreController extends GetxController {
   final TtsService _ttsService = TtsService();
   final WatchConnectivityService _watchService = WatchConnectivityService();
   final Uuid _uuid = const Uuid();
+
+  // Gesture detection
+  final GestureDetectionService _gestureService = GestureDetectionService();
+  StreamSubscription<GestureEvent>? _gestureSub;
+  final RxBool isGestureActive = false.obs;
+  final RxBool isGestureDebugMode = false.obs;
+
+  GestureDetectionService get gestureService => _gestureService;
 
   final Rx<GameState> _gameState = GameState().obs;
   final RxString lastCommand = ''.obs;
@@ -25,7 +36,7 @@ class ScoreController extends GetxController {
   // Cooldown to prevent rapid scoring
   final RxBool isCooldownActive = false.obs;
   final RxDouble cooldownProgress = 0.0.obs;
-  final int cooldownDurationMs = 5000;
+  final int cooldownDurationMs = 1000;
   Timer? _cooldownTimer;
 
   // Team configuration
@@ -461,9 +472,61 @@ class ScoreController extends GetxController {
     _ttsService.testSpeech();
   }
 
+  /// Toggle gesture detection on/off.
+  Future<void> toggleGestureDetection() async {
+    if (isGestureActive.value) {
+      await _gestureService.stop();
+      await _gestureSub?.cancel();
+      _gestureSub = null;
+      isGestureActive.value = false;
+    } else {
+      try {
+        await _gestureService.start(
+          debugMode: isGestureDebugMode.value,
+        );
+        _gestureSub =
+            _gestureService.gestureEvents.listen(_handleGestureEvent);
+        isGestureActive.value = true;
+      } catch (e) {
+        print('🖐 [Controller] Gesture start error: $e');
+        Get.snackbar(
+          'Camera Error',
+          e.toString(),
+          snackPosition: SnackPosition.BOTTOM,
+        );
+      }
+    }
+  }
+
+  /// Toggle debug overlay (long-press on camera button).
+  void toggleGestureDebugMode() {
+    isGestureDebugMode.value = !isGestureDebugMode.value;
+    _gestureService.setDebugMode(isGestureDebugMode.value);
+  }
+
+  void _handleGestureEvent(GestureEvent event) {
+    if (!gameState.isGameActive || isCooldownActive.value) return;
+
+    switch (event.gesture) {
+      case HandGesture.thumbsUp:
+        incrementTeamA(fromVoice: true);
+        break;
+      case HandGesture.thumbsDown:
+        incrementTeamB(fromVoice: true);
+        break;
+      case HandGesture.openPalm:
+        undo();
+        break;
+      case HandGesture.none:
+        break;
+    }
+  }
+
   @override
   void onClose() {
     _cooldownTimer?.cancel();
+    _gestureSub?.cancel();
+    _gestureService.dispose();
     _voiceService.dispose();
     _ttsService.dispose();
     _watchService.dispose();

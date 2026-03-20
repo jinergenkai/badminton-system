@@ -4,7 +4,9 @@ import '../controllers/score_controller.dart';
 import '../widgets/team_card.dart';
 import '../widgets/voice_indicator.dart';
 import '../widgets/cooldown_bar.dart';
+import '../widgets/gesture_indicator.dart';
 import '../services/tts_service.dart';
+import '../services/gesture_detection/gesture_camera_widget.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
@@ -18,7 +20,9 @@ class ScoreScreen extends StatelessWidget {
 
     return SafeArea(
       child: Scaffold(
-        body: Container(
+        body: Stack(
+          children: [
+            Container(
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
@@ -164,7 +168,7 @@ class ScoreScreen extends StatelessWidget {
 
                 // Voice Indicator
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                   child: Obx(
                     () => VoiceIndicator(
                       isListening: controller.isVoiceActive.value,
@@ -179,9 +183,36 @@ class ScoreScreen extends StatelessWidget {
                     ),
                   ),
                 ),
+
+                // Gesture Indicator
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                  child: Obx(
+                    () => GestureIndicator(
+                      isActive: controller.isGestureActive.value,
+                      isDebugMode: controller.isGestureDebugMode.value,
+                      service: controller.gestureService,
+                      onToggle: controller.toggleGestureDetection,
+                      onLongPress: controller.toggleGestureDebugMode,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
+        ),
+
+            // Debug overlay — draggable camera preview (only when debug mode is on)
+            Obx(() {
+              if (controller.isGestureActive.value &&
+                  controller.isGestureDebugMode.value) {
+                return GestureCameraWidget(
+                  service: controller.gestureService,
+                );
+              }
+              return const SizedBox.shrink();
+            }),
+          ],
         ),
         floatingActionButton: Column(
           mainAxisSize: MainAxisSize.min,

@@ -5,7 +5,9 @@
       "Bash(ls -la \"D:\\\\project\\\\personal\\\\voice_counter\\\\assets\\\\models\"\" 2>/dev/null || echo \"No models found \")",
       "Bash(flutter pub get:*)",
       "Bash(flutter pub run build_runner build:*)",
-      "Bash(flutter analyze:*)"
+      "Bash(flutter analyze:*)",
+      "WebSearch",
+      "WebFetch(domain:raw.githubusercontent.com)"
     ]
   }
 }

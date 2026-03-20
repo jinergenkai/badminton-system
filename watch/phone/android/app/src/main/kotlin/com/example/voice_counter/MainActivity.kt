@@ -8,6 +8,7 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.EventChannel
 import com.google.android.gms.wearable.*
 import kotlinx.coroutines.*
+import kotlinx.coroutines.tasks.await
 import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
