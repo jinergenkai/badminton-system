@@ -247,14 +247,49 @@ After `canvas.rotate(θ)` in Flutter (CW rotation), the direction that maps to s
 17-20: PINKY  (MCP → PIP → DIP → TIP)
 ```
 
-### 6.2 Finger extension (non-thumb)
+### 6.2 Finger extension (non-thumb) — Dot Product method
+
+**Problem with Y-axis approach:** The original `TIP.y < PIP.y` only works when the hand points upward. A sideways or downward-facing palm fails entirely.
+
+**Solution:** Check whether each finger is **straight** using the **dot product** between consecutive bone vectors. This is **direction-agnostic** — works regardless of hand orientation.
+
+Each finger has 3 bone segments:
+
+```
+MCP ──v1──→ PIP ──v2──→ DIP ──v3──→ TIP
+```
 
 ```dart
-// In canonical space: y=0 is screen-top
-// Extended (pointing up) → TIP.y < PIP.y
-bool _isFingerExtended(landmarks, tipIdx, pipIdx) =>
-    landmarks[tipIdx].y < landmarks[pipIdx].y;
+bool _isFingerExtended(landmarks, tipIdx, pipIdx) {
+  final mcpIdx = _mcpIndices[tipIdx]!;
+  final dipIdx = _dipIndices[tipIdx]!;
+
+  // Vector MCP → PIP (first bone)
+  v1 = PIP - MCP
+  // Vector PIP → DIP (second bone)
+  v2 = DIP - PIP
+  // Vector DIP → TIP (third bone)
+  v3 = TIP - DIP
+
+  // Noise guard: if any segment is too short, treat as folded
+  if (|v1|² < 0.001 || |v2|² < 0.001 || |v3|² < 0.001) return false;
+
+  // Both joints must continue in the same direction (not bend back)
+  return dot(v1, v2) > 0 && dot(v2, v3) > 0;
+}
 ```
+
+**How it works:**
+
+| Joint state | dot product | Meaning |
+|---|---|---|
+| Straight (< 90° bend) | `> 0` | Vectors point in same direction → extended |
+| Right angle (90° bend) | `= 0` | Vectors perpendicular → borderline |
+| Bent back (> 90° bend) | `< 0` | Vectors point in opposite directions → folded |
+
+**Both** PIP and DIP joints must pass (`dot > 0`) for the finger to count as extended. A fist will have strongly negative dot products at both joints → clearly folded.
+
+**Noise guard:** When two landmarks nearly overlap (segment length² < 0.001), the vector direction is dominated by tracking noise. Rather than flipping randomly between extended/folded, we default to **folded**. This prevents flickering in edge cases.
 
 Called with: `(8,6)` index, `(12,10)` middle, `(16,14)` ring, `(20,18)` pinky.
 
@@ -270,33 +305,39 @@ bool _isThumbExtended(landmarks) {
 }
 ```
 
-`1.2×` threshold gives a safety margin against near-neutral thumb positions.
+The thumb moves in/out rather than curling like other fingers, so distance ratio is more reliable than dot product for this specific digit. `1.2×` threshold gives a safety margin against near-neutral thumb positions.
 
 ### 6.4 Thumb direction
 
 ```dart
 // In canonical space: small y = UP
-if (landmarks[4].y < landmarks[2].y - 0.04) → ThumbDirection.up
-if (landmarks[4].y > landmarks[2].y + 0.04) → ThumbDirection.down
+if (landmarks[4].y < landmarks[2].y - 0.02) → ThumbDirection.up
+if (landmarks[4].y > landmarks[2].y + 0.02) → ThumbDirection.down
 else                                         → ThumbDirection.neutral
 ```
 
-`0.04` (normalized) is the dead-band threshold. It filters out the thumb being only slightly above/below MCP.
+`0.02` (normalized) is the dead-band threshold — relaxed from the original `0.04` so users don't need to hold an extreme position to register up/down. The smoother's 6-frame window filters any jitter this might introduce.
 
 ### 6.5 Decision tree
 
 ```
-thumbExtended?
-├── NO  → HandGesture.none
-└── YES
-    ├── allFingersFolded (index+middle+ring+pinky)?
+4 fingers (index+middle+ring+pinky) all extended?
+├── YES → HandGesture.openPalm  (thumb state doesn't matter)
+└── NO
+    ├── thumbExtended AND all 4 fingers folded?
     │   ├── thumbDirection == up   → HandGesture.thumbsUp
     │   ├── thumbDirection == down → HandGesture.thumbsDown
     │   └── neutral                → HandGesture.none
-    └── allFingersExtended?
-        ├── YES → HandGesture.openPalm
-        └── NO  → HandGesture.none
+    └── else → HandGesture.none
 ```
+
+**Key design decisions:**
+
+- **Open Palm ignores thumb:** When palm is open, the thumb may appear extended or folded depending on camera angle. Requiring thumb would cause false negatives. Checking only 4 fingers makes detection robust.
+- **Thumbs Up/Down requires all 4 fingers folded:** This prevents confusion with open palm. A fist + extended thumb is a very distinct pose.
+- **Open Palm is checked first:** Prevents a thumb-extended open palm from accidentally matching the thumbs up/down path.
+
+> **Note:** The actual code checks thumbs up/down first, then open palm. This is safe because thumbs up/down requires `allFingersFolded`, which is mutually exclusive with `allFingersExtended`. The order doesn't affect results.
 
 ---
 
@@ -455,7 +496,19 @@ void _handleGestureEvent(GestureEvent event) {
 
 **The key mistake to avoid:** Using raw landmark coordinates for classification without accounting for `sensorOrientation`. This will always fail on standard Android back cameras (90°).
 
-### Issue 3 — UI lag / frame drop
+### Issue 3 — Finger extension detection unreliable with Y-axis method
+
+**Cause:** Original `TIP.y < PIP.y` approach only works when fingers point upward. For sideways or downward hand orientations, the Y comparison produces wrong results. Additionally, distance-based approach (`dist(TIP→MCP) > dist(PIP→MCP)`) was too loose — PIP is always close to MCP, so even folded fingers could pass.
+
+**Solution:** Replaced with **dot product** of consecutive bone vectors (`MCP→PIP`, `PIP→DIP`, `DIP→TIP`). Both joints must have `dot > 0` (angle < 90°) to count as extended. Added noise guard: if any bone segment is too short (length² < 0.001), defaults to folded to prevent flickering.
+
+### Issue 4 — Open palm confused with thumbs up/down
+
+**Cause:** All three gestures required `thumbExtended = true`. When thumb detection was borderline, open palm could flip to thumbs up/down or vice versa.
+
+**Solution:** Open palm now only requires 4 fingers extended — **thumb state is ignored**. Thumbs up/down requires all 4 fingers **folded**, making the two gesture groups mutually exclusive.
+
+### Issue 5 — UI lag / frame drop
 
 **Cause:** `detect()` is a synchronous JNI call running on the main Dart isolate. At `ResolutionPreset.medium` (~720×480), each call took ~150 ms, consuming all frame budget.
 
@@ -499,13 +552,15 @@ static const int _frameIntervalMs = 100;  // min ms between processed frames
 
 Lower this (e.g. 66 ms = ~15 fps) if your device handles it without jank. Higher (e.g. 150 ms = ~7 fps) if still lagging.
 
-**Classifier threshold in `gesture_classifier.dart`:**
+**Classifier constants in `gesture_classifier.dart`:**
 
 ```dart
-static const double _thumbDirectionThreshold = 0.04;
+static const double _thumbDirectionThreshold = 0.02;  // dead-band for up/down
+const minLen2 = 0.001;  // noise guard for finger dot-product (squared min length)
 ```
 
-Raise if thumbs-up/down is being confused when the thumb is only slightly tilted. Lower if the user needs to hold an extreme position to register direction.
+- `_thumbDirectionThreshold`: Raise (e.g. 0.04) if thumbs-up/down triggers from a slightly tilted thumb. Lower (e.g. 0.01) if users struggle to register direction.
+- `minLen2`: Raise (e.g. 0.005) if finger detection flickers on low-quality cameras. Lower only if short fingers are not being detected at distance.
 
 ---
 
