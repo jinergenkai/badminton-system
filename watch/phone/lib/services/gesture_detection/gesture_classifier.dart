@@ -12,26 +12,38 @@ class GestureClassifier {
   // MCP indices: tipIdx → mcpIdx (knuckle base)
   static const _mcpIndices = {8: 5, 12: 9, 16: 13, 20: 17};
 
+  // Cosine thresholds for finger state:
+  //   extended: both joints have cos > this (angle < ~75°, mostly straight)
+  //   folded:   at least one joint has cos < this (angle > ~110°, clearly bent)
+  //   between:  ambiguous → HandGesture.none
+  static const double _extendedCosThreshold = 0.25;
+  static const double _foldedCosThreshold = -0.35;
+
   HandGesture classify(List<Landmark> landmarks) {
     if (landmarks.length < 21) return HandGesture.none;
 
     final thumbExtended = _isThumbExtended(landmarks);
-    final indexExtended = _isFingerExtended(landmarks, 8, 6);
-    final middleExtended = _isFingerExtended(landmarks, 12, 10);
-    final ringExtended = _isFingerExtended(landmarks, 16, 14);
-    final pinkyExtended = _isFingerExtended(landmarks, 20, 18);
+    final indexFolded = _isFingerFolded(landmarks, 8, 6);
+    final middleFolded = _isFingerFolded(landmarks, 12, 10);
+    final ringFolded = _isFingerFolded(landmarks, 16, 14);
+    final pinkyFolded = _isFingerFolded(landmarks, 20, 18);
 
     final allFingersFolded =
-        !indexExtended && !middleExtended && !ringExtended && !pinkyExtended;
+        indexFolded && middleFolded && ringFolded && pinkyFolded;
 
-    // Thumbs Up / Down: thumb extended + 4 fingers folded
+    // Thumbs Up / Down: thumb extended + 4 fingers clearly folded
     if (thumbExtended && allFingersFolded) {
       final direction = _getThumbDirection(landmarks);
       if (direction == _ThumbDirection.up) return HandGesture.thumbsUp;
       if (direction == _ThumbDirection.down) return HandGesture.thumbsDown;
     }
 
-    // Open Palm: 4 fingers extended (thumb doesn't matter)
+    // Open Palm: 4 fingers clearly extended (thumb doesn't matter)
+    final indexExtended = _isFingerExtended(landmarks, 8, 6);
+    final middleExtended = _isFingerExtended(landmarks, 12, 10);
+    final ringExtended = _isFingerExtended(landmarks, 16, 14);
+    final pinkyExtended = _isFingerExtended(landmarks, 20, 18);
+
     final allFingersExtended =
         indexExtended && middleExtended && ringExtended && pinkyExtended;
     if (allFingersExtended) {
@@ -60,48 +72,55 @@ class GestureClassifier {
     };
   }
 
-  // Finger is extended when both joints (MCP→PIP and PIP→TIP) continue
-  // in roughly the same direction (dot product > 0 = angle < 90°).
-  // Direction-agnostic — works regardless of hand orientation.
-  bool _isFingerExtended(List<Landmark> landmarks, int tipIdx, int pipIdx) {
+  /// Cosine of angle between two 2D vectors.
+  /// Returns 0.0 (ambiguous) if either vector is too short — avoids
+  /// noise-dominated results when hand is far from camera.
+  double _cosAngle(double ax, double ay, double bx, double by) {
+    final magA = sqrt(ax * ax + ay * ay);
+    final magB = sqrt(bx * bx + by * by);
+    if (magA < 0.005 || magB < 0.005) return 0.0;
+    return (ax * bx + ay * by) / (magA * magB);
+  }
+
+  /// Compute cosines at PIP and DIP joints for a finger.
+  List<double> _fingerJointCosines(
+      List<Landmark> landmarks, int tipIdx, int pipIdx) {
     final mcpIdx = _mcpIndices[tipIdx]!;
     final dipIdx = _dipIndices[tipIdx]!;
 
-    // Vector MCP → PIP (first bone direction)
     final v1x = landmarks[pipIdx].x - landmarks[mcpIdx].x;
     final v1y = landmarks[pipIdx].y - landmarks[mcpIdx].y;
-
-    // Vector PIP → DIP (second bone direction)
     final v2x = landmarks[dipIdx].x - landmarks[pipIdx].x;
     final v2y = landmarks[dipIdx].y - landmarks[pipIdx].y;
-
-    // Vector DIP → TIP (third bone direction)
     final v3x = landmarks[tipIdx].x - landmarks[dipIdx].x;
     final v3y = landmarks[tipIdx].y - landmarks[dipIdx].y;
 
-    // If any bone segment is too short (landmarks nearly overlapping),
-    // noise makes direction unreliable → treat as folded.
-    const minLen2 = 0.001; // squared min length (~3% of normalized space)
-    final len1sq = v1x * v1x + v1y * v1y;
-    final len2sq = v2x * v2x + v2y * v2y;
-    final len3sq = v3x * v3x + v3y * v3y;
-    if (len1sq < minLen2 || len2sq < minLen2 || len3sq < minLen2) return false;
-
-    // Both joints must not bend back (dot > 0)
-    final dotPip = v1x * v2x + v1y * v2y;
-    final dotDip = v2x * v3x + v2y * v3y;
-
-    return dotPip > 0 && dotDip > 0;
+    return [_cosAngle(v1x, v1y, v2x, v2y), _cosAngle(v2x, v2y, v3x, v3y)];
   }
 
-  // Thumb is extended when TIP is farther from WRIST than MCP
+  /// Finger is clearly EXTENDED: both joints mostly straight (angle < ~75°).
+  bool _isFingerExtended(List<Landmark> landmarks, int tipIdx, int pipIdx) {
+    final cos = _fingerJointCosines(landmarks, tipIdx, pipIdx);
+    return cos[0] > _extendedCosThreshold && cos[1] > _extendedCosThreshold;
+  }
+
+  /// Finger is clearly FOLDED: at least one joint significantly bent (angle > ~110°).
+  bool _isFingerFolded(List<Landmark> landmarks, int tipIdx, int pipIdx) {
+    final cos = _fingerJointCosines(landmarks, tipIdx, pipIdx);
+    return cos[0] < _foldedCosThreshold || cos[1] < _foldedCosThreshold;
+  }
+
+  // Thumb is extended when TIP is farther from WRIST than MCP.
   bool _isThumbExtended(List<Landmark> landmarks) {
     final tipToWrist = _distance(landmarks[4], landmarks[0]);
     final mcpToWrist = _distance(landmarks[2], landmarks[0]);
+    if (tipToWrist < 0.03 || mcpToWrist < 0.02) return false;
     return tipToWrist > mcpToWrist * 1.2;
   }
 
   _ThumbDirection _getThumbDirection(List<Landmark> landmarks) {
+    final dy = (landmarks[4].y - landmarks[2].y).abs();
+    if (dy < 0.01) return _ThumbDirection.neutral;
     if (landmarks[4].y < landmarks[2].y - _thumbDirectionThreshold) {
       return _ThumbDirection.up;
     }
