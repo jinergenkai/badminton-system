@@ -12,11 +12,11 @@ class ForegroundService {
     // Initialize foreground task
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'voice_counter_channel',
+        channelId: 'voice_counter_channel_v2',
         channelName: 'Voice Counter Service',
         channelDescription: 'Wake word detection and score tracking',
-        channelImportance: NotificationChannelImportance.HIGH,
-        priority: NotificationPriority.HIGH,
+        channelImportance: NotificationChannelImportance.LOW,
+        priority: NotificationPriority.LOW,
       ),
       iosNotificationOptions: const IOSNotificationOptions(
         showNotification: true,

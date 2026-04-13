@@ -65,15 +65,14 @@ class TtsService {
     try {
       String announcement;
       if (teamAScore == teamBScore) {
-        // Same score — say "X all"
-        if (_currentLanguage.startsWith('vi')) {
-          announcement = "$teamAScore đều";
-        } else {
-          announcement = "$teamAScore all";
-        }
+        announcement = _currentLanguage.startsWith('vi')
+            ? "$teamAScore đều"
+            : "$teamAScore all";
       } else {
-        // Leading team's score first
-        announcement = "$teamAScore, $teamBScore";
+        // Scoring team reads first (badminton rule: server announces first)
+        final first = scoringTeam == 'A' ? teamAScore : teamBScore;
+        final second = scoringTeam == 'A' ? teamBScore : teamAScore;
+        announcement = "$first, $second";
       }
 
       print('🔊 [TTS] 📢 Announcing: "$announcement"');
@@ -129,20 +128,28 @@ class TtsService {
     }
   }
 
-  Future<void> announceUndo(int teamAScore, int teamBScore) async {
+  Future<void> announceUndo(
+      int teamAScore, int teamBScore, String undoneTeam) async {
     if (!_isInitialized) await initialize();
 
     try {
       String announcement;
+      final String scoreText;
       if (teamAScore == teamBScore) {
-        announcement = _currentLanguage.startsWith('vi')
-            ? "Hoàn tác, $teamAScore đều"
-            : "Undo, $teamAScore all";
+        scoreText = _currentLanguage.startsWith('vi')
+            ? "$teamAScore đều"
+            : "$teamAScore all";
       } else {
-        announcement = _currentLanguage.startsWith('vi')
-            ? "Hoàn tác, $teamAScore $teamBScore"
-            : "Undo, $teamAScore $teamBScore";
+        // After undo, the team that LOST the point no longer serves.
+        // The other team now serves → reads first.
+        final serverIsA = undoneTeam == 'B';
+        final first = serverIsA ? teamAScore : teamBScore;
+        final second = serverIsA ? teamBScore : teamAScore;
+        scoreText = "$first $second";
       }
+      announcement = _currentLanguage.startsWith('vi')
+          ? "Hoàn tác, $scoreText"
+          : "Undo, $scoreText";
 
       print('🔊 [TTS] ↩️ Announcing: "$announcement"');
       await _flutterTts.speak(announcement);

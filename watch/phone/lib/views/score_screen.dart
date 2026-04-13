@@ -95,8 +95,8 @@ class ScoreScreen extends StatelessWidget {
                                 child: TeamCard(
                                   teamName: state.teamAName,
                                   score: state.teamAScore,
-                                  primaryColor: Colors.blue[600]!,
-                                  accentColor: Colors.cyan[400]!,
+                                  primaryColor: Colors.red[600]!,
+                                  accentColor: Colors.red[300]!,
                                   onIncrement: controller.incrementTeamA,
                                   onDecrement: controller.decrementTeamA,
                                   isActive: state.isGameActive,
@@ -143,8 +143,8 @@ class ScoreScreen extends StatelessWidget {
                                 child: TeamCard(
                                   teamName: state.teamBName,
                                   score: state.teamBScore,
-                                  primaryColor: Colors.orange[600]!,
-                                  accentColor: Colors.amber[400]!,
+                                  primaryColor: Colors.blue[600]!,
+                                  accentColor: Colors.cyan[400]!,
                                   onIncrement: controller.incrementTeamB,
                                   onDecrement: controller.decrementTeamB,
                                   isActive: state.isGameActive,
@@ -221,7 +221,7 @@ class ScoreScreen extends StatelessWidget {
             FloatingActionButton(
               heroTag: 'testA',
               mini: true,
-              backgroundColor: Colors.blue.shade400,
+              backgroundColor: Colors.red.shade400,
               elevation: 3,
               onPressed: () => controller.simulateVoiceCommand('A'),
               child: const Text(
@@ -234,7 +234,7 @@ class ScoreScreen extends StatelessWidget {
             FloatingActionButton(
               heroTag: 'testB',
               mini: true,
-              backgroundColor: Colors.orange.shade400,
+              backgroundColor: Colors.blue.shade400,
               elevation: 3,
               onPressed: () => controller.simulateVoiceCommand('B'),
               child: const Text(

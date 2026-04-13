@@ -296,12 +296,15 @@ class ScoreController extends GetxController {
     final stack = List<GameState>.from(gameState.stateStack);
     final previousState = stack.removeLast();
 
+    // Detect which team's point is being undone
+    final undoneTeam = gameState.teamAScore > previousState.teamAScore ? 'A' : 'B';
+
     _gameState.value = previousState.copyWith(stateStack: stack);
 
-    // Announce undo with restored score
     _ttsService.announceUndo(
       previousState.teamAScore,
       previousState.teamBScore,
+      undoneTeam,
     );
 
     print('↩️ [Undo] Restored to: ${previousState.teamAScore}-${previousState.teamBScore}');
@@ -512,10 +515,10 @@ class ScoreController extends GetxController {
 
     switch (event.gesture) {
       case HandGesture.thumbsUp:
-        incrementTeamA(fromVoice: true);
+        incrementTeamB(fromVoice: true); // 👍 up = blue team
         break;
       case HandGesture.thumbsDown:
-        incrementTeamB(fromVoice: true);
+        incrementTeamA(fromVoice: true); // 👎 down = red team
         break;
       case HandGesture.openPalm:
         undo();

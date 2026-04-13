@@ -23,10 +23,9 @@ class VoiceService {
 
   // Wake word model files - must be mutable list for Porcupine
   static final List<String> keywordPaths = [
-    // 'assets/models/hey-go-go_en_android_v4_0_0.ppn',
-    // 'assets/models/meow-meow_en_android_v4_0_0.ppn',
-    'assets/models/red-point_en_android_v4_0_0.ppn',
-    'assets/models/blue-point_en_android_v4_0_0.ppn',
+    'assets/models/red-point_en_android_v4_0_0.ppn',   // index 0 → Team A
+    'assets/models/blue-point_en_android_v4_0_0.ppn',  // index 1 → Team B
+    'assets/models/picovoice_android.ppn',              // index 2 → Undo
   ];
 
   Future<bool> requestPermissions() async {
@@ -57,9 +56,8 @@ class VoiceService {
       _porcupineManager = await PorcupineManager.fromKeywordPaths(
         accessKey,
         keywordPaths,
-        sensitivities: [1, 1],
+        sensitivities: [0.3, 0.3, 0.3],
         (keywordIndex) {
-          // keywordIndex tells us which wake word was detected
           print('🎤 [Voice] ✨ WAKE WORD DETECTED! Index: $keywordIndex');
 
           if (keywordIndex == 0) {
@@ -70,6 +68,10 @@ class VoiceService {
             print('🎤 [Voice] 🔵 Blue Point detected → Team B scores!');
             onWakeWord('🔵 Blue Point');
             _commandController.add('B');
+          } else if (keywordIndex == 2) {
+            print('🎤 [Voice] ↩️ Picovoice detected → Undo!');
+            onWakeWord('↩️ Undo');
+            _commandController.add('UNDO');
           } else {
             print('🎤 [Voice] ⚠️ Unknown keyword index: $keywordIndex');
           }
