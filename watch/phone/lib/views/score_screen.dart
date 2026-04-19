@@ -4,9 +4,7 @@ import '../controllers/score_controller.dart';
 import '../widgets/team_card.dart';
 import '../widgets/voice_indicator.dart';
 import '../widgets/cooldown_bar.dart';
-import '../widgets/gesture_indicator.dart';
 import '../services/tts_service.dart';
-import '../services/gesture_detection/gesture_camera_widget.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
@@ -18,137 +16,73 @@ class ScoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final ScoreController controller = Get.put(ScoreController());
 
-    return SafeArea(
-      child: Scaffold(
-        body: Stack(
-          children: [
-            Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.indigo[900]!,
-                Colors.purple[900]!,
-                Colors.pink[900]!,
-              ],
-            ),
+    return Scaffold(
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              const Color(0xFF0F172A),
+              const Color(0xFF1E1B4B),
+              const Color(0xFF312E81),
+            ],
           ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                // App Bar
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                            '🏸 Badminton Score',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                              letterSpacing: 0.5,
-                            ),
-                          )
-                          .animate()
-                          .fadeIn(duration: 800.ms)
-                          .slideX(begin: -0.3, end: 0),
-                      IconButton(
-                            icon: const Icon(
-                              Icons.settings_outlined,
-                              color: Colors.white,
-                            ),
-                            iconSize: 26,
-                            onPressed: () => _showGameMenu(context, controller),
-                          )
-                          .animate()
-                          .fadeIn(duration: 800.ms)
-                          .slideX(begin: 0.3, end: 0),
-                    ],
-                  ),
-                ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              // 1. Thin Cooldown Line (Top Overlay)
+              Obx(() => CooldownBar(
+                isActive: controller.isCooldownActive.value,
+                progress: controller.cooldownProgress.value,
+              )),
 
-                const SizedBox(height: 8),
+              // 2. Compact Top Bar
+              _buildCompactTopBar(context, controller),
 
-                // Score Display
-                Expanded(
+              // 3. Maximized Scoring Area
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: Obx(() {
-                    // Access the observable to trigger updates
                     final state = controller.gameStateObservable.value;
-
                     return LayoutBuilder(
                       builder: (context, constraints) {
-                        final isPortrait =
-                            constraints.maxWidth < constraints.maxHeight;
+                        final isPortrait = constraints.maxWidth < constraints.maxHeight;
 
                         return Flex(
-                          direction: isPortrait
-                              ? Axis.vertical
-                              : Axis.horizontal,
+                          direction: isPortrait ? Axis.vertical : Axis.horizontal,
                           children: [
-                            // Team A Card
                             Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: TeamCard(
-                                  teamName: state.teamAName,
-                                  score: state.teamAScore,
-                                  primaryColor: Colors.red[600]!,
-                                  accentColor: Colors.red[300]!,
-                                  onIncrement: controller.incrementTeamA,
-                                  onDecrement: controller.decrementTeamA,
-                                  isActive: state.isGameActive,
-                                ),
+                              flex: 10,
+                              child: TeamCard(
+                                teamName: state.teamAName,
+                                score: state.teamAScore,
+                                primaryColor: Colors.redAccent,
+                                accentColor: Colors.orangeAccent,
+                                onIncrement: controller.incrementTeamA,
+                                onDecrement: controller.decrementTeamA,
+                                isActive: state.isGameActive,
                               ),
                             ),
-
-                            // VS Divider
-                            if (isPortrait)
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                ),
-                                child: Text(
-                                  'VS',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white.withOpacity(0.5),
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                              )
-                            else
-                              Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                ),
-                                child: Text(
-                                  'VS',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w800,
-                                    color: Colors.white.withOpacity(0.5),
-                                    letterSpacing: 2,
-                                  ),
-                                ),
-                              ),
-
-                            // Team B Card
+                            
+                            // Minimal Divider
+                            if (isPortrait) 
+                              const SizedBox(height: 4)
+                            else 
+                              const SizedBox(width: 4),
+                              
                             Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: TeamCard(
-                                  teamName: state.teamBName,
-                                  score: state.teamBScore,
-                                  primaryColor: Colors.blue[600]!,
-                                  accentColor: Colors.cyan[400]!,
-                                  onIncrement: controller.incrementTeamB,
-                                  onDecrement: controller.decrementTeamB,
-                                  isActive: state.isGameActive,
-                                ),
+                              flex: 10,
+                              child: TeamCard(
+                                teamName: state.teamBName,
+                                score: state.teamBScore,
+                                primaryColor: Colors.blueAccent,
+                                accentColor: Colors.cyanAccent,
+                                onIncrement: controller.incrementTeamB,
+                                onDecrement: controller.decrementTeamB,
+                                isActive: state.isGameActive,
                               ),
                             ),
                           ],
@@ -157,232 +91,213 @@ class ScoreScreen extends StatelessWidget {
                     );
                   }),
                 ),
+              ),
 
-                // Cooldown Progress Bar
-                Obx(
-                  () => CooldownBar(
-                    isActive: controller.isCooldownActive.value,
-                    progress: controller.cooldownProgress.value,
-                  ),
-                ),
-
-                // Voice Indicator
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-                  child: Obx(
-                    () => VoiceIndicator(
-                      isListening: controller.isVoiceActive.value,
-                      lastCommand: controller.lastCommand.value,
-                      onToggle: () async {
-                        if (controller.isVoiceActive.value) {
-                          await controller.stopListening();
-                        } else {
-                          await controller.startListening();
-                        }
-                      },
-                    ),
-                  ),
-                ),
-
-                // Gesture Indicator
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                  child: Obx(
-                    () => GestureIndicator(
-                      isActive: controller.isGestureActive.value,
-                      isDebugMode: controller.isGestureDebugMode.value,
-                      service: controller.gestureService,
-                      onToggle: controller.toggleGestureDetection,
-                      onLongPress: controller.toggleGestureDebugMode,
-                    ),
-                  ),
-                ),
-              ],
-            ),
+              // 4. Ultra Compact Bottom Controls
+              _buildUltraCompactBottomControls(controller),
+            ],
           ),
-        ),
-
-            // Debug overlay — draggable camera preview (only when debug mode is on)
-            Obx(() {
-              if (controller.isGestureActive.value &&
-                  controller.isGestureDebugMode.value) {
-                return GestureCameraWidget(
-                  service: controller.gestureService,
-                );
-              }
-              return const SizedBox.shrink();
-            }),
-          ],
-        ),
-        floatingActionButton: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Test Button A
-            FloatingActionButton(
-              heroTag: 'testA',
-              mini: true,
-              backgroundColor: Colors.red.shade400,
-              elevation: 3,
-              onPressed: () => controller.simulateVoiceCommand('A'),
-              child: const Text(
-                'A',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ).animate().fadeIn(delay: 500.ms),
-            const SizedBox(height: 10),
-            // Test Button B
-            FloatingActionButton(
-              heroTag: 'testB',
-              mini: true,
-              backgroundColor: Colors.blue.shade400,
-              elevation: 3,
-              onPressed: () => controller.simulateVoiceCommand('B'),
-              child: const Text(
-                'B',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-            ).animate().fadeIn(delay: 600.ms),
-          ],
         ),
       ),
     );
   }
 
-  void _showGameMenu(BuildContext context, ScoreController controller) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Colors.indigo[800]!, Colors.purple[800]!],
-          ),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Game Menu',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+  Widget _buildCompactTopBar(BuildContext context, ScoreController controller) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.sports_tennis, color: Colors.amber, size: 20),
+              const SizedBox(width: 8),
+              const Text(
+                'VOICE COUNTER PRO',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white70,
+                  letterSpacing: 1.2,
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
-            _buildMenuButton(
-              icon: Icons.refresh,
-              label: 'Reset Game',
-              color: Colors.blue,
-              onTap: () {
-                controller.resetGame();
-                Navigator.pop(context);
-              },
-            ),
-            const SizedBox(height: 12),
-            Obx(() {
-              final state = controller.gameStateObservable.value;
-              return _buildMenuButton(
-                icon: state.isGameActive ? Icons.pause : Icons.play_arrow,
-                label: state.isGameActive ? 'Pause Game' : 'Resume Game',
-                color: Colors.orange,
-                onTap: () {
-                  if (state.isGameActive) {
-                    controller.pauseGame();
-                  } else {
-                    controller.resumeGame();
-                  }
-                  Navigator.pop(context);
-                },
-              );
-            }),
-            const SizedBox(height: 12),
-            _buildMenuButton(
-              icon: Icons.history,
-              label: 'Match History',
-              color: Colors.purple,
-              onTap: () {
-                Navigator.pop(context);
-                Get.to(() => const HistoryScreen());
-              },
-            ),
-            const SizedBox(height: 12),
-            Obx(() {
-              final state = controller.gameStateObservable.value;
-              return state.canUndo
-                  ? _buildMenuButton(
-                      icon: Icons.undo,
-                      label: 'Undo Last Action',
-                      color: Colors.red,
-                      onTap: () {
-                        controller.undo();
-                        Navigator.pop(context);
-                      },
-                    )
-                  : const SizedBox.shrink();
-            }),
-            if (controller.gameStateObservable.value.canUndo)
-              const SizedBox(height: 12),
-            _buildMenuButton(
-              icon: Icons.language,
-              label: 'Voice Language',
-              color: Colors.green,
-              onTap: () {
-                Navigator.pop(context);
-                _showLanguageSettings(context, controller);
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildMenuButton(
-              icon: Icons.settings,
-              label: 'Settings',
-              color: Colors.teal,
-              onTap: () {
-                Navigator.pop(context);
-                Get.to(() => const SettingsScreen());
-              },
-            ),
-            const SizedBox(height: 24),
-          ],
-        ),
+            ],
+          ),
+          
+          Row(
+            children: [
+              _buildMinimalTopButton(
+                icon: Icons.history,
+                onPressed: () => Get.to(() => const HistoryScreen()),
+              ),
+              const SizedBox(width: 8),
+              _buildMinimalTopButton(
+                icon: Icons.settings_rounded,
+                onPressed: () => Get.to(() => const SettingsScreen()),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildMenuButton({
+  Widget _buildMinimalTopButton({
     required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
+    required VoidCallback onPressed,
   }) {
     return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+        padding: const EdgeInsets.all(6),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.2),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.5), width: 2),
+          color: Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(8),
         ),
-        child: Row(
-          children: [
-            Icon(icon, color: Colors.white, size: 28),
-            const SizedBox(width: 16),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+        child: Icon(icon, color: Colors.white60, size: 18),
+      ),
+    );
+  }
+
+  Widget _buildUltraCompactBottomControls(ScoreController controller) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.3),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+      ),
+      child: Row(
+        children: [
+          // 1. Voice Toggle (Compact)
+          Obx(() {
+            final isListening = controller.isVoiceActive.value;
+            return GestureDetector(
+              onTap: () async {
+                if (isListening) {
+                  await controller.stopListening();
+                } else {
+                  await controller.startListening();
+                }
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isListening ? Colors.greenAccent.withOpacity(0.1) : Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isListening ? Colors.greenAccent.withOpacity(0.5) : Colors.white12,
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      isListening ? Icons.mic : Icons.mic_none,
+                      color: isListening ? Colors.greenAccent : Colors.white30,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      isListening ? 'LISTENING' : 'VOICE OFF',
+                      style: TextStyle(
+                        color: isListening ? Colors.greenAccent : Colors.white30,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 10,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            );
+          }),
+
+          const SizedBox(width: 8),
+
+          // 2. Language Quick Info
+          Expanded(
+            child: Obx(() {
+              final lang = controller.ttsService.currentLanguageRx.value;
+              final langName = TtsService.supportedLanguages[lang] ?? 'English';
+              return GestureDetector(
+                onTap: () => _showLanguageSettings(Get.context!, controller),
+                child: Text(
+                  'TTS: ${langName.toUpperCase()}',
+                  style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              );
+            }),
+          ),
+
+          const SizedBox(width: 8),
+
+          // 3. Quick Actions (Undo/Reset)
+          Obx(() {
+            final canUndo = controller.gameStateObservable.value.canUndo;
+            return _buildMicroActionButton(
+              icon: Icons.undo,
+              color: Colors.orangeAccent,
+              onTap: canUndo ? () => controller.undo() : null,
+              isEnabled: canUndo,
+            );
+          }),
+          
+          const SizedBox(width: 8),
+          
+          _buildMicroActionButton(
+            icon: Icons.refresh,
+            color: Colors.redAccent,
+            onTap: () => _confirmReset(controller),
+            isEnabled: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMicroActionButton({
+    required IconData icon,
+    required Color color,
+    required VoidCallback? onTap,
+    required bool isEnabled,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isEnabled ? color.withOpacity(0.1) : Colors.white.withOpacity(0.02),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isEnabled ? color.withOpacity(0.3) : Colors.transparent,
+          ),
         ),
+        child: Icon(
+          icon,
+          color: isEnabled ? color : Colors.white10,
+          size: 20,
+        ),
+      ),
+    );
+  }
+
+  void _confirmReset(ScoreController controller) {
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: const Color(0xFF1E1B4B),
+        title: const Text('Reset Match?', style: TextStyle(color: Colors.white)),
+        actions: [
+          TextButton(onPressed: () => Get.back(), child: const Text('CANCEL')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () {
+              controller.resetGame();
+              Get.back();
+            },
+            child: const Text('RESET'),
+          ),
+        ],
       ),
     );
   }
@@ -394,109 +309,26 @@ class ScoreScreen extends StatelessWidget {
       builder: (context) => Container(
         padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Colors.green[800]!, Colors.teal[800]!],
-          ),
+          color: const Color(0xFF1E1B4B),
           borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Row(
-              children: [
-                Icon(Icons.language, color: Colors.white, size: 28),
-                SizedBox(width: 12),
-                Text(
-                  'Voice Language',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Choose language for score announcements',
-              style: TextStyle(fontSize: 14, color: Colors.white70),
-            ),
-            const SizedBox(height: 24),
+            const Text('Select Voice Language', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
             ...TtsService.supportedLanguages.entries.map((entry) {
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: _buildLanguageOption(
-                  code: entry.key,
-                  name: entry.value,
-                  controller: controller,
-                  context: context,
-                ),
+              return ListTile(
+                title: Text(entry.value, style: const TextStyle(color: Colors.white)),
+                onTap: () async {
+                  await controller.changeLanguage(entry.key);
+                  Navigator.pop(context);
+                },
+                trailing: controller.ttsService.currentLanguage == entry.key 
+                  ? const Icon(Icons.check, color: Colors.greenAccent) 
+                  : null,
               );
             }),
-            const SizedBox(height: 12),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLanguageOption({
-    required String code,
-    required String name,
-    required ScoreController controller,
-    required BuildContext context,
-  }) {
-    final isSelected = controller.ttsService.currentLanguage == code;
-
-    return InkWell(
-      onTap: () async {
-        await controller.changeLanguage(code);
-        if (context.mounted) {
-          Navigator.pop(context);
-        }
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Colors.white.withOpacity(0.3)
-              : Colors.white.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isSelected
-                ? Colors.white.withOpacity(0.6)
-                : Colors.white.withOpacity(0.2),
-            width: isSelected ? 2 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              isSelected ? Icons.check_circle : Icons.radio_button_unchecked,
-              color: Colors.white,
-              size: 24,
-            ),
-            const SizedBox(width: 12),
-            Text(
-              name,
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                color: Colors.white,
-              ),
-            ),
-            const Spacer(),
-            if (isSelected)
-              TextButton(
-                onPressed: () => controller.testTts(),
-                child: const Text(
-                  'Test',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ),
           ],
         ),
       ),

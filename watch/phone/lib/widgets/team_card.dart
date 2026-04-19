@@ -26,180 +26,175 @@ class TeamCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            primaryColor.withValues(alpha: 0.4),
-            accentColor.withValues(alpha: 0.3),
-          ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: primaryColor.withValues(alpha: 0.5),
-            blurRadius: 20,
-            spreadRadius: 2,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-          child: Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: 0.15),
-                  Colors.white.withValues(alpha: 0.05),
-                ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final double width = constraints.maxWidth;
+        final double height = constraints.maxHeight;
+        final bool isTablet = width > 400 || height > 400;
+
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                primaryColor.withOpacity(0.4),
+                accentColor.withOpacity(0.3),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            boxShadow: [
+              BoxShadow(
+                color: primaryColor.withOpacity(0.2),
+                blurRadius: 20,
+                spreadRadius: -5,
               ),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.2),
-                width: 1.5,
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Colors.white.withOpacity(0.1),
+                      Colors.white.withOpacity(0.03),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.15),
+                    width: 1.5,
+                  ),
+                ),
+                child: Stack(
+                  children: [
+                    // MAXIMIZED Main Score Area
+                    _buildMaximizedScoreArea(width, height, isTablet),
+
+                    // Tiny Minimal Controls
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: _buildMicroControl(
+                        icon: Icons.remove,
+                        onTap: onDecrement,
+                        size: isTablet ? 48 : 36,
+                      ),
+                    ),
+
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: _buildMicroControl(
+                        icon: Icons.add,
+                        onTap: onIncrement,
+                        size: isTablet ? 48 : 36,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            child: _buildCardContent(),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildMaximizedScoreArea(double width, double height, bool isTablet) {
+    // Dynamically calculate massive font size based on available height
+    // We target about 70-80% of the card's height for the score
+    final double scoreFontSize = isTablet 
+        ? (height * 0.75).clamp(150, 500) 
+        : (height * 0.7).clamp(100, 250);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          if (isActive) {
+            HapticFeedback.heavyImpact();
+            onIncrement();
+          }
+        },
+        splashColor: primaryColor.withOpacity(0.2),
+        highlightColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: SizedBox(
+          width: double.infinity,
+          height: double.infinity,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Team Name (Top edge, small to save space)
+              const Spacer(flex: 1),
+              Text(
+                teamName.toUpperCase(),
+                style: TextStyle(
+                  fontSize: isTablet ? 24 : 14,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white.withOpacity(0.5),
+                  letterSpacing: 3,
+                ),
+                textAlign: TextAlign.center,
+              ).animate().fadeIn(),
+
+              // GIANT SCORE
+              Text(
+                '$score',
+                key: ValueKey(score),
+                style: GoogleFonts.orbitron(
+                  fontSize: scoreFontSize,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  height: 1.0,
+                  shadows: [
+                    Shadow(color: primaryColor, blurRadius: 30),
+                    Shadow(color: Colors.black, offset: const Offset(0, 5), blurRadius: 20),
+                  ],
+                ),
+              )
+              .animate(key: ValueKey(score))
+              .scale(
+                duration: 200.ms,
+                curve: Curves.easeOutBack,
+                begin: const Offset(0.9, 0.9),
+                end: const Offset(1, 1),
+              )
+              .shimmer(duration: 1500.ms, color: Colors.white.withOpacity(0.3)),
+              
+              const Spacer(flex: 2),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _buildCardContent() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-          // Team Name
-          Text(
-            teamName,
-            style: const TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 1.5,
-            ),
-          ).animate().fadeIn(duration: 600.ms).slideY(begin: -0.3, end: 0),
-
-          const SizedBox(height: 12),
-
-          // Score Display with Glassmorphism
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.2),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.white.withValues(alpha: 0.3),
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.1),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Text(
-              '$score',
-              key: ValueKey(score),
-              style: GoogleFonts.orbitron(
-                fontSize: 56,
-                fontWeight: FontWeight.w900,
-                color: Colors.white,
-                height: 1,
-                shadows: [
-                  Shadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-            )
-                .animate(key: ValueKey(score))
-                .scale(
-                  duration: 400.ms,
-                  curve: Curves.elasticOut,
-                  begin: const Offset(0.8, 0.8),
-                  end: const Offset(1, 1),
-                )
-                .then()
-                .shake(hz: 2, duration: 250.ms)
-                .shimmer(duration: 500.ms, color: Colors.white.withValues(alpha: 0.5)),
-          ),
-
-          const SizedBox(height: 16),
-
-          // Control Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              _buildControlButton(
-                icon: Icons.remove,
-                onTap: () {
-                  HapticFeedback.lightImpact();
-                  onDecrement();
-                },
-                color: Colors.white.withValues(alpha: 0.25),
-                iconColor: Colors.white70,
-              ),
-              const SizedBox(width: 12),
-              _buildControlButton(
-                icon: Icons.add,
-                onTap: () {
-                  HapticFeedback.mediumImpact();
-                  onIncrement();
-                },
-                color: Colors.white.withValues(alpha: 0.35),
-                iconColor: Colors.white,
-              ),
-            ],
-          ),
-        ],
-      );
-  }
-
-  Widget _buildControlButton({
+  Widget _buildMicroControl({
     required IconData icon,
     required VoidCallback onTap,
-    required Color color,
-    required Color iconColor,
+    required double size,
   }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: Colors.white.withValues(alpha: 0.3),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Icon(icon, color: iconColor, size: 28),
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        onTap();
+      },
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white12),
         ),
+        child: Icon(icon, color: Colors.white30, size: size * 0.6),
       ),
     );
   }

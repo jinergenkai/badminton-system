@@ -32,9 +32,9 @@ class _WinDialogState extends State<WinDialog> {
   @override
   void initState() {
     super.initState();
-    _confettiController = ConfettiController(duration: const Duration(seconds: 3));
+    _confettiController = ConfettiController(duration: const Duration(seconds: 5));
     // Trigger confetti and haptic feedback
-    Future.delayed(const Duration(milliseconds: 500), () {
+    Future.delayed(const Duration(milliseconds: 300), () {
       _confettiController.play();
       HapticFeedback.heavyImpact();
     });
@@ -48,10 +48,10 @@ class _WinDialogState extends State<WinDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isTeamA = widget.winner == 'Team A';
+    final isTeamA = widget.winner == 'Team A' || widget.winner == widget.teamAName;
     final winnerScore = isTeamA ? widget.teamAScore : widget.teamBScore;
     final loserScore = isTeamA ? widget.teamBScore : widget.teamAScore;
-    final winnerColor = isTeamA ? Colors.blue : Colors.orange;
+    final winnerColor = isTeamA ? Colors.redAccent : Colors.blueAccent;
 
     return Stack(
       children: [
@@ -63,16 +63,15 @@ class _WinDialogState extends State<WinDialog> {
             blastDirectionality: BlastDirectionality.explosive,
             shouldLoop: false,
             colors: const [
-              Colors.green,
-              Colors.blue,
-              Colors.pink,
-              Colors.orange,
-              Colors.purple,
-              Colors.yellow,
+              Colors.amber,
+              Colors.redAccent,
+              Colors.blueAccent,
+              Colors.greenAccent,
+              Colors.purpleAccent,
             ],
             createParticlePath: _drawStar,
-            numberOfParticles: 30,
-            gravity: 0.3,
+            numberOfParticles: 50,
+            gravity: 0.2,
             emissionFrequency: 0.05,
           ),
         ),
@@ -80,185 +79,201 @@ class _WinDialogState extends State<WinDialog> {
         // Dialog
         Dialog(
           backgroundColor: Colors.transparent,
+          elevation: 0,
           child: Container(
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [winnerColor[700]!, winnerColor[900]!],
-          ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: winnerColor.withOpacity(0.5),
-              blurRadius: 20,
-              spreadRadius: 5,
+            width: double.infinity,
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  const Color(0xFF1E1B4B),
+                  const Color(0xFF0F172A),
+                ],
+              ),
+              borderRadius: BorderRadius.circular(32),
+              border: Border.all(color: winnerColor.withOpacity(0.5), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: winnerColor.withOpacity(0.3),
+                  blurRadius: 40,
+                  spreadRadius: 5,
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Trophy Icon
-            Icon(Icons.emoji_events, size: 80, color: Colors.amber[300])
-                .animate(onPlay: (controller) => controller.repeat())
-                .shimmer(duration: 5000.ms)
-                .shake(hz: 2, curve: Curves.easeInOut),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Trophy Icon with Glow
+                Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                    ).animate(onPlay: (c) => c.repeat(reverse: true))
+                     .scale(begin: const Offset(1,1), end: const Offset(1.2, 1.2), duration: 2000.ms),
+                    Icon(Icons.emoji_events_rounded, size: 90, color: Colors.amber[400])
+                        .animate(onPlay: (c) => c.repeat())
+                        .shimmer(duration: 3000.ms)
+                        .shake(hz: 1, curve: Curves.easeInOut),
+                  ],
+                ),
 
-            const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-            // Game Over Text
-            const Text(
-              'GAME OVER!',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 2,
-              ),
-            ).animate().fadeIn(duration: 600.ms).scale(),
-
-            const SizedBox(height: 8),
-
-            // Winner Text
-            Text(
-              widget.winner == 'Team A'
-                  ? '${widget.teamAName} WINS!'
-                  : '${widget.teamBName} WINS!',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.w900,
-                color: Colors.amber[300],
-                letterSpacing: 1,
-              ),
-            ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.3, end: 0),
-
-            const SizedBox(height: 20),
-
-            // Final Score
-            Container(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 16,
-                    horizontal: 24,
+                // Winner Text
+                Text(
+                  'VICTORY!',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white.withOpacity(0.6),
+                    letterSpacing: 4,
                   ),
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '$winnerScore',
-                        style: const TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        '-',
-                        style: TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white.withOpacity(0.5),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Text(
-                        '$loserScore',
-                        style: TextStyle(
-                          fontSize: 48,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white.withOpacity(0.6),
-                        ),
-                      ),
+                ).animate().fadeIn().scale(begin: const Offset(0.5, 0.5)),
+
+                const SizedBox(height: 8),
+
+                Text(
+                  widget.winner.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 36,
+                    fontWeight: FontWeight.w900,
+                    color: winnerColor,
+                    letterSpacing: 1,
+                    shadows: [
+                      Shadow(color: winnerColor.withOpacity(0.5), blurRadius: 15),
                     ],
                   ),
-                )
-                .animate()
-                .fadeIn(delay: 500.ms)
-                .scale(begin: const Offset(0.8, 0.8)),
+                  textAlign: TextAlign.center,
+                ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.2, end: 0),
 
-            const SizedBox(height: 24),
+                const SizedBox(height: 32),
 
-            // Voice Instruction
-            Container(
-                  padding: const EdgeInsets.all(16),
+                // Score Display
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 32),
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.3),
-                      width: 2,
-                    ),
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
                   ),
-                  child: Column(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                      _buildScoreDigit(winnerScore, Colors.white, 54),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: Text(
+                          ':',
+                          style: TextStyle(
+                            fontSize: 40,
+                            fontWeight: FontWeight.w900,
+                            color: Colors.white.withOpacity(0.3),
+                          ),
+                        ),
+                      ),
+                      _buildScoreDigit(loserScore, Colors.white.withOpacity(0.5), 54),
+                    ],
+                  ),
+                ).animate().fadeIn(delay: 600.ms).scale(begin: const Offset(0.8, 0.8)),
+
+                const SizedBox(height: 40),
+
+                // Actions
+                Column(
+                  children: [
+                    Text(
+                      'READY FOR ANOTHER ROUND?',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white.withOpacity(0.4),
+                        letterSpacing: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Voice Hint
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.greenAccent.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.greenAccent.withOpacity(0.2)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.mic, color: Colors.white, size: 20),
+                          const Icon(Icons.mic, color: Colors.greenAccent, size: 14),
                           const SizedBox(width: 8),
-                          const Text(
-                            'Start New Game',
-                            style: TextStyle(
-                              fontSize: 16,
+                          Text(
+                            'Say "Red Point" or "Blue Point" to start',
+                            style: const TextStyle(
+                              color: Colors.greenAccent,
+                              fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: Colors.white,
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Say "Red Point" or "Meow Meow"',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.white.withOpacity(0.8),
+                    ).animate(onPlay: (c) => c.repeat())
+                     .shimmer(duration: 2000.ms, delay: 1000.ms),
+                    
+                    const SizedBox(height: 24),
+
+                    // Manual Start Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          HapticFeedback.mediumImpact();
+                          widget.onNewGame();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'START NEW MATCH',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                          ),
                         ),
                       ),
-                    ],
-                  ),
-                )
-                .animate(onPlay: (controller) => controller.repeat())
-                .shimmer(duration: 3000.ms, delay: 1000.ms),
-
-            const SizedBox(height: 20),
-
-            // Manual Button
-            ElevatedButton(
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                widget.onNewGame();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: winnerColor[900],
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 32,
-                  vertical: 16,
+                    ).animate().fadeIn(delay: 900.ms).slideY(begin: 0.2, end: 0),
+                  ],
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              child: const Text(
-                'NEW GAME',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1,
-                ),
-              ),
-            ).animate().fadeIn(delay: 800.ms).slideY(begin: 0.3, end: 0),
-          ],
-        ),
-      ),
+              ],
+            ),
+          ),
         ),
       ],
+    );
+  }
+
+  Widget _buildScoreDigit(int score, Color color, double size) {
+    return Text(
+      '$score',
+      style: TextStyle(
+        fontSize: size,
+        fontWeight: FontWeight.w900,
+        color: color,
+        fontFamily: 'Orbitron', // Using the sporty font
+      ),
     );
   }
 

@@ -1,10 +1,11 @@
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:get/get.dart';
 
 class TtsService {
   final FlutterTts _flutterTts = FlutterTts();
   bool _isInitialized = false;
-  String _currentLanguage = 'en-US'; // Default
+  final RxString _currentLanguage = 'en-US'.obs; // Default
 
   // Ngôn ngữ hỗ trợ
   static const Map<String, String> supportedLanguages = {
@@ -21,16 +22,16 @@ class TtsService {
 
       // Load saved language
       final prefs = await SharedPreferences.getInstance();
-      _currentLanguage = prefs.getString('tts_language') ?? 'en-US';
+      _currentLanguage.value = prefs.getString('tts_language') ?? 'en-US';
 
       // Cấu hình TTS
-      await _flutterTts.setLanguage(_currentLanguage);
+      await _flutterTts.setLanguage(_currentLanguage.value);
       await _flutterTts.setSpeechRate(0.6); // Chậm để nghe rõ
       await _flutterTts.setVolume(1.0);
       await _flutterTts.setPitch(1.0);
 
       _isInitialized = true;
-      print('🔊 [TTS] ✅ Ready! Language: $_currentLanguage');
+      print('🔊 [TTS] ✅ Ready! Language: ${_currentLanguage.value}');
     } catch (e) {
       print('🔊 [TTS] ❌ Error initializing: $e');
     }
@@ -38,7 +39,7 @@ class TtsService {
 
   Future<void> setLanguage(String languageCode) async {
     try {
-      _currentLanguage = languageCode;
+      _currentLanguage.value = languageCode;
       await _flutterTts.setLanguage(languageCode);
 
       // Save preference
@@ -51,7 +52,8 @@ class TtsService {
     }
   }
 
-  String get currentLanguage => _currentLanguage;
+  String get currentLanguage => _currentLanguage.value;
+  RxString get currentLanguageRx => _currentLanguage;
 
   Future<void> announceScore(
     int teamAScore,
@@ -65,7 +67,7 @@ class TtsService {
     try {
       String announcement;
       if (teamAScore == teamBScore) {
-        announcement = _currentLanguage.startsWith('vi')
+        announcement = _currentLanguage.value.startsWith('vi')
             ? "$teamAScore đều"
             : "$teamAScore all";
       } else {
@@ -93,7 +95,7 @@ class TtsService {
     try {
       // Đọc người thắng kèm tỉ số theo ngôn ngữ
       String announcement;
-      if (_currentLanguage.startsWith('vi')) {
+      if (_currentLanguage.value.startsWith('vi')) {
         announcement = winner == 'Team A'
             ? 'Gâu Gâu thắng $teamAScore $teamBScore'
             : 'Meo Meo thắng $teamBScore $teamAScore';
@@ -115,7 +117,7 @@ class TtsService {
 
     try {
       String announcement;
-      if (_currentLanguage.startsWith('vi')) {
+      if (_currentLanguage.value.startsWith('vi')) {
         announcement = 'Trận mới bắt đầu!';
       } else {
         announcement = "New battle begins!";
@@ -136,7 +138,7 @@ class TtsService {
       String announcement;
       final String scoreText;
       if (teamAScore == teamBScore) {
-        scoreText = _currentLanguage.startsWith('vi')
+        scoreText = _currentLanguage.value.startsWith('vi')
             ? "$teamAScore đều"
             : "$teamAScore all";
       } else {
@@ -147,7 +149,7 @@ class TtsService {
         final second = serverIsA ? teamBScore : teamAScore;
         scoreText = "$first $second";
       }
-      announcement = _currentLanguage.startsWith('vi')
+      announcement = _currentLanguage.value.startsWith('vi')
           ? "Hoàn tác, $scoreText"
           : "Undo, $scoreText";
 
@@ -172,13 +174,13 @@ class TtsService {
   Future<void> testSpeech() async {
     if (!_isInitialized) await initialize();
 
-    if (_currentLanguage.startsWith('vi')) {
+    if (_currentLanguage.value.startsWith('vi')) {
       await _flutterTts.speak("Xin chào");
-    } else if (_currentLanguage.startsWith('zh')) {
+    } else if (_currentLanguage.value.startsWith('zh')) {
       await _flutterTts.speak("你好");
-    } else if (_currentLanguage.startsWith('ja')) {
+    } else if (_currentLanguage.value.startsWith('ja')) {
       await _flutterTts.speak("こんにちは");
-    } else if (_currentLanguage.startsWith('ko')) {
+    } else if (_currentLanguage.value.startsWith('ko')) {
       await _flutterTts.speak("안녕하세요");
     } else {
       await _flutterTts.speak("Hello");
