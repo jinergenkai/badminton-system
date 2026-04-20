@@ -1,0 +1,193 @@
+<template>
+  <div class="container">
+    <text class="title">Score Counter</text>
+
+    <div class="score-row">
+      <text class="score-label">A</text>
+      <text class="score-value">{{ scoreA }}</text>
+      <text class="score-label score-label-b">B</text>
+      <text class="score-value">{{ scoreB }}</text>
+    </div>
+
+    <div class="status-row">
+      <text class="status {{ connected ? 'connected' : 'disconnected' }}">
+        {{ connected ? '● Connected' : '○ No phone' }}
+      </text>
+    </div>
+
+    <div class="btn-row">
+      <input type="button" class="btn btn-a" value="+A" onclick="onScoreA" />
+      <div class="spacer"></div>
+      <input type="button" class="btn btn-b" value="+B" onclick="onScoreB" />
+    </div>
+
+    <div class="btn-row">
+      <input type="button" class="btn btn-undo" value="↩ Undo" onclick="onUndo" />
+    </div>
+
+    <text class="last-event">{{ lastEvent }}</text>
+  </div>
+</template>
+
+<script>
+  import interconnect from '@system.interconnect'
+
+  export default {
+    private: {
+      scoreA: 0,
+      scoreB: 0,
+      connected: false,
+      lastEvent: 'Ready',
+      connect: null,
+    },
+
+    onInit() {
+      try {
+        this.connect = interconnect.instance()
+        if (!this.connect) {
+          this.lastEvent = 'API Error'
+          return
+        }
+
+        this.connect.onopen = (data) => {
+          this.connected = true
+          this.lastEvent = data.isReconnected ? 'Reconnected' : 'Connected'
+        }
+
+        this.connect.onclose = () => {
+          this.connected = false
+          this.lastEvent = 'Disconnected'
+        }
+
+        this.connect.onmessage = (data) => {
+          try {
+            const msg = JSON.parse(data.data)
+            if (msg.scoreA !== undefined) this.scoreA = msg.scoreA
+            if (msg.scoreB !== undefined) this.scoreB = msg.scoreB
+          } catch (e) {}
+        }
+
+        this.connect.getReadyState({
+          success: (data) => {
+            this.connected = (data.status === 1)
+          }
+        })
+      } catch (e) {
+        this.lastEvent = 'Crash avoided'
+      }
+    },
+
+    sendEvent(action) {
+      if (!this.connect) return
+
+      if (action === 'score_A') this.scoreA++
+      else if (action === 'score_B') this.scoreB++
+
+      this.connect.send({
+        data: {
+          action: action,
+          scoreA: this.scoreA,
+          scoreB: this.scoreB,
+          timestamp: Date.now(),
+        },
+        fail: (data, code) => {
+          if (action === 'score_A') this.scoreA--
+          else if (action === 'score_B') this.scoreB--
+          this.lastEvent = 'Err: ' + code
+        }
+      })
+    },
+
+    onScoreA() { this.sendEvent('score_A') },
+    onScoreB() { this.sendEvent('score_B') },
+    onUndo() { this.sendEvent('undo') },
+  }
+</script>
+
+<style>
+  .container {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background-color: #000000;
+  }
+
+  .title {
+    font-size: 18px;
+    color: #ffffff;
+    font-weight: bold;
+    margin-bottom: 8px;
+  }
+
+  .score-row {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+
+  .score-label {
+    font-size: 14px;
+    color: #888888;
+    margin-right: 4px;
+  }
+
+  .score-label-b {
+    margin-left: 16px;
+  }
+
+  .score-value {
+    font-size: 32px;
+    color: #ffffff;
+    font-weight: bold;
+    width: 44px;
+    text-align: center;
+  }
+
+  .status-row {
+    margin-bottom: 8px;
+  }
+
+  .status {
+    font-size: 11px;
+  }
+
+  .connected { color: #4caf50; }
+  .disconnected { color: #666666; }
+
+  .btn-row {
+    flex-direction: row;
+    justify-content: center;
+    margin-bottom: 6px;
+  }
+
+  .spacer {
+    width: 10px;
+  }
+
+  .btn {
+    height: 40px;
+    border-radius: 20px;
+    font-size: 15px;
+    padding: 0 15px;
+    background-color: #333333;
+    color: #ffffff;
+  }
+
+  .btn-a { background-color: #1565c0; }
+  .btn-b { background-color: #b71c1c; }
+
+  .btn-undo {
+    background-color: #222222;
+    color: #888888;
+    width: 120px;
+  }
+
+  .last-event {
+    font-size: 10px;
+    color: #444444;
+    margin-top: 4px;
+  }
+</style>
