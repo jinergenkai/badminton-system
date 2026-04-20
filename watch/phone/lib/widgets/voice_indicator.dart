@@ -5,64 +5,65 @@ class VoiceIndicator extends StatelessWidget {
   final bool isListening;
   final String lastCommand;
   final VoidCallback onToggle;
+  final bool isWatchConnected;
 
   const VoiceIndicator({
     super.key,
     required this.isListening,
     required this.lastCommand,
     required this.onToggle,
+    this.isWatchConnected = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.25),
-        borderRadius: BorderRadius.circular(20),
+        color: Colors.black.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: isListening
-              ? Colors.greenAccent.withOpacity(0.4)
-              : Colors.white.withOpacity(0.15),
-          width: 1.5,
+              ? Colors.greenAccent.withOpacity(0.3)
+              : Colors.white.withOpacity(0.1),
+          width: 1,
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Microphone Button
           GestureDetector(
             onTap: onToggle,
             child: Container(
-              width: 56,
-              height: 56,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: isListening
-                      ? [Colors.greenAccent, Colors.green.shade600]
-                      : [Colors.grey[700]!, Colors.grey[850]!],
+                      ? [Colors.greenAccent, Colors.green.shade700]
+                      : [Colors.grey[800]!, Colors.grey[900]!],
                 ),
                 shape: BoxShape.circle,
                 boxShadow: [
-                  BoxShadow(
-                    color: (isListening ? Colors.greenAccent : Colors.grey)
-                        .withOpacity(0.4),
-                    blurRadius: 15,
-                    spreadRadius: isListening ? 3 : 0,
-                  ),
+                  if (isListening)
+                    BoxShadow(
+                      color: Colors.greenAccent.withOpacity(0.3),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
                 ],
               ),
               child: Icon(
                 isListening ? Icons.mic : Icons.mic_off,
                 color: Colors.white,
-                size: 28,
+                size: 24,
               ),
             ),
           ),
 
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
 
           // Status and Command
           Expanded(
@@ -70,30 +71,48 @@ class VoiceIndicator extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Status Text
-                Text(
-                  isListening ? 'LISTENING' : 'TAP TO START',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: isListening ? Colors.greenAccent : Colors.grey[400],
-                    letterSpacing: 1.2,
-                  ),
-                ),
-
-                // Last Command
-                if (lastCommand.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    lastCommand,
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: Colors.white.withOpacity(0.6),
+                Row(
+                  children: [
+                    Text(
+                      isListening ? 'LISTENING' : 'OFFLINE',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w900,
+                        color: isListening ? Colors.greenAccent : Colors.grey[500],
+                        letterSpacing: 1,
+                      ),
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ).animate().fadeIn(duration: 300.ms),
-                ],
+                    const Spacer(),
+                    // Watch Status Icon
+                    Icon(
+                      Icons.watch,
+                      size: 14,
+                      color: isWatchConnected ? Colors.blueAccent : Colors.white24,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      isWatchConnected ? 'WATCH ON' : 'WATCH OFF',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                        color: isWatchConnected ? Colors.blueAccent : Colors.white24,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  lastCommand.isEmpty
+                      ? (isListening ? 'Waiting for command...' : 'Tap mic to start voice')
+                      : lastCommand,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withOpacity(lastCommand.isEmpty ? 0.4 : 0.9),
+                    fontWeight: lastCommand.isEmpty ? FontWeight.normal : FontWeight.bold,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ],
             ),
           ),

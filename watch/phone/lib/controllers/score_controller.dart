@@ -21,6 +21,7 @@ class ScoreController extends GetxController {
   final RxString lastCommand = ''.obs;
   final RxBool isVoiceActive = false.obs;
   final RxBool isGameEnded = false.obs;
+  final RxBool isWatchConnected = false.obs;
 
   // Cooldown to prevent rapid scoring
   final RxBool isCooldownActive = false.obs;
@@ -30,6 +31,9 @@ class ScoreController extends GetxController {
 
   // Team configuration
   TeamConfig? _teamConfig;
+
+  // Watch command subscription
+  StreamSubscription? _watchCommandSubscription;
 
   // Expose the observable for Obx to track
   Rx<GameState> get gameStateObservable => _gameState;
@@ -65,10 +69,51 @@ class ScoreController extends GetxController {
         _watchService.sendScoreUpdate(gameState);
       });
 
+      // Listen for commands from watch
+      _watchCommandSubscription = _watchService.watchCommandStream.listen((event) {
+        _handleWatchCommand(event);
+      });
+
+      // Periodic connection check
+      Timer.periodic(const Duration(seconds: 5), (timer) async {
+        isWatchConnected.value = await _watchService.isWatchConnected();
+      });
+
       print('⌚ [Controller] Watch sync initialized');
     } catch (e) {
       print('⌚ [Controller] Watch sync initialization error: $e');
       // Not critical if watch isn't available
+    }
+  }
+
+  void _handleWatchCommand(Map<String, dynamic> event) {
+    if (event['type'] == 'command') {
+      final command = event['data'] as String;
+      print('⌚ [Controller] Handling watch command: $command');
+      
+      if (!gameState.isGameActive && command != 'undo') {
+        print('⌚ [Controller] Ignored $command: Game is PAUSED');
+      }
+
+      switch (command) {
+        case 'team1_add':
+          incrementTeamA();
+          break;
+        case 'team1_sub':
+          decrementTeamA();
+          break;
+        case 'team2_add':
+          incrementTeamB();
+          break;
+        case 'team2_sub':
+          decrementTeamB();
+          break;
+        case 'undo':
+          undo();
+          break;
+        default:
+          print('⌚ [Controller] Unknown watch command: $command');
+      }
     }
   }
 
@@ -470,6 +515,7 @@ class ScoreController extends GetxController {
   @override
   void onClose() {
     _cooldownTimer?.cancel();
+    _watchCommandSubscription?.cancel();
     _voiceService.dispose();
     _ttsService.dispose();
     _watchService.dispose();

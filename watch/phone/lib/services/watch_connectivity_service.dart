@@ -103,6 +103,21 @@ class WatchConnectivityService {
     }
   }
 
+  /// Send command from watch to phone
+  Future<void> sendCommand(String command) async {
+    if (!_isInitialized) {
+      // Try to initialize if not yet initialized (common on watch side)
+      await initialize();
+    }
+
+    try {
+      await platform.invokeMethod('sendCommand', command);
+      print('⌚ [WatchService] Command sent: $command');
+    } catch (e) {
+      print('⌚ [WatchService] Error sending command: $e');
+    }
+  }
+
   /// Check if watch is connected
   Future<bool> isWatchConnected() async {
     if (!_isInitialized) return false;

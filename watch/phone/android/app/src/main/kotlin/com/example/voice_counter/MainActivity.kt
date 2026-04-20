@@ -22,6 +22,26 @@ class MainActivity : FlutterActivity() {
     private lateinit var nodeClient: NodeClient
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
+    private val messageListener = MessageClient.OnMessageReceivedListener { messageEvent ->
+        Log.d(TAG, "Message received from watch: ${messageEvent.path}")
+        when (messageEvent.path) {
+            "/watch-command" -> {
+                val command = String(messageEvent.data)
+                Log.d(TAG, "Watch command payload: $command")
+                
+                // EventSink must be called on the UI thread
+                scope.launch(Dispatchers.Main) {
+                    if (eventSink != null) {
+                        eventSink?.success(mapOf("type" to "command", "data" to command))
+                        Log.d(TAG, "Successfully sent command to Flutter eventSink on Main thread")
+                    } else {
+                        Log.e(TAG, "Failed to send command to Flutter: eventSink is NULL")
+                    }
+                }
+            }
+        }
+    }
+
     companion object {
         private const val TAG = "MainActivity"
         private const val GAME_UPDATE_PATH = "/game-update"
@@ -37,16 +57,7 @@ class MainActivity : FlutterActivity() {
         nodeClient = Wearable.getNodeClient(this)
 
         // Listen for messages from watch
-        messageClient.addListener { messageEvent ->
-            Log.d(TAG, "Message received from watch: ${messageEvent.path}")
-            when (messageEvent.path) {
-                "/watch-command" -> {
-                    val command = String(messageEvent.data)
-                    Log.d(TAG, "Watch command: $command")
-                    eventSink?.success(mapOf("type" to "command", "data" to command))
-                }
-            }
-        }
+        messageClient.addListener(messageListener)
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -89,6 +100,18 @@ class MainActivity : FlutterActivity() {
                     }
                 }
 
+                "sendCommand" -> {
+                    val command = call.arguments<String>()
+                    if (command != null) {
+                        scope.launch {
+                            sendRawMessageToNodes("/watch-command", command)
+                        }
+                        result.success(true)
+                    } else {
+                        result.error("INVALID_ARGS", "Missing command", null)
+                    }
+                }
+
                 else -> {
                     result.notImplemented()
                 }
@@ -108,6 +131,22 @@ class MainActivity : FlutterActivity() {
                 Log.d(TAG, "Watch event channel listener cancelled")
             }
         })
+    }
+
+    private suspend fun sendRawMessageToNodes(path: String, message: String) = withContext(Dispatchers.IO) {
+        try {
+            val nodes = nodeClient.connectedNodes.await()
+            val bytes = message.toByteArray()
+
+            for (node in nodes) {
+                if (node.isNearby) {
+                    messageClient.sendMessage(node.id, path, bytes).await()
+                    Log.d(TAG, "Raw message sent to node ${node.displayName}: $path ($message)")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error sending raw message to nodes", e)
+        }
     }
 
     private suspend fun sendMessageToWatch(path: String, data: Map<String, Any>) = withContext(Dispatchers.IO) {
@@ -134,7 +173,8 @@ class MainActivity : FlutterActivity() {
             val nodes = nodeClient.connectedNodes.await()
             nodes.any { it.isNearby }
         } catch (e: Exception) {
-            Log.e(TAG, "Error checking watch connection", e)
+            // Use Warning instead of Error for expected API unavailability (e.g. no watch paired)
+            Log.w(TAG, "Watch connection check skipped: ${e.message}")
             false
         }
     }
@@ -144,7 +184,7 @@ class MainActivity : FlutterActivity() {
             val nodes = nodeClient.connectedNodes.await()
             nodes.filter { it.isNearby }.map { it.displayName }
         } catch (e: Exception) {
-            Log.e(TAG, "Error getting connected nodes", e)
+            Log.w(TAG, "Get connected nodes skipped: ${e.message}")
             emptyList()
         }
     }
@@ -152,6 +192,6 @@ class MainActivity : FlutterActivity() {
     override fun onDestroy() {
         super.onDestroy()
         scope.cancel()
-        messageClient.removeListener { }
+        messageClient.removeListener(messageListener)
     }
 }

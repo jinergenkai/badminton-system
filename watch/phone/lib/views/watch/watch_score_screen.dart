@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:wear/wear.dart';
 import '../../controllers/score_controller.dart';
+import '../../services/watch_connectivity_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// WearOS optimized score screen
@@ -11,6 +13,7 @@ class WatchScoreScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ScoreController controller = Get.put(ScoreController());
+    final WatchConnectivityService watchService = WatchConnectivityService();
 
     return WatchShape(
       builder: (context, shape, child) {
@@ -24,114 +27,111 @@ class WatchScoreScreen extends StatelessWidget {
                 final state = controller.gameStateObservable.value;
 
                 return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
+                  child: Stack(
+                    alignment: Alignment.center,
                     children: [
-                      // Sport Icon
+                      // Main Score View
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            // Team A Column
+                            Expanded(
+                              child: _buildScoreColumn(
+                                teamName: state.teamAName,
+                                score: state.teamAScore,
+                                color: isAmbient ? Colors.white : Colors.blue[300]!,
+                                isAmbient: isAmbient,
+                                onIncrement: () {
+                                  HapticFeedback.mediumImpact();
+                                  watchService.sendCommand('team1_add');
+                                },
+                                onDecrement: () {
+                                  HapticFeedback.mediumImpact();
+                                  watchService.sendCommand('team1_sub');
+                                },
+                              ),
+                            ),
+
+                            // Divider
+                            Container(
+                              width: 1,
+                              height: 60,
+                              color: isAmbient ? Colors.white24 : Colors.white10,
+                            ),
+
+                            // Team B Column
+                            Expanded(
+                              child: _buildScoreColumn(
+                                teamName: state.teamBName,
+                                score: state.teamBScore,
+                                color: isAmbient ? Colors.white : Colors.orange[300]!,
+                                isAmbient: isAmbient,
+                                onIncrement: () {
+                                  HapticFeedback.mediumImpact();
+                                  watchService.sendCommand('team2_add');
+                                },
+                                onDecrement: () {
+                                  HapticFeedback.mediumImpact();
+                                  watchService.sendCommand('team2_sub');
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      // Undo Button (Only in non-ambient)
                       if (!isAmbient)
-                        Icon(
-                          Icons.sports_tennis,
-                          color: Colors.white70,
-                          size: 24,
+                        Positioned(
+                          bottom: 10,
+                          child: GestureDetector(
+                            onTap: () {
+                              HapticFeedback.mediumImpact();
+                              watchService.sendCommand('undo');
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white10,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Icon(
+                                Icons.undo,
+                                color: Colors.white70,
+                                size: 20,
+                              ),
+                            ),
+                          ),
                         ),
 
-                      const SizedBox(height: 8),
-
-                      // Team A Score
-                      _buildTeamScore(
-                        teamName: state.teamAName,
-                        score: state.teamAScore,
-                        color: isAmbient ? Colors.white : Colors.blue[300]!,
-                        isAmbient: isAmbient,
-                      ),
-
-                      const SizedBox(height: 4),
-
-                      // VS Divider
-                      Text(
-                        'VS',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: isAmbient ? Colors.white54 : Colors.white70,
+                      // VS Label
+                      if (!isAmbient)
+                        Positioned(
+                          top: 25,
+                          child: Text(
+                            'VS',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white38,
+                            ),
+                          ),
                         ),
-                      ),
 
-                      const SizedBox(height: 4),
-
-                      // Team B Score
-                      _buildTeamScore(
-                        teamName: state.teamBName,
-                        score: state.teamBScore,
-                        color: isAmbient ? Colors.white : Colors.orange[300]!,
-                        isAmbient: isAmbient,
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Winner Indicator
+                      // Winner / Paused Overlay
                       if (state.hasWinner && !isAmbient)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.amber[700],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.emoji_events,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 4),
-                              Text(
-                                state.winner,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
+                        _buildStatusOverlay(
+                          text: state.winner,
+                          icon: Icons.emoji_events,
+                          color: Colors.amber[700]!,
                         ),
-
-                      // Game Paused Indicator
                       if (!state.isGameActive && !state.hasWinner && !isAmbient)
-                        Container(
-                          margin: const EdgeInsets.only(top: 8),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.red[700],
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.pause_circle,
-                                color: Colors.white,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 4),
-                              const Text(
-                                'PAUSED',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
+                        _buildStatusOverlay(
+                          text: 'PAUSED',
+                          icon: Icons.pause_circle,
+                          color: Colors.red[700]!,
                         ),
                     ],
                   ),
@@ -144,40 +144,124 @@ class WatchScoreScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildTeamScore({
+  Widget _buildScoreColumn({
     required String teamName,
     required int score,
     required Color color,
     required bool isAmbient,
+    required VoidCallback onIncrement,
+    required VoidCallback onDecrement,
   }) {
     return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Team Name
-        Text(
-          teamName,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: isAmbient ? Colors.white70 : color,
-            letterSpacing: 1,
+        // Plus Button
+        if (!isAmbient)
+          _buildActionButton(
+            icon: Icons.add,
+            onTap: onIncrement,
+            color: color,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
 
-        const SizedBox(height: 2),
+        const SizedBox(height: 4),
 
         // Score
         Text(
           '$score',
           style: GoogleFonts.orbitron(
-            fontSize: 36,
+            fontSize: isAmbient ? 42 : 36,
             fontWeight: FontWeight.w900,
             color: isAmbient ? Colors.white : color,
             height: 1,
           ),
         ),
+
+        // Team Name
+        Text(
+          teamName.toUpperCase(),
+          style: TextStyle(
+            fontSize: 8,
+            fontWeight: FontWeight.bold,
+            color: isAmbient ? Colors.white70 : color.withOpacity(0.7),
+            letterSpacing: 0.5,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+
+        const SizedBox(height: 4),
+
+        // Minus Button
+        if (!isAmbient)
+          _buildActionButton(
+            icon: Icons.remove,
+            onTap: onDecrement,
+            color: color,
+            isSmall: true,
+          ),
       ],
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required VoidCallback onTap,
+    required Color color,
+    bool isSmall = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: isSmall ? 40 : 56,
+        height: isSmall ? 32 : 56,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.15),
+          borderRadius: BorderRadius.circular(isSmall ? 8 : 16),
+        ),
+        child: Icon(
+          icon,
+          color: color,
+          size: isSmall ? 18 : 28,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusOverlay({
+    required String text,
+    required IconData icon,
+    required Color color,
+  }) {
+    return Positioned(
+      top: 40,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black54,
+              blurRadius: 4,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 14),
+            const SizedBox(width: 4),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

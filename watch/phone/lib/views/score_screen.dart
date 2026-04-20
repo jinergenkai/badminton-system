@@ -216,16 +216,42 @@ class ScoreScreen extends StatelessWidget {
           // 2. Language Quick Info
           Expanded(
             child: Obx(() {
+              final isConnected = controller.isWatchConnected.value;
               final lang = controller.ttsService.currentLanguageRx.value;
               final langName = TtsService.supportedLanguages[lang] ?? 'English';
-              return GestureDetector(
-                onTap: () => _showLanguageSettings(Get.context!, controller),
-                child: Text(
-                  'TTS: ${langName.toUpperCase()}',
-                  style: TextStyle(color: Colors.white24, fontSize: 10, fontWeight: FontWeight.bold),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.watch,
+                        size: 12,
+                        color: isConnected ? Colors.blueAccent : Colors.white10,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        isConnected ? 'WATCH ON' : 'WATCH OFF',
+                        style: TextStyle(
+                          color: isConnected ? Colors.blueAccent : Colors.white10,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 2),
+                  GestureDetector(
+                    onTap: () => _showLanguageSettings(Get.context!, controller),
+                    child: Text(
+                      'TTS: ${langName.toUpperCase()}',
+                      style: TextStyle(color: Colors.white24, fontSize: 9, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               );
             }),
           ),
