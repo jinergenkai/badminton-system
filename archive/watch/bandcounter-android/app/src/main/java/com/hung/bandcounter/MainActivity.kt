@@ -17,6 +17,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xiaomi.xms.wearable.Wearable
+import com.xiaomi.xms.wearable.auth.AuthApi
+import com.xiaomi.xms.wearable.auth.Permission
 import com.xiaomi.xms.wearable.message.MessageApi
 import com.xiaomi.xms.wearable.message.OnMessageReceivedListener
 import com.xiaomi.xms.wearable.node.Node
@@ -67,9 +69,9 @@ class MainActivity : ComponentActivity() {
     private val TAG = "BandCounter"
     private lateinit var nodeApi: NodeApi
     private lateinit var messageApi: MessageApi
+    private lateinit var authApi: AuthApi
     private var watchNodeId: String? = null
 
-    // Listener theo chuẩn SDK 1.4: (String, ByteArray)
     private val messageListener = OnMessageReceivedListener { nodeId, message ->
         val raw = String(message)
         Log.d(TAG, "Received from $nodeId: $raw")
@@ -90,34 +92,45 @@ class MainActivity : ComponentActivity() {
         try {
             nodeApi = Wearable.getNodeApi(this)
             messageApi = Wearable.getMessageApi(this)
+            authApi = Wearable.getAuthApi(this)
 
             // Bước 1: Tìm watch đang kết nối
             nodeApi.getConnectedNodes()
-                .addOnSuccessListener(OnSuccessListener<List<Node>> { nodes ->
+                .addOnSuccessListener { nodes ->
                     if (nodes == null || nodes.isEmpty()) {
                         AppState.statusText = "○ No watch connected"
-                        return@OnSuccessListener
+                        return@addOnSuccessListener
                     }
 
                     val node = nodes[0]
                     watchNodeId = node.id
-                    AppState.statusText = "● Watch [${node.id}] connected"
-                    Log.d(TAG, "Watch found: ${node.id}")
+                    AppState.statusText = "Found: ${node.id}"
 
-                    // Bước 2: Đăng ký nhận message
-                    messageApi.addListener(node.id, messageListener)
-                        .addOnSuccessListener(OnSuccessListener<Void> {
-                            Log.d(TAG, "Listener registered for ${node.id}")
-                        })
-                        .addOnFailureListener(OnFailureListener { e ->
-                            AppState.statusText = "Listener error: ${e.message}"
-                        })
-                })
-                .addOnFailureListener(OnFailureListener { e ->
-                    AppState.statusText = "Error: ${e.message}"
-                })
+                    // Bước 2: YÊU CẦU QUYỀN (Sửa cú pháp Lambda)
+                    authApi.requestPermission(node.id, Permission.DEVICE_MANAGER)
+                        .addOnSuccessListener { permissions ->
+                            Log.d(TAG, "Permission granted")
+                            AppState.statusText = "● Connected: ${node.id}"
+
+                            // Bước 3: Đăng ký listener
+                            messageApi.addListener(node.id, messageListener)
+                                .addOnSuccessListener {
+                                    Log.d(TAG, "Message listener OK")
+                                }
+                                .addOnFailureListener { e ->
+                                    AppState.statusText = "Listener error: ${e.message}"
+                                }
+                        }
+                        .addOnFailureListener { e ->
+                            AppState.statusText = "Permission error: ${e.message}"
+                            Log.e(TAG, "requestPermission failed: ${e.message}")
+                        }
+                }
+                .addOnFailureListener { e ->
+                    AppState.statusText = "Node error: ${e.message}"
+                }
         } catch (e: Exception) {
-            Log.e(TAG, "Init error: ${e.message}")
+            Log.e(TAG, "SDK Init error: ${e.message}")
             AppState.statusText = "SDK Init error"
         }
 
@@ -148,7 +161,7 @@ fun BandCounterApp() {
         Text(
             AppState.statusText,
             fontSize = 12.sp,
-            color = if (AppState.statusText.startsWith("●")) Color(0xFF4CAF50) else Color(0xFF666666),
+            color = if (AppState.statusText.contains("●")) Color(0xFF4CAF50) else Color(0xFF666666),
             modifier = Modifier.padding(vertical = 10.dp)
         )
 
