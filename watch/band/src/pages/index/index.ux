@@ -1,31 +1,37 @@
 <template>
   <div class="container">
-    <text class="title">Score Counter</text>
-
-    <div class="score-row">
-      <text class="score-label">A</text>
-      <text class="score-value">{{ scoreA }}</text>
-      <text class="score-label score-label-b">B</text>
-      <text class="score-value">{{ scoreB }}</text>
+    <!-- Header Section -->
+    <div class="header">
+      <div class="score-display">
+        <text class="score-num color-a">{{ scoreA }}</text>
+        <text class="score-sep">:</text>
+        <text class="score-num color-b">{{ scoreB }}</text>
+      </div>
+      <div class="status-row">
+        <text class="status-dot {{ connected ? 'online' : 'offline' }}">●</text>
+        <text class="status-info">{{ connected ? 'PHONE LINKED' : 'OFFLINE' }}</text>
+      </div>
     </div>
 
-    <div class="status-row">
-      <text class="status {{ connected ? 'connected' : 'disconnected' }}">
-        {{ connected ? '● Connected' : '○ No phone' }}
-      </text>
+    <!-- Main Giant Buttons Area - Dùng Hình Ảnh -->
+    <div class="main-touch-area">
+      <!-- Nút A -->
+      <div class="huge-btn btn-a" onclick="onScoreA">
+        <img src="/common/btn_a.png" class="huge-img" />
+      </div>
+      
+      <!-- Nút B -->
+      <div class="huge-btn btn-b" onclick="onScoreB">
+        <img src="/common/btn_b.png" class="huge-img" />
+      </div>
     </div>
 
-    <div class="btn-row">
-      <input type="button" class="btn btn-a" value="+A" onclick="onScoreA" />
-      <div class="spacer"></div>
-      <input type="button" class="btn btn-b" value="+B" onclick="onScoreB" />
+    <!-- Undo Giant Button -->
+    <div class="undo-touch-area" onclick="onUndo">
+      <text class="undo-huge-text">UNDO</text>
     </div>
 
-    <div class="btn-row">
-      <input type="button" class="btn btn-undo" value="↩ Undo" onclick="onUndo" />
-    </div>
-
-    <text class="last-event">{{ lastEvent }}</text>
+    <div class="footer-spacer"></div>
   </div>
 </template>
 
@@ -37,49 +43,34 @@
       scoreA: 0,
       scoreB: 0,
       connected: false,
-      lastEvent: 'Ready',
       connect: null,
     },
 
     onInit() {
       try {
         this.connect = interconnect.instance()
-        if (!this.connect) {
-          this.lastEvent = 'API Error'
-          return
-        }
-
-        this.connect.onopen = (data) => {
-          this.connected = true
-          this.lastEvent = data.isReconnected ? 'Reconnected' : 'Connected'
-        }
-
-        this.connect.onclose = () => {
-          this.connected = false
-          this.lastEvent = 'Disconnected'
-        }
-
-        this.connect.onmessage = (data) => {
-          try {
-            const msg = JSON.parse(data.data)
-            if (msg.scoreA !== undefined) this.scoreA = msg.scoreA
-            if (msg.scoreB !== undefined) this.scoreB = msg.scoreB
-          } catch (e) {}
-        }
-
-        this.connect.getReadyState({
-          success: (data) => {
-            this.connected = (data.status === 1)
+        if (this.connect) {
+          this.connect.onopen = () => { this.connected = true }
+          this.connect.onclose = () => { this.connected = false }
+          this.connect.onmessage = (data) => {
+            try {
+              const msg = JSON.parse(data.data)
+              if (msg.scoreA !== undefined) this.scoreA = msg.scoreA
+              if (msg.scoreB !== undefined) this.scoreB = msg.scoreB
+            } catch (e) {}
           }
-        })
+          this.connect.getReadyState({
+            success: (data) => { this.connected = (data.status === 1) }
+          })
+        }
       } catch (e) {
-        this.lastEvent = 'Crash avoided'
+        console.error('Init error: ' + e)
       }
     },
 
     sendEvent(action) {
       if (!this.connect) return
-
+      
       if (action === 'score_A') this.scoreA++
       else if (action === 'score_B') this.scoreB++
 
@@ -93,7 +84,6 @@
         fail: (data, code) => {
           if (action === 'score_A') this.scoreA--
           else if (action === 'score_B') this.scoreB--
-          this.lastEvent = 'Err: ' + code
         }
       })
     },
@@ -107,87 +97,102 @@
 <style>
   .container {
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
     width: 100%;
     height: 100%;
     background-color: #000000;
   }
 
-  .title {
-    font-size: 18px;
-    color: #ffffff;
-    font-weight: bold;
-    margin-bottom: 8px;
-  }
-
-  .score-row {
-    flex-direction: row;
-    justify-content: center;
+  .header {
+    width: 100%;
+    height: 110px;
+    flex-direction: column;
     align-items: center;
-    margin-bottom: 8px;
+    justify-content: center;
+    background-color: #111111;
   }
 
-  .score-label {
-    font-size: 14px;
-    color: #888888;
+  .score-display {
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .score-num {
+    font-size: 48px;
+    font-weight: bold;
+  }
+
+  .score-sep {
+    font-size: 36px;
+    color: #333333;
+    margin: 0 12px;
+  }
+
+  .color-a { color: #1E88E5; }
+  .color-b { color: #EF5350; }
+
+  .status-row {
+    flex-direction: row;
+    align-items: center;
+    margin-top: 2px;
+  }
+
+  .status-dot {
+    font-size: 8px;
     margin-right: 4px;
   }
 
-  .score-label-b {
-    margin-left: 16px;
-  }
-
-  .score-value {
-    font-size: 32px;
-    color: #ffffff;
-    font-weight: bold;
-    width: 44px;
-    text-align: center;
-  }
-
-  .status-row {
-    margin-bottom: 8px;
-  }
-
-  .status {
-    font-size: 11px;
-  }
-
-  .connected { color: #4caf50; }
-  .disconnected { color: #666666; }
-
-  .btn-row {
-    flex-direction: row;
-    justify-content: center;
-    margin-bottom: 6px;
-  }
-
-  .spacer {
-    width: 10px;
-  }
-
-  .btn {
-    height: 40px;
-    border-radius: 20px;
-    font-size: 15px;
-    padding: 0 15px;
-    background-color: #333333;
-    color: #ffffff;
-  }
-
-  .btn-a { background-color: #1565c0; }
-  .btn-b { background-color: #b71c1c; }
-
-  .btn-undo {
-    background-color: #222222;
-    color: #888888;
-    width: 120px;
-  }
-
-  .last-event {
+  .status-info {
     font-size: 10px;
-    color: #444444;
-    margin-top: 4px;
+    color: #666666;
+    font-weight: bold;
+  }
+
+  .online { color: #4caf50; }
+  .offline { color: #555555; }
+
+  /* Main Giant Buttons Area */
+  .main-touch-area {
+    width: 100%;
+    height: 310px;
+    flex-direction: row;
+  }
+
+  .huge-btn {
+    flex: 1;
+    height: 100%;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .btn-a { background-color: #1E88E5; }
+  .btn-b { background-color: #EF5350; }
+
+  /* Style cho Hình Ảnh */
+  .huge-img {
+    width: 90px;
+    height: 90px;
+    object-fit: contain;
+  }
+
+  /* Undo Giant Button */
+  .undo-touch-area {
+    width: 100%;
+    height: 120px;
+    background-color: #222222;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .undo-huge-text {
+    color: #888888;
+    font-size: 32px;
+    font-weight: bold;
+  }
+
+  .footer-spacer {
+    flex: 1;
+    width: 100%;
+    background-color: #000000;
   }
 </style>

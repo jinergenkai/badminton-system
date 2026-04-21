@@ -5,18 +5,14 @@
   "versionCode": 1,
   "minPlatformVersion": 1100,
   "icon": "/common/icon.png",
-  "deviceTypeList": [
-    "watch"
-  ],
+  "deviceTypeList": ["watch"],
   "features": [
     { "name": "system.interconnect" },
     { "name": "system.app" },
     { "name": "system.router" },
     { "name": "system.configuration" }
   ],
-  "permissions": [
-    { "origin": "*" }
-  ],
+  "permissions": [{ "origin": "*" }],
   "config": {
     "logLevel": "debug",
     "designWidth": 212
