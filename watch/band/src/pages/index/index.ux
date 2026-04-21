@@ -19,19 +19,19 @@
       </div>
     </div>
 
-    <!-- Main Giant Buttons Area -->
+    <!-- Main Giant Buttons Area - Đã bỏ hiệu ứng dimmed -->
     <div class="main-touch-area">
       <div class="huge-btn btn-a" onclick="onScoreA">
-        <img src="/common/cat.png" class="huge-img {{ isLocked ? 'dimmed' : '' }}" />
+        <img src="/common/cat.png" class="huge-img" />
       </div>
       <div class="huge-btn btn-b" onclick="onScoreB">
-        <img src="/common/dog.png" class="huge-img {{ isLocked ? 'dimmed' : '' }}" />
+        <img src="/common/dog.png" class="huge-img" />
       </div>
     </div>
 
-    <!-- Undo Giant Button -->
+    <!-- Undo Giant Button - Đã bỏ hiệu ứng dimmed-text -->
     <div class="undo-touch-area" onclick="onUndo">
-      <text class="undo-huge-text {{ isLocked ? 'dimmed-text' : '' }}">UNDO</text>
+      <text class="undo-huge-text">UNDO</text>
     </div>
 
     <div class="footer-spacer"></div>
@@ -48,6 +48,7 @@
     private: {
       scoreA: 0,
       scoreB: 0,
+      history: [], // Lưu lịch sử điểm số
       connected: false,
       isConnecting: false,
       connect: null,
@@ -93,12 +94,9 @@
               this.isConnecting = false
             }
           })
-        } else {
-          this.isConnecting = false
         }
       } catch (e) {
         this.isConnecting = false
-        console.error('Init error: ' + e)
       }
     },
 
@@ -122,17 +120,11 @@
     },
 
     startCooldown() {
-      // Đảm bảo xóa timer cũ trước khi tạo mới
-      if (this.cooldownTimer) {
-        clearInterval(this.cooldownTimer)
-      }
-      
+      if (this.cooldownTimer) clearInterval(this.cooldownTimer)
       this.isLocked = true
       this.cooldownProgress = 100
-      
       const interval = 50
-      const step = 5 // 1000ms / 50ms = 20 bước. 100 / 20 = 5.
-      
+      const step = 5 
       this.cooldownTimer = setInterval(() => {
         if (this.cooldownProgress > 0) {
           this.cooldownProgress -= step
@@ -155,21 +147,50 @@
       this.cooldownProgress = 0
     },
 
-    sendEvent(action) {
-      if (!this.connect || this.isLocked) return
+    // Ghi điểm A
+    onScoreA() {
+      if (this.isLocked || this.isWinnerA || this.isWinnerB) return
+      
+      // Lưu lịch sử trước khi cộng
+      this.history.push({ a: this.scoreA, b: this.scoreB })
+      if (this.history.length > 20) this.history.shift() // Giới hạn 20 bước
+      
+      this.scoreA++
+      this.sendUpdate('score_A')
+    },
 
-      if (action === 'score_A' && !this.isWinnerA && !this.isWinnerB) {
-        this.scoreA++
-      } else if (action === 'score_B' && !this.isWinnerA && !this.isWinnerB) {
-        this.scoreB++
-      } else if (action === 'undo') {
-        // Luôn cho phép undo
-      } else {
-        return 
+    // Ghi điểm B
+    onScoreB() {
+      if (this.isLocked || this.isWinnerA || this.isWinnerB) return
+      
+      // Lưu lịch sử trước khi cộng
+      this.history.push({ a: this.scoreA, b: this.scoreB })
+      if (this.history.length > 20) this.history.shift()
+      
+      this.scoreB++
+      this.sendUpdate('score_B')
+    },
+
+    // Xử lý Undo
+    onUndo() {
+      if (this.isLocked || this.history.length === 0) {
+        if (this.history.length === 0) prompt.showToast({ message: 'No more history' })
+        return
       }
 
+      // Lấy trạng thái cũ nhất từ stack
+      const lastState = this.history.pop()
+      this.scoreA = lastState.a
+      this.scoreB = lastState.b
+      
+      this.sendUpdate('undo')
+    },
+
+    sendUpdate(action) {
       this.checkWinner()
       this.startCooldown()
+
+      if (!this.connect) return
 
       this.connect.send({
         data: {
@@ -179,18 +200,13 @@
           timestamp: Date.now(),
         },
         fail: (data, code) => {
-          if (action === 'score_A') this.scoreA--
-          else if (action === 'score_B') this.scoreB--
-          this.checkWinner()
-          // Nếu fail do nghẽn, ta có thể reset lock sớm hơn
-          this.stopCooldown()
+          // Nếu gửi lỗi, ta có thể khôi phục lại từ history nếu cần
+          // Ở đây đơn giản là hiện lỗi
+          // vẫn tính điểm bình thường vì trong case dùng đồng hồ tính điểm mà không sync tới điện thoại
+          // prompt.showToast({ message: 'Sync fail: ' + code })
         }
       })
-    },
-
-    onScoreA() { this.sendEvent('score_A') },
-    onScoreB() { this.sendEvent('score_B') },
-    onUndo() { this.sendEvent('undo') },
+    }
   }
 </script>
 
@@ -253,7 +269,7 @@
   }
 
   .online { color: #4caf50; }
-  .offline { color: #f44336; } /* Màu đỏ khi offline */
+  .offline { color: #f44336; }
 
   .progress-container {
     width: 120px;
@@ -289,14 +305,6 @@
     width: 90px;
     height: 90px;
     object-fit: contain;
-  }
-
-  .dimmed {
-    opacity: 0.15; /* Làm mờ sâu hơn để rõ sự khác biệt */
-  }
-
-  .dimmed-text {
-    color: #333333;
   }
 
   .undo-touch-area {
