@@ -5,6 +5,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -43,23 +44,21 @@ object AppState {
     var scoreA by mutableStateOf(0)
     var scoreB by mutableStateOf(0)
     var statusText by mutableStateOf("Initializing...")
+    var isConnected by mutableStateOf(false)
     val eventLog = mutableStateListOf<ScoreEvent>()
 
-    fun handleAction(action: String) {
-        when (action) {
-            "score_A" -> scoreA++
-            "score_B" -> scoreB++
-            "undo"    -> {
-                val last = eventLog.firstOrNull()
-                when (last?.action) {
-                    "score_A" -> if (scoreA > 0) scoreA--
-                    "score_B" -> if (scoreB > 0) scoreB--
-                }
-            }
+    fun handleAction(action: String, rawScoreA: Int, rawScoreB: Int) {
+        if (action != "sync") {
+            scoreA = rawScoreA
+            scoreB = rawScoreB
+            val fmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            eventLog.add(0, ScoreEvent(action, scoreA, scoreB, fmt.format(Date())))
+            if (eventLog.size > 50) eventLog.removeLast()
+        } else {
+            // Chỉ là sync điểm, không log vào lịch sử trận đấu
+            scoreA = rawScoreA
+            scoreB = rawScoreB
         }
-        val fmt = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-        eventLog.add(0, ScoreEvent(action, scoreA, scoreB, fmt.format(Date())))
-        if (eventLog.size > 50) eventLog.removeLast()
     }
 }
 
@@ -78,8 +77,17 @@ class MainActivity : ComponentActivity() {
         try {
             val json = JSONObject(raw)
             val action = json.getString("action")
+            
             runOnUiThread {
-                AppState.handleAction(action)
+                if (action == "request_sync") {
+                    sendSyncToWatch(nodeId, "sync")
+                } else {
+                    val sA = json.optInt("scoreA", AppState.scoreA)
+                    val sB = json.optInt("scoreB", AppState.scoreB)
+                    AppState.handleAction(action, sA, sB)
+                    // Confirm ngược lại cho Watch
+                    sendSyncToWatch(nodeId, "sync_confirm")
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Parse error: ${e.message}")
@@ -88,101 +96,115 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
         try {
             nodeApi = Wearable.getNodeApi(this)
             messageApi = Wearable.getMessageApi(this)
             authApi = Wearable.getAuthApi(this)
-
-            // Bước 1: Tìm watch đang kết nối
-            nodeApi.getConnectedNodes()
-                .addOnSuccessListener { nodes ->
-                    if (nodes == null || nodes.isEmpty()) {
-                        AppState.statusText = "○ No watch connected"
-                        return@addOnSuccessListener
-                    }
-
-                    val node = nodes[0]
-                    watchNodeId = node.id
-                    AppState.statusText = "Found: ${node.id}"
-
-                    // Bước 2: YÊU CẦU QUYỀN (Sửa cú pháp Lambda)
-                    authApi.requestPermission(node.id, Permission.DEVICE_MANAGER)
-                        .addOnSuccessListener { permissions ->
-                            Log.d(TAG, "Permission granted")
-                            AppState.statusText = "● Connected: ${node.id}"
-
-                            // Bước 3: Đăng ký listener
-                            messageApi.addListener(node.id, messageListener)
-                                .addOnSuccessListener {
-                                    Log.d(TAG, "Message listener OK")
-                                }
-                                .addOnFailureListener { e ->
-                                    AppState.statusText = "Listener error: ${e.message}"
-                                }
-                        }
-                        .addOnFailureListener { e ->
-                            AppState.statusText = "Permission error: ${e.message}"
-                            Log.e(TAG, "requestPermission failed: ${e.message}")
-                        }
-                }
-                .addOnFailureListener { e ->
-                    AppState.statusText = "Node error: ${e.message}"
-                }
+            initWearableConnect()
         } catch (e: Exception) {
-            Log.e(TAG, "SDK Init error: ${e.message}")
-            AppState.statusText = "SDK Init error"
+            AppState.statusText = "SDK Error: ${e.message}"
         }
-
         setContent {
-            BandCounterApp()
+            BandCounterApp(
+                onReconnect = { initWearableConnect() },
+                onSync = { watchNodeId?.let { sendSyncToWatch(it, "manual_sync") } }
+            )
         }
+    }
+
+    private fun sendSyncToWatch(nodeId: String, action: String) {
+        try {
+            val json = JSONObject().apply {
+                put("action", action)
+                put("scoreA", AppState.scoreA)
+                put("scoreB", AppState.scoreB)
+            }
+            messageApi.sendMessage(nodeId, json.toString().toByteArray())
+                .addOnSuccessListener { Log.d(TAG, "Sync sent: $action") }
+        } catch (e: Exception) {
+            Log.e(TAG, "sendSync error: ${e.message}")
+        }
+    }
+
+    private fun initWearableConnect() {
+        AppState.statusText = "Searching..."
+        AppState.isConnected = false
+        nodeApi.getConnectedNodes()
+            .addOnSuccessListener { nodes ->
+                if (nodes == null || nodes.isEmpty()) {
+                    AppState.statusText = "○ No watch (Tap to retry)"
+                    return@addOnSuccessListener
+                }
+                val node = nodes[0]
+                watchNodeId = node.id
+                authApi.requestPermission(node.id, Permission.DEVICE_MANAGER)
+                    .addOnSuccessListener {
+                        AppState.statusText = "● Linked: ${node.id}"
+                        AppState.isConnected = true
+                        messageApi.addListener(node.id, messageListener)
+                        // Tự động sync khi vừa kết nối thành công
+                        sendSyncToWatch(node.id, "init_sync")
+                    }
+                    .addOnFailureListener { AppState.statusText = "Auth Denied" }
+            }
+            .addOnFailureListener { AppState.statusText = "Search fail" }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        watchNodeId?.let { nodeId ->
-            try {
-                messageApi.removeListener(nodeId)
-            } catch (e: Exception) {
-                Log.e(TAG, "Remove listener error: ${e.message}")
-            }
-        }
+        watchNodeId?.let { try { messageApi.removeListener(it) } catch (e: Exception) {} }
     }
 }
 
 @Composable
-fun BandCounterApp() {
+fun BandCounterApp(onReconnect: () -> Unit, onSync: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D0D)).padding(20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Band Counter", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Text(
-            AppState.statusText,
-            fontSize = 12.sp,
-            color = if (AppState.statusText.contains("●")) Color(0xFF4CAF50) else Color(0xFF666666),
-            modifier = Modifier.padding(vertical = 10.dp)
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-            ScoreCard("A", AppState.scoreA, Color(0xFF1565C0))
-            ScoreCard("B", AppState.scoreB, Color(0xFFB71C1C))
+        Text("Band Counter Pro", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        
+        Surface(
+            modifier = Modifier.padding(vertical = 12.dp).clickable { onReconnect() },
+            color = Color(0xFF1A1A1A),
+            shape = MaterialTheme.shapes.small
+        ) {
+            Text(
+                AppState.statusText,
+                fontSize = 12.sp,
+                color = if (AppState.isConnected) Color(0xFF4CAF50) else Color(0xFFE57373),
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+            )
         }
 
-        Spacer(Modifier.height(20.dp))
-
-        Button(onClick = { AppState.scoreA = 0; AppState.scoreB = 0; AppState.eventLog.clear() }) {
-            Text("Reset")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(40.dp),
+            modifier = Modifier.padding(vertical = 20.dp)
+        ) {
+            ScoreCard("TEAM A", AppState.scoreA, Color(0xFF1E88E5))
+            ScoreCard("TEAM B", AppState.scoreB, Color(0xFFEF5350))
         }
+
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Button(onClick = onReconnect, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))) {
+                Text("Reconnect")
+            }
+            Button(onClick = onSync, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))) {
+                Text("Sync")
+            }
+            OutlinedButton(onClick = { AppState.scoreA = 0; AppState.scoreB = 0; AppState.eventLog.clear(); onSync() }) {
+                Text("Reset")
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+        Text("Match Log", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp))
 
         LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f).padding(top = 20.dp).background(Color(0xFF1A1A1A)),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFF141414), MaterialTheme.shapes.medium).padding(8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(AppState.eventLog) { event ->
-                EventRow(event)
-            }
+            items(AppState.eventLog) { EventRow(it) }
         }
     }
 }
@@ -190,22 +212,22 @@ fun BandCounterApp() {
 @Composable
 fun ScoreCard(label: String, score: Int, color: Color) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = Color.Gray, fontSize = 16.sp)
-        Text(score.toString(), fontSize = 56.sp, fontWeight = FontWeight.Bold, color = color)
+        Text(label, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        Text(score.toString(), fontSize = 64.sp, fontWeight = FontWeight.Bold, color = color)
     }
 }
 
 @Composable
 fun EventRow(event: ScoreEvent) {
     val (label, color) = when (event.action) {
-        "score_A" -> "+A" to Color(0xFF4FC3F7)
-        "score_B" -> "+B" to Color(0xFFEF9A9A)
-        "undo"    -> "↩ undo" to Color(0xFFFFCC80)
+        "score_A" -> "+A" to Color(0xFF64B5F6)
+        "score_B" -> "+B" to Color(0xFFE57373)
+        "undo"    -> "UNDO" to Color(0xFFFFB74D)
         else      -> event.action to Color.Gray
     }
-    Row(modifier = Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = color, fontWeight = FontWeight.Bold)
-        Text("${event.scoreA} - ${event.scoreB}", color = Color.White)
-        Text(event.time, color = Color.Gray, fontSize = 10.sp)
+    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = color, fontWeight = FontWeight.Bold, modifier = Modifier.width(50.dp))
+        Text("${event.scoreA} - ${event.scoreB}", color = Color.White, fontSize = 16.sp)
+        Text(event.time, color = Color(0xFF444444), fontSize = 11.sp)
     }
 }

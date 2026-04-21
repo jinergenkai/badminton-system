@@ -19,7 +19,7 @@
       </div>
     </div>
 
-    <!-- Main Giant Buttons Area - Đã bỏ hiệu ứng dimmed -->
+    <!-- Main Giant Buttons Area -->
     <div class="main-touch-area">
       <div class="huge-btn btn-a" onclick="onScoreA">
         <img src="/common/cat.png" class="huge-img" />
@@ -29,7 +29,7 @@
       </div>
     </div>
 
-    <!-- Undo Giant Button - Đã bỏ hiệu ứng dimmed-text -->
+    <!-- Undo Giant Button -->
     <div class="undo-touch-area" onclick="onUndo">
       <text class="undo-huge-text">UNDO</text>
     </div>
@@ -48,7 +48,7 @@
     private: {
       scoreA: 0,
       scoreB: 0,
-      history: [], // Lưu lịch sử điểm số
+      history: [], 
       connected: false,
       isConnecting: false,
       connect: null,
@@ -72,6 +72,8 @@
           this.connect.onopen = (data) => {
             this.connected = true
             this.isConnecting = false
+            // YÊU CẦU SYNC NGAY KHI MỞ APP
+            this.requestSync()
           }
           this.connect.onclose = () => {
             this.connected = false
@@ -80,19 +82,24 @@
           this.connect.onmessage = (data) => {
             try {
               const msg = JSON.parse(data.data)
-              if (msg.scoreA !== undefined) this.scoreA = msg.scoreA
-              if (msg.scoreB !== undefined) this.scoreB = msg.scoreB
-              this.checkWinner()
+              // NHẬN DATA TỪ ĐIỆN THOẠI
+              if (msg.scoreA !== undefined && msg.scoreB !== undefined) {
+                this.scoreA = msg.scoreA
+                this.scoreB = msg.scoreB
+                this.checkWinner()
+                if (msg.action === 'sync' || msg.action === 'manual_sync') {
+                   prompt.showToast({ message: 'Score Synced' })
+                }
+              }
             } catch (e) {}
           }
           this.connect.getReadyState({
             success: (data) => {
               this.connected = (data.status === 1)
               this.isConnecting = false
+              if (this.connected) this.requestSync()
             },
-            fail: () => {
-              this.isConnecting = false
-            }
+            fail: () => { this.isConnecting = false }
           })
         }
       } catch (e) {
@@ -100,9 +107,16 @@
       }
     },
 
+    requestSync() {
+      if (!this.connect) return
+      this.connect.send({
+        data: { action: 'request_sync' }
+      })
+    },
+
     manualReconnect() {
       if (this.connected) {
-        prompt.showToast({ message: 'Already Linked' })
+        this.requestSync()
         return
       }
       prompt.showToast({ message: 'Reconnecting...' })
@@ -123,75 +137,51 @@
       if (this.cooldownTimer) clearInterval(this.cooldownTimer)
       this.isLocked = true
       this.cooldownProgress = 100
-      const interval = 50
-      const step = 5 
       this.cooldownTimer = setInterval(() => {
-        if (this.cooldownProgress > 0) {
-          this.cooldownProgress -= step
-        } else {
-          this.stopCooldown()
-        }
-      }, interval)
+        if (this.cooldownProgress > 0) this.cooldownProgress -= 5
+        else this.stopCooldown()
+      }, 50)
     },
+
     
     onExitApp() {
        app.terminate()
     },
 
     stopCooldown() {
-      if (this.cooldownTimer) {
-        clearInterval(this.cooldownTimer)
-        this.cooldownTimer = null
-      }
+      if (this.cooldownTimer) { clearInterval(this.cooldownTimer); this.cooldownTimer = null }
       this.isLocked = false
       this.cooldownProgress = 0
     },
 
-    // Ghi điểm A
     onScoreA() {
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
-      
-      // Lưu lịch sử trước khi cộng
       this.history.push({ a: this.scoreA, b: this.scoreB })
-      if (this.history.length > 20) this.history.shift() // Giới hạn 20 bước
-      
+      if (this.history.length > 20) this.history.shift()
       this.scoreA++
       this.sendUpdate('score_A')
     },
 
-    // Ghi điểm B
     onScoreB() {
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
-      
-      // Lưu lịch sử trước khi cộng
       this.history.push({ a: this.scoreA, b: this.scoreB })
       if (this.history.length > 20) this.history.shift()
-      
       this.scoreB++
       this.sendUpdate('score_B')
     },
 
-    // Xử lý Undo
     onUndo() {
-      if (this.isLocked || this.history.length === 0) {
-        if (this.history.length === 0) prompt.showToast({ message: 'No more history' })
-        return
-      }
-
-      // Lấy trạng thái cũ nhất từ stack
+      if (this.isLocked || this.history.length === 0) return
       const lastState = this.history.pop()
       this.scoreA = lastState.a
       this.scoreB = lastState.b
-      
       this.sendUpdate('undo')
     },
 
     sendUpdate(action) {
       this.checkWinner()
       this.startCooldown()
-
       if (!this.connect) return
-
       this.connect.send({
         data: {
           action: action,
@@ -263,7 +253,7 @@
   }
 
   .status-info {
-    font-size: 9px;
+    font-size: 10px;
     color: #666666;
     font-weight: bold;
   }
