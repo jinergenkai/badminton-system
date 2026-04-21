@@ -1,34 +1,37 @@
 <template>
   <div class="container">
-    <!-- Header Section -->
-    <div class="header">
+    <!-- Header: Score & Status - Giờ là vùng bấm Reconnect -->
+    <div class="header" onclick="manualReconnect">
       <div class="score-display">
-        <text class="score-num color-a">{{ scoreA }}</text>
+        <text class="score-num color-a {{ isWinnerA ? 'winner-pulse' : '' }}">{{ scoreA }}</text>
         <text class="score-sep">:</text>
-        <text class="score-num color-b">{{ scoreB }}</text>
+        <text class="score-num color-b {{ isWinnerB ? 'winner-pulse' : '' }}">{{ scoreB }}</text>
       </div>
+      
       <div class="status-row">
         <text class="status-dot {{ connected ? 'online' : 'offline' }}">●</text>
-        <text class="status-info">{{ connected ? 'PHONE LINKED' : 'OFFLINE' }}</text>
+        <text class="status-info">{{ connected ? 'PHONE LINKED' : (isConnecting ? 'CONNECTING...' : 'OFFLINE - TAP TO FIX') }}</text>
+      </div>
+
+      <!-- Thanh Progress Line chống spam -->
+      <div class="progress-container">
+        <div class="progress-line" style="width: {{ cooldownProgress }}%"></div>
       </div>
     </div>
 
-    <!-- Main Giant Buttons Area - Dùng Hình Ảnh -->
+    <!-- Main Giant Buttons Area -->
     <div class="main-touch-area">
-      <!-- Nút A -->
       <div class="huge-btn btn-a" onclick="onScoreA">
-        <img src="/common/btn_a.png" class="huge-img" />
+        <img src="/common/cat.png" class="huge-img {{ isLocked ? 'dimmed' : '' }}" />
       </div>
-      
-      <!-- Nút B -->
       <div class="huge-btn btn-b" onclick="onScoreB">
-        <img src="/common/btn_b.png" class="huge-img" />
+        <img src="/common/dog.png" class="huge-img {{ isLocked ? 'dimmed' : '' }}" />
       </div>
     </div>
 
     <!-- Undo Giant Button -->
     <div class="undo-touch-area" onclick="onUndo">
-      <text class="undo-huge-text">UNDO</text>
+      <text class="undo-huge-text {{ isLocked ? 'dimmed-text' : '' }}">UNDO</text>
     </div>
 
     <div class="footer-spacer"></div>
@@ -37,42 +40,136 @@
 
 <script>
   import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+  import app from '@system.app'
+  
 
   export default {
     private: {
       scoreA: 0,
       scoreB: 0,
       connected: false,
+      isConnecting: false,
       connect: null,
+      isLocked: false,
+      cooldownProgress: 0,
+      cooldownTimer: null,
+      isWinnerA: false,
+      isWinnerB: false,
     },
 
     onInit() {
+      this.initConnect()
+    },
+
+    initConnect() {
       try {
+        this.isConnecting = true
         this.connect = interconnect.instance()
+        
         if (this.connect) {
-          this.connect.onopen = () => { this.connected = true }
-          this.connect.onclose = () => { this.connected = false }
+          this.connect.onopen = (data) => {
+            this.connected = true
+            this.isConnecting = false
+          }
+          this.connect.onclose = () => {
+            this.connected = false
+            this.isConnecting = false
+          }
           this.connect.onmessage = (data) => {
             try {
               const msg = JSON.parse(data.data)
               if (msg.scoreA !== undefined) this.scoreA = msg.scoreA
               if (msg.scoreB !== undefined) this.scoreB = msg.scoreB
+              this.checkWinner()
             } catch (e) {}
           }
           this.connect.getReadyState({
-            success: (data) => { this.connected = (data.status === 1) }
+            success: (data) => {
+              this.connected = (data.status === 1)
+              this.isConnecting = false
+            },
+            fail: () => {
+              this.isConnecting = false
+            }
           })
+        } else {
+          this.isConnecting = false
         }
       } catch (e) {
+        this.isConnecting = false
         console.error('Init error: ' + e)
       }
     },
 
-    sendEvent(action) {
-      if (!this.connect) return
+    manualReconnect() {
+      if (this.connected) {
+        prompt.showToast({ message: 'Already Linked' })
+        return
+      }
+      prompt.showToast({ message: 'Reconnecting...' })
+      this.initConnect()
+    },
+
+    checkWinner() {
+      this.isWinnerA = false
+      this.isWinnerB = false
+      if ((this.scoreA >= 21 && (this.scoreA - this.scoreB) >= 2) || this.scoreA === 30) {
+        this.isWinnerA = true
+      } else if ((this.scoreB >= 21 && (this.scoreB - this.scoreA) >= 2) || this.scoreB === 30) {
+        this.isWinnerB = true
+      }
+    },
+
+    startCooldown() {
+      // Đảm bảo xóa timer cũ trước khi tạo mới
+      if (this.cooldownTimer) {
+        clearInterval(this.cooldownTimer)
+      }
       
-      if (action === 'score_A') this.scoreA++
-      else if (action === 'score_B') this.scoreB++
+      this.isLocked = true
+      this.cooldownProgress = 100
+      
+      const interval = 50
+      const step = 5 // 1000ms / 50ms = 20 bước. 100 / 20 = 5.
+      
+      this.cooldownTimer = setInterval(() => {
+        if (this.cooldownProgress > 0) {
+          this.cooldownProgress -= step
+        } else {
+          this.stopCooldown()
+        }
+      }, interval)
+    },
+    
+    onExitApp() {
+       app.terminate()
+    },
+
+    stopCooldown() {
+      if (this.cooldownTimer) {
+        clearInterval(this.cooldownTimer)
+        this.cooldownTimer = null
+      }
+      this.isLocked = false
+      this.cooldownProgress = 0
+    },
+
+    sendEvent(action) {
+      if (!this.connect || this.isLocked) return
+
+      if (action === 'score_A' && !this.isWinnerA && !this.isWinnerB) {
+        this.scoreA++
+      } else if (action === 'score_B' && !this.isWinnerA && !this.isWinnerB) {
+        this.scoreB++
+      } else if (action === 'undo') {
+        // Luôn cho phép undo
+      } else {
+        return 
+      }
+
+      this.checkWinner()
+      this.startCooldown()
 
       this.connect.send({
         data: {
@@ -84,6 +181,9 @@
         fail: (data, code) => {
           if (action === 'score_A') this.scoreA--
           else if (action === 'score_B') this.scoreB--
+          this.checkWinner()
+          // Nếu fail do nghẽn, ta có thể reset lock sớm hơn
+          this.stopCooldown()
         }
       })
     },
@@ -104,7 +204,7 @@
 
   .header {
     width: 100%;
-    height: 110px;
+    height: 125px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -118,8 +218,12 @@
   }
 
   .score-num {
-    font-size: 48px;
+    font-size: 50px;
     font-weight: bold;
+  }
+
+  .winner-pulse {
+    color: #FFD700;
   }
 
   .score-sep {
@@ -143,18 +247,31 @@
   }
 
   .status-info {
-    font-size: 10px;
+    font-size: 9px;
     color: #666666;
     font-weight: bold;
   }
 
   .online { color: #4caf50; }
-  .offline { color: #555555; }
+  .offline { color: #f44336; } /* Màu đỏ khi offline */
 
-  /* Main Giant Buttons Area */
+  .progress-container {
+    width: 120px;
+    height: 2px;
+    background-color: #222222;
+    margin-top: 6px;
+    border-radius: 1px;
+    overflow: hidden;
+  }
+
+  .progress-line {
+    height: 100%;
+    background-color: #1E88E5;
+  }
+
   .main-touch-area {
     width: 100%;
-    height: 310px;
+    height: 300px;
     flex-direction: row;
   }
 
@@ -168,14 +285,20 @@
   .btn-a { background-color: #1E88E5; }
   .btn-b { background-color: #EF5350; }
 
-  /* Style cho Hình Ảnh */
   .huge-img {
     width: 90px;
     height: 90px;
     object-fit: contain;
   }
 
-  /* Undo Giant Button */
+  .dimmed {
+    opacity: 0.15; /* Làm mờ sâu hơn để rõ sự khác biệt */
+  }
+
+  .dimmed-text {
+    color: #333333;
+  }
+
   .undo-touch-area {
     width: 100%;
     height: 120px;
