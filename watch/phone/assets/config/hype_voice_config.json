@@ -1,0 +1,49 @@
+{
+  "triggers": [
+    {
+      "id": "comeback_king",
+      "priority": 100,
+      "pool": ["comeback_king", "unbelievable", "written_in_history"]
+    },
+    {
+      "id": "shutdown",
+      "priority": 90,
+      "pool": ["shutdown"]
+    },
+    {
+      "id": "streak_7_plus",
+      "priority": 80,
+      "pool": ["godlike", "legendary", "to_the_moon", "the_chosen_one", "mom_are_you_watching"]
+    },
+    {
+      "id": "streak_6",
+      "priority": 70,
+      "pool": ["rampage", "did_you_see_that"]
+    },
+    {
+      "id": "streak_5",
+      "priority": 60,
+      "pool": ["penta_shot", "unstoppable", "badminton_slayer"]
+    },
+    {
+      "id": "streak_4",
+      "priority": 50,
+      "pool": ["quadra_kill", "quadra_shot", "dominating"]
+    },
+    {
+      "id": "streak_3",
+      "priority": 40,
+      "pool": ["triple_kill", "triple_shot", "hat_trick"]
+    },
+    {
+      "id": "streak_2",
+      "priority": 30,
+      "pool": ["double_kill", "double_shot", "nice_pair"]
+    },
+    {
+      "id": "first_point_of_match",
+      "priority": 10,
+      "pool": ["game_on", "lets_dance", "here_we_go"]
+    }
+  ]
+}

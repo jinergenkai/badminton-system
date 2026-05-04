@@ -57,6 +57,7 @@ class ScoreScreen extends StatelessWidget {
                                     onIncrement: controller.incrementTeamA,
                                     onDecrement: controller.decrementTeamA,
                                     isActive: state.isGameActive,
+                                    mascotAsset: 'assets/image/dog_smash.png',
                                   ),
                                 ),
                                 const SizedBox(width: 4, height: 4),
@@ -70,6 +71,7 @@ class ScoreScreen extends StatelessWidget {
                                     onIncrement: controller.incrementTeamB,
                                     onDecrement: controller.decrementTeamB,
                                     isActive: state.isGameActive,
+                                    mascotAsset: 'assets/image/cat_dropshot.png',
                                   ),
                                 ),
                               ],
@@ -102,35 +104,50 @@ class ScoreScreen extends StatelessWidget {
     final winner = controller.gameState.winner;
     final isTeamA = winner == controller.gameState.teamAName;
     final winColor = isTeamA ? Colors.redAccent : Colors.blueAccent;
+    final mascot = isTeamA ? 'assets/image/dog_smash.png' : 'assets/image/cat_dropshot.png';
+    final delay = controller.autoResetDelay.value;
 
     return Container(
-      color: Colors.black.withOpacity(0.9),
+      color: Colors.black.withOpacity(0.92),
       width: double.infinity,
       height: double.infinity,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.emoji_events, color: Colors.amber, size: 120).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
-          const SizedBox(height: 24),
+          // Mascot large celebratory image
+          Image.asset(mascot, width: 160, height: 160, fit: BoxFit.contain)
+              .animate()
+              .scale(duration: 600.ms, curve: Curves.elasticOut)
+              .then()
+              .shake(duration: 400.ms, hz: 4),
+          const SizedBox(height: 16),
           Text(
             'WINNER',
-            style: TextStyle(color: Colors.white70, fontSize: 32, fontWeight: FontWeight.w900, letterSpacing: 8),
+            style: TextStyle(
+                color: Colors.white70,
+                fontSize: 28,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 8),
           ).animate().fadeIn(delay: 300.ms),
           const SizedBox(height: 8),
           Text(
             winner.toUpperCase(),
             style: TextStyle(
               color: winColor,
-              fontSize: 100,
+              fontSize: 80,
               fontWeight: FontWeight.w900,
               shadows: [Shadow(color: winColor, blurRadius: 40)],
             ),
             textAlign: TextAlign.center,
-          ).animate().scale(delay: 500.ms, duration: 400.ms, curve: Curves.easeOutBack),
+          ).animate().scale(
+              delay: 500.ms, duration: 400.ms, curve: Curves.easeOutBack),
           const SizedBox(height: 40),
           Text(
-            'Starting next match in 5s...',
-            style: TextStyle(color: Colors.white24, fontSize: 18, fontStyle: FontStyle.italic),
+            'Next match in ${delay}s...',
+            style: const TextStyle(
+                color: Colors.white24,
+                fontSize: 16,
+                fontStyle: FontStyle.italic),
           ).animate().fadeIn(delay: 1500.ms),
         ],
       ),

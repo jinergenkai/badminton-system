@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 import '../models/team_config.dart';
 import '../services/database_service.dart';
+import '../services/music_service.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -114,7 +116,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const SizedBox(height: 16),
             _buildPreferencesCard().animate().fadeIn(delay: 300.ms),
             const SizedBox(height: 32),
-            _buildDangerZone().animate().fadeIn(delay: 400.ms),
+            _buildSectionHeader('MUSIC'),
+            const SizedBox(height: 16),
+            _buildMusicCard().animate().fadeIn(delay: 400.ms),
+            const SizedBox(height: 32),
+            _buildDangerZone().animate().fadeIn(delay: 450.ms),
           ],
         ),
       ),
@@ -226,6 +232,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildPreferencesCard() {
+    final controller = Get.find<ScoreController>();
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
@@ -260,8 +267,61 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: Icons.timer,
             title: 'Cooldown Duration',
             subtitle: 'Prevent accidental double scoring',
-            trailing: const Text('1.0s', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+            trailing: const Text('1.0s',
+                style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
           ),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+          Obx(() => Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.replay, color: Colors.white70, size: 20),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('Auto-start Next Game',
+                                  style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15)),
+                              Text('After win screen',
+                                  style: TextStyle(
+                                      color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                            ],
+                          ),
+                        ),
+                        Text('${controller.autoResetDelay.value}s',
+                            style: const TextStyle(
+                                color: Colors.amber,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15)),
+                      ],
+                    ),
+                    Slider(
+                      value: controller.autoResetDelay.value.toDouble(),
+                      min: 10,
+                      max: 120,
+                      divisions: 22,
+                      activeColor: Colors.amber,
+                      inactiveColor: Colors.white12,
+                      onChanged: (v) => controller.autoResetDelay.value = v.round(),
+                      onChangeEnd: (v) => controller.setAutoResetDelay(v.round()),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
     );
@@ -293,6 +353,283 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       trailing: trailing,
     );
+  }
+
+  Widget _buildMusicCard() {
+    final music = Get.find<MusicService>();
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Win Music
+          Obx(() => _buildSettingsTile(
+                icon: Icons.emoji_events,
+                title: 'Win Music',
+                subtitle: 'KPOP after match ends (fade in)',
+                trailing: Switch(
+                  value: music.winMusicEnabled.value,
+                  onChanged: (v) {
+                    music.winMusicEnabled.value = v;
+                    music.savePreferences();
+                  },
+                  activeColor: Colors.pinkAccent,
+                ),
+              )),
+          Obx(() => music.winMusicEnabled.value
+              ? _buildVolumeRow('Win Volume', music.winVolume, Colors.pinkAccent,
+                  () => music.savePreferences())
+              : const SizedBox.shrink()),
+          // Play mode chips
+          Obx(() => music.winMusicEnabled.value
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  child: Row(
+                    children: [
+                      Text('Mode  ',
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.6), fontSize: 13)),
+                      _buildModeChip('random', music),
+                      const SizedBox(width: 8),
+                      _buildModeChip('sequential', music),
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink()),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+
+          // Tension Music
+          Obx(() => _buildSettingsTile(
+                icon: Icons.whatshot,
+                title: 'Tension Music',
+                subtitle: 'Music when both reach ${music.tensionThreshold.value}-${music.tensionThreshold.value}',
+                trailing: Switch(
+                  value: music.tensionMusicEnabled.value,
+                  onChanged: (v) {
+                    music.tensionMusicEnabled.value = v;
+                    music.savePreferences();
+                  },
+                  activeColor: Colors.orangeAccent,
+                ),
+              )),
+          Obx(() => music.tensionMusicEnabled.value
+              ? _buildVolumeRow('Tension Volume', music.tensionVolume, Colors.orangeAccent,
+                  () => music.savePreferences())
+              : const SizedBox.shrink()),
+          Obx(() => music.tensionMusicEnabled.value
+              ? Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Threshold',
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 13)),
+                          Text('${music.tensionThreshold.value} pts each',
+                              style: const TextStyle(
+                                  color: Colors.orangeAccent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13)),
+                        ],
+                      ),
+                      Slider(
+                        value: music.tensionThreshold.value.toDouble(),
+                        min: 15,
+                        max: 25,
+                        divisions: 10,
+                        activeColor: Colors.orangeAccent,
+                        inactiveColor: Colors.white12,
+                        onChanged: (v) => music.tensionThreshold.value = v.round(),
+                        onChangeEnd: (_) => music.savePreferences(),
+                      ),
+                    ],
+                  ),
+                )
+              : const SizedBox.shrink()),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+
+          // Music Folder
+          Obx(() {
+            final count = music.playlist.length;
+            final path = music.musicFolderPath;
+            return Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.folder_open, color: Colors.white54, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Music Folder',
+                          style: const TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      const Spacer(),
+                      Text('$count tracks',
+                          style: TextStyle(
+                              color: count > 0 ? Colors.greenAccent : Colors.white38,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () {
+                      Clipboard.setData(ClipboardData(text: path));
+                      Get.snackbar('Copied', 'Folder path copied to clipboard',
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: Colors.white12,
+                          colorText: Colors.white,
+                          margin: const EdgeInsets.all(16),
+                          borderRadius: 12,
+                          duration: const Duration(seconds: 2));
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.black26,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: Colors.white12),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              path,
+                              style: const TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                  fontFamily: 'monospace'),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const Icon(Icons.copy, color: Colors.white38, size: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  count == 0
+                      ? Text(
+                          'Copy MP3 files to the folder above, then tap Rescan.',
+                          style: TextStyle(
+                              color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic),
+                        )
+                      : Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: music.playlist
+                              .map((p) => Chip(
+                                    label: Text(
+                                      p.split('/').last.replaceAll(RegExp(r'\.(mp3|m4a|aac)$', caseSensitive: false), ''),
+                                      style: const TextStyle(fontSize: 11, color: Colors.white),
+                                    ),
+                                    backgroundColor: Colors.white10,
+                                    padding: EdgeInsets.zero,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ))
+                              .toList(),
+                        ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        await music.scanMusicFolder();
+                        Get.snackbar(
+                          'Rescan Complete',
+                          '${music.playlist.length} track(s) found',
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: Colors.white12,
+                          colorText: Colors.white,
+                          margin: const EdgeInsets.all(16),
+                          borderRadius: 12,
+                          duration: const Duration(seconds: 2),
+                        );
+                      },
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('Rescan Folder'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.pinkAccent,
+                        side: const BorderSide(color: Colors.pinkAccent, width: 1),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVolumeRow(String label, RxDouble rxVolume, Color color, VoidCallback? onSave) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+      child: Obx(() => Row(
+            children: [
+              Icon(Icons.volume_up, color: color.withOpacity(0.7), size: 18),
+              const SizedBox(width: 8),
+              Text(label,
+                  style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+              const Spacer(),
+              Text('${(rxVolume.value * 100).round()}%',
+                  style: TextStyle(
+                      color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+              Expanded(
+                child: Slider(
+                  value: rxVolume.value,
+                  min: 0.0,
+                  max: 1.0,
+                  activeColor: color,
+                  inactiveColor: Colors.white12,
+                  onChanged: (v) => rxVolume.value = v,
+                  onChangeEnd: (_) => onSave?.call(),
+                ),
+              ),
+            ],
+          )),
+    );
+  }
+
+  Widget _buildModeChip(String mode, MusicService music) {
+    return Obx(() {
+      final selected = music.playMode.value == mode;
+      return GestureDetector(
+        onTap: () {
+          music.playMode.value = mode;
+          music.savePreferences();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? Colors.pinkAccent.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: selected ? Colors.pinkAccent : Colors.white24, width: 1),
+          ),
+          child: Text(
+            mode == 'random' ? 'Random' : 'Sequential',
+            style: TextStyle(
+                color: selected ? Colors.pinkAccent : Colors.white54,
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal),
+          ),
+        ),
+      );
+    });
   }
 
   Widget _buildDangerZone() {

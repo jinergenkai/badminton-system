@@ -12,6 +12,7 @@ class TeamCard extends StatelessWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final bool isActive;
+  final String? mascotAsset; // e.g. 'assets/image/dog_smash.png'
 
   const TeamCard({
     super.key,
@@ -22,6 +23,7 @@ class TeamCard extends StatelessWidget {
     required this.onIncrement,
     required this.onDecrement,
     this.isActive = true,
+    this.mascotAsset,
   });
 
   @override
@@ -73,10 +75,14 @@ class TeamCard extends StatelessWidget {
                 ),
                 child: Stack(
                   children: [
-                    // MAXIMIZED Main Score Area
+                    // Layer 1 — Mascot watermark (behind everything)
+                    if (mascotAsset != null)
+                      _buildMascotWatermark(mascotAsset!, width, height),
+
+                    // Layer 2 — Main score + name area
                     _buildMaximizedScoreArea(width, height, isTablet),
 
-                    // Tiny Minimal Controls
+                    // Layer 3 — Micro controls on top
                     Positioned(
                       top: 8,
                       left: 8,
@@ -86,7 +92,6 @@ class TeamCard extends StatelessWidget {
                         size: isTablet ? 48 : 36,
                       ),
                     ),
-
                     Positioned(
                       top: 8,
                       right: 8,
@@ -106,16 +111,39 @@ class TeamCard extends StatelessWidget {
     );
   }
 
+  /// Large semi-transparent mascot sitting at the bottom of the card.
+  /// Sized to ~65% of card width, clamped so it never overflows.
+  Widget _buildMascotWatermark(String asset, double width, double height) {
+    // Image takes at most 65% of width and 55% of height
+    final double imgSize = (width * 0.85).clamp(80.0, 360.0);
+    final double maxH = height * 0.65;
+    final double size = imgSize.clamp(0.0, maxH);
+
+    return Positioned(
+      bottom: -size * 0.08, // slightly peek below so it feels "grounded"
+      right: -size * 0.05,
+      child: Opacity(
+        opacity: 0.13,
+        child: Image.asset(
+          asset,
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+          // TODO(animation): swap this Image for an AnimatedWidget
+          // to trigger K.O / kill-point effect on score change
+        ),
+      ),
+    );
+  }
+
   Widget _buildMaximizedScoreArea(double width, double height, bool isTablet) {
-    // Dynamically calculate massive font size based on available height
-    double scoreFontSize = isTablet 
-        ? (height * 0.75).clamp(150, 500) 
+    double scoreFontSize = isTablet
+        ? (height * 0.75).clamp(150, 500)
         : (height * 0.7).clamp(100, 250);
 
-    // Bóp nhỏ font nếu điểm số có 2 chữ số (từ 10 trở lên) để không bị tràn viền
-    if (score > 9) {
-      scoreFontSize *= 0.8;
-    }
+    if (score > 9) scoreFontSize *= 0.8;
+
+    final double iconSize = isTablet ? 32.0 : 22.0;
 
     return Material(
       color: Colors.transparent,
@@ -135,17 +163,33 @@ class TeamCard extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // Team Name (Top edge, small to save space)
               const Spacer(flex: 1),
-              Text(
-                teamName.toUpperCase(),
-                style: TextStyle(
-                  fontSize: isTablet ? 24 : 14,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white.withOpacity(0.5),
-                  letterSpacing: 3,
-                ),
-                textAlign: TextAlign.center,
+
+              // Team name row — icon + text
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (mascotAsset != null) ...[
+                    Image.asset(
+                      mascotAsset!,
+                      width: iconSize,
+                      height: iconSize,
+                      fit: BoxFit.contain,
+                    ),
+                    SizedBox(width: isTablet ? 10 : 6),
+                  ],
+                  Text(
+                    teamName.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: isTablet ? 24 : 14,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white.withOpacity(0.5),
+                      letterSpacing: 3,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ).animate().fadeIn(),
 
               // GIANT SCORE
@@ -159,19 +203,24 @@ class TeamCard extends StatelessWidget {
                   height: 1.0,
                   shadows: [
                     Shadow(color: primaryColor, blurRadius: 30),
-                    Shadow(color: Colors.black, offset: const Offset(0, 5), blurRadius: 20),
+                    Shadow(
+                        color: Colors.black,
+                        offset: const Offset(0, 5),
+                        blurRadius: 20),
                   ],
                 ),
               )
-              .animate(key: ValueKey(score))
-              .scale(
-                duration: 200.ms,
-                curve: Curves.easeOutBack,
-                begin: const Offset(0.9, 0.9),
-                end: const Offset(1, 1),
-              )
-              .shimmer(duration: 1500.ms, color: Colors.white.withOpacity(0.3)),
-              
+                  .animate(key: ValueKey(score))
+                  .scale(
+                    duration: 200.ms,
+                    curve: Curves.easeOutBack,
+                    begin: const Offset(0.9, 0.9),
+                    end: const Offset(1, 1),
+                  )
+                  .shimmer(
+                      duration: 1500.ms,
+                      color: Colors.white.withOpacity(0.3)),
+
               const Spacer(flex: 2),
             ],
           ),
