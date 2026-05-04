@@ -5,20 +5,22 @@ import 'package:get/get.dart';
 class TtsService {
   final FlutterTts _flutterTts = FlutterTts();
   bool _isInitialized = false;
-  final RxString _currentLanguage = 'en-US'.obs; // Default
+  final RxString _currentLanguage = 'en-US'.obs;
 
-  // Ngôn ngữ hỗ trợ
-  static const Map<String, String> supportedLanguages = {
-    'en-US': 'English',
-    'vi-VN': 'Tiếng Việt',
-    'zh-CN': '中文',
-    'ja-JP': '日本語',
-    'ko-KR': '한국어',
-  };
+  // Callback when speech finishes
+  Function? onSpeechCompleted;
 
   Future<void> initialize() async {
     try {
       print('🔊 [TTS] Initializing Text-to-Speech...');
+
+      // Setup completion handler
+      _flutterTts.setCompletionHandler(() {
+        print('🔊 [TTS] Speech completed');
+        if (onSpeechCompleted != null) {
+          onSpeechCompleted!();
+        }
+      });
 
       // Load saved language
       final prefs = await SharedPreferences.getInstance();

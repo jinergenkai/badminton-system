@@ -1,40 +1,63 @@
 plugins {
     id("com.android.application")
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
 android {
-    namespace = "com.example.voice_counter"
-    compileSdk = flutter.compileSdkVersion
-    ndkVersion = "27.0.12077973"
+    namespace = "com.hung.bandcounter"
+    compileSdk = 35 
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "17"
+    }
+
+    signingConfigs {
+        // Lấy thông tin từ gradle.properties
+        val keystorePath = if (project.hasProperty("KEYSTORE_PATH")) project.property("KEYSTORE_PATH").toString() else ""
+        val keystoreFile = if (keystorePath.isNotEmpty()) file(keystorePath) else null
+
+        if (keystoreFile != null && keystoreFile.exists()) {
+            create("secureConfig") {
+                storeFile = keystoreFile
+                storePassword = project.property("KEYSTORE_PASS").toString()
+                keyAlias = project.property("KEY_ALIAS").toString()
+                keyPassword = project.property("KEY_PASS").toString()
+            }
+        }
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.voice_counter"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 24  // hand_landmarker requires API 24+
-        targetSdk = flutter.targetSdkVersion
+        applicationId = "com.hung.bandcounter"
+        minSdk = 26
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
     buildTypes {
-        release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+        getByName("debug") {
+            // ÉP BUỘC dùng key thật ngay cả khi debug
+            val config = signingConfigs.findByName("secureConfig")
+            if (config != null) {
+                signingConfig = config
+                println("--- [BUILD] Using secureConfig for DEBUG build ---")
+            }
+        }
+        getByName("release") {
+            val config = signingConfigs.findByName("secureConfig")
+            if (config != null) {
+                signingConfig = config
+            }
+            isMinifyEnabled = false
+            isShrinkResources = false
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 }
@@ -44,10 +67,8 @@ flutter {
 }
 
 dependencies {
-    // Google Wearable API for watch communication
-    implementation("com.google.android.gms:play-services-wearable:18.1.0")
-
-    // Kotlinx Coroutines
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
+    implementation(files("${projectDir}/libs/xms-wearable-lib_1.4_release.aar"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
 }

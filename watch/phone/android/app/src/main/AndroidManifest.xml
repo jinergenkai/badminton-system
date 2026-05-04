@@ -23,7 +23,7 @@
             android:value="false"
             tools:replace="android:value" />
         <activity
-            android:name=".MainActivity"
+            android:name="com.hung.bandcounter.MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:taskAffinity=""

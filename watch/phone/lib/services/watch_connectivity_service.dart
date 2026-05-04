@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 import '../models/game_state.dart';
 
-/// Service for communicating with WearOS watch
+/// Service for communicating with Xiaomi Wearable SDK watch
 class WatchConnectivityService {
   static const platform = MethodChannel('com.voice_counter/watch');
   static const eventChannel = EventChannel('com.voice_counter/watch_events');
@@ -21,31 +21,34 @@ class WatchConnectivityService {
     if (_isInitialized) return;
 
     try {
-      await platform.invokeMethod('initialize');
-      _isInitialized = true;
-      print('⌚ [WatchService] Initialized successfully');
+      final success = await platform.invokeMethod('initialize');
+      if (success == true) {
+        _isInitialized = true;
+        print('⌚ [WatchService] Initialized successfully');
 
-      // Listen for commands from watch
-      _eventSubscription = eventChannel.receiveBroadcastStream().listen(
-        (event) {
-          if (event is Map) {
-            final command = Map<String, dynamic>.from(event);
-            _commandController.add(command);
-            print('⌚ [WatchService] Received command from watch: $command');
-          }
-        },
-        onError: (error) {
-          print('⌚ [WatchService] Event stream error: $error');
-        },
-      );
+        // Listen for commands from watch
+        _eventSubscription = eventChannel.receiveBroadcastStream().listen(
+          (event) {
+            if (event is Map) {
+              final command = Map<String, dynamic>.from(event);
+              _commandController.add(command);
+              print('⌚ [WatchService] Received from watch: $command');
+            }
+          },
+          onError: (error) {
+            print('⌚ [WatchService] Event stream error: $error');
+          },
+        );
+      } else {
+        print('⌚ [WatchService] Initialization failed (no watch found or auth denied)');
+      }
     } catch (e) {
       print('⌚ [WatchService] Initialization error: $e');
-      // Not critical if watch isn't available
     }
   }
 
   /// Send score update to connected watch
-  Future<void> sendScoreUpdate(GameState gameState) async {
+  Future<void> sendScoreUpdate(GameState gameState, {String action = 'sync'}) async {
     if (!_isInitialized) {
       print('⌚ [WatchService] Not initialized, skipping score update');
       return;
@@ -53,14 +56,10 @@ class WatchConnectivityService {
 
     try {
       await platform.invokeMethod('sendMessage', {
-        'path': '/game-update',
         'data': {
-          'teamAScore': gameState.teamAScore,
-          'teamBScore': gameState.teamBScore,
-          'teamAName': gameState.teamAName,
-          'teamBName': gameState.teamBName,
-          'isGameActive': gameState.isGameActive,
-          'winner': gameState.winner,
+          'action': action,
+          'scoreA': gameState.teamAScore,
+          'scoreB': gameState.teamBScore,
         },
       });
       print('⌚ [WatchService] Score update sent: ${gameState.teamAScore}-${gameState.teamBScore}');
@@ -72,11 +71,13 @@ class WatchConnectivityService {
   /// Send game reset notification to watch
   Future<void> sendGameReset() async {
     if (!_isInitialized) return;
-
     try {
       await platform.invokeMethod('sendMessage', {
-        'path': '/game-reset',
-        'data': {'reset': true},
+        'data': {
+          'action': 'sync',
+          'scoreA': 0,
+          'scoreB': 0,
+        },
       });
       print('⌚ [WatchService] Game reset notification sent');
     } catch (e) {
@@ -84,57 +85,37 @@ class WatchConnectivityService {
     }
   }
 
-  /// Send winner announcement to watch
+  /// Send winner announcement to watch (Optional since watch handles winning logic, but we can sync)
   Future<void> sendWinnerUpdate(String winner, int teamAScore, int teamBScore) async {
     if (!_isInitialized) return;
-
     try {
       await platform.invokeMethod('sendMessage', {
-        'path': '/game-winner',
         'data': {
-          'winner': winner,
-          'teamAScore': teamAScore,
-          'teamBScore': teamBScore,
+          'action': 'sync',
+          'scoreA': teamAScore,
+          'scoreB': teamBScore,
         },
       });
-      print('⌚ [WatchService] Winner update sent: $winner');
-    } catch (e) {
-      print('⌚ [WatchService] Error sending winner: $e');
-    }
+    } catch (e) {}
   }
 
-  /// Send command from watch to phone
-  Future<void> sendCommand(String command) async {
-    if (!_isInitialized) {
-      // Try to initialize if not yet initialized (common on watch side)
-      await initialize();
-    }
-
-    try {
-      await platform.invokeMethod('sendCommand', command);
-      print('⌚ [WatchService] Command sent: $command');
-    } catch (e) {
-      print('⌚ [WatchService] Error sending command: $e');
-    }
-  }
+  /// Send raw command (Not really used in the new Xiaomi logic)
+  Future<void> sendCommand(String command) async { }
 
   /// Check if watch is connected
   Future<bool> isWatchConnected() async {
     if (!_isInitialized) return false;
-
     try {
       final result = await platform.invokeMethod('isWatchConnected');
       return result == true;
     } catch (e) {
-      print('⌚ [WatchService] Error checking watch connection: $e');
       return false;
     }
   }
 
-  /// Get list of connected nodes (watches)
+  /// Get list of connected nodes
   Future<List<String>> getConnectedNodes() async {
     if (!_isInitialized) return [];
-
     try {
       final result = await platform.invokeMethod('getConnectedNodes');
       if (result is List) {
@@ -142,7 +123,6 @@ class WatchConnectivityService {
       }
       return [];
     } catch (e) {
-      print('⌚ [WatchService] Error getting connected nodes: $e');
       return [];
     }
   }
@@ -151,6 +131,5 @@ class WatchConnectivityService {
     _eventSubscription?.cancel();
     _commandController.close();
     _isInitialized = false;
-    print('⌚ [WatchService] Disposed');
   }
 }

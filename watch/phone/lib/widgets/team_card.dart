@@ -108,10 +108,14 @@ class TeamCard extends StatelessWidget {
 
   Widget _buildMaximizedScoreArea(double width, double height, bool isTablet) {
     // Dynamically calculate massive font size based on available height
-    // We target about 70-80% of the card's height for the score
-    final double scoreFontSize = isTablet 
+    double scoreFontSize = isTablet 
         ? (height * 0.75).clamp(150, 500) 
         : (height * 0.7).clamp(100, 250);
+
+    // Bóp nhỏ font nếu điểm số có 2 chữ số (từ 10 trở lên) để không bị tràn viền
+    if (score > 9) {
+      scoreFontSize *= 0.8;
+    }
 
     return Material(
       color: Colors.transparent,

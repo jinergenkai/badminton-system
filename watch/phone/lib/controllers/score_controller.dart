@@ -88,31 +88,37 @@ class ScoreController extends GetxController {
 
   void _handleWatchCommand(Map<String, dynamic> event) {
     if (event['type'] == 'command') {
-      final command = event['data'] as String;
-      print('⌚ [Controller] Handling watch command: $command');
+      final action = event['action'] as String;
+      final int scoreA = event['scoreA'] ?? -1;
+      final int scoreB = event['scoreB'] ?? -1;
       
-      if (!gameState.isGameActive && command != 'undo') {
-        print('⌚ [Controller] Ignored $command: Game is PAUSED');
+      print('⌚ [Controller] Watch Command: $action | Sync scores: $scoreA-$scoreB');
+      
+      if (action == 'request_sync') {
+        _watchService.sendScoreUpdate(gameState, action: 'sync');
+        return;
       }
 
-      switch (command) {
-        case 'team1_add':
-          incrementTeamA();
-          break;
-        case 'team1_sub':
-          decrementTeamA();
-          break;
-        case 'team2_add':
-          incrementTeamB();
-          break;
-        case 'team2_sub':
-          decrementTeamB();
-          break;
-        case 'undo':
-          undo();
-          break;
-        default:
-          print('⌚ [Controller] Unknown watch command: $command');
+      // LOGIC RESET THÔNG MINH: Nếu đã có người thắng mà bấm tiếp -> Reset trận mới
+      if (gameState.hasWinner && (action == 'score_A' || action == 'score_B')) {
+        print('♻️ [Controller] Game already ended. Auto-resetting match for new game.');
+        resetGame();
+        return;
+      }
+
+      // ĐỒNG BỘ TRỰC TIẾP GIÁ TRỊ ĐIỂM TỪ ĐỒNG HỒ
+      if (scoreA != -1 && scoreB != -1) {
+        _gameState.value = gameState.copyWith(
+          teamAScore: scoreA,
+          teamBScore: scoreB,
+          history: [...gameState.history, 'Watch sync: $action'],
+        );
+        
+        if (action == 'score_A') _ttsService.announceScore(scoreA, scoreB, 'A');
+        if (action == 'score_B') _ttsService.announceScore(scoreA, scoreB, 'B');
+        if (action == 'undo') _ttsService.announceUndo(scoreA, scoreB, 'None');
+        
+        _checkGameEnd();
       }
     }
   }
@@ -349,25 +355,30 @@ class ScoreController extends GetxController {
       _gameState.value = gameState.copyWith(isGameActive: false);
       isGameEnded.value = true;
 
-      // Save match to database
       _saveMatchToDatabase();
 
-      // Đọc người thắng kèm tỉ số
+      // Đọc người thắng
       _ttsService.announceWinner(
         gameState.winner,
         gameState.teamAScore,
         gameState.teamBScore,
       );
 
-      // Notify watch of winner
+      // Notify watch
       _watchService.sendWinnerUpdate(
         gameState.winner,
         gameState.teamAScore,
         gameState.teamBScore,
       );
 
-      // Show win dialog
-      _showWinDialog();
+      // TỰ ĐỘNG RESET SAU 5 GIÂY
+      print('🏆 [Score] Game Ended. Auto-resetting in 5 seconds...');
+      Timer(const Duration(seconds: 5), () {
+        if (isGameEnded.value) {
+          resetGame();
+          print('♻️ [Score] Auto-reset completed.');
+        }
+      });
     }
   }
 
