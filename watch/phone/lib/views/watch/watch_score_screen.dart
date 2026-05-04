@@ -41,7 +41,7 @@ class WatchScoreScreen extends StatelessWidget {
                               child: _buildScoreColumn(
                                 teamName: state.teamAName,
                                 score: state.teamAScore,
-                                color: isAmbient ? Colors.white : Colors.blue[300]!,
+                                color: isAmbient ? Colors.white : controller.teamAColor,
                                 isAmbient: isAmbient,
                                 onIncrement: () {
                                   HapticFeedback.mediumImpact();
@@ -66,7 +66,7 @@ class WatchScoreScreen extends StatelessWidget {
                               child: _buildScoreColumn(
                                 teamName: state.teamBName,
                                 score: state.teamBScore,
-                                color: isAmbient ? Colors.white : Colors.orange[300]!,
+                                color: isAmbient ? Colors.white : controller.teamBColor,
                                 isAmbient: isAmbient,
                                 onIncrement: () {
                                   HapticFeedback.mediumImpact();
@@ -123,9 +123,9 @@ class WatchScoreScreen extends StatelessWidget {
                       // Winner / Paused Overlay
                       if (state.hasWinner && !isAmbient)
                         _buildStatusOverlay(
-                          text: state.winner,
+                          text: state.winnerName,
                           icon: Icons.emoji_events,
-                          color: Colors.amber[700]!,
+                          color: state.winner == 'A' ? controller.teamAColor : controller.teamBColor,
                         ),
                       if (!state.isGameActive && !state.hasWinner && !isAmbient)
                         _buildStatusOverlay(

@@ -46,8 +46,14 @@ class GameState {
   }
 
   String get winner {
-    if (teamAScore >= 21 && teamAScore - teamBScore >= 2) return 'Team A';
-    if (teamBScore >= 21 && teamBScore - teamAScore >= 2) return 'Team B';
+    if (teamAScore >= 21 && teamAScore - teamBScore >= 2) return 'A';
+    if (teamBScore >= 21 && teamBScore - teamAScore >= 2) return 'B';
+    return '';
+  }
+
+  String get winnerName {
+    if (winner == 'A') return teamAName;
+    if (winner == 'B') return teamBName;
     return '';
   }
 

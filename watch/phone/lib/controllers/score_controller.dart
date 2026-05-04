@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:ui';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -48,6 +50,9 @@ class ScoreController extends GetxController {
   int get teamBScore => gameState.teamBScore;
   bool get isGameActive => gameState.isGameActive;
   String get winner => gameState.winner;
+
+  Color get teamAColor => _teamConfig?.teamAColor ?? Colors.redAccent;
+  Color get teamBColor => _teamConfig?.teamBColor ?? Colors.blueAccent;
 
   @override
   void onInit() {
@@ -294,7 +299,7 @@ class ScoreController extends GetxController {
       _saveMatchToDatabase();
       // Stop tension music, then: TTS winner → hype (comeback_king etc.) → win music
       _musicService.stopMusic(fadeOut: true);
-      _ttsService.announceWinner(gameState.winner, gameState.teamAScore, gameState.teamBScore);
+      _ttsService.announceWinner(gameState.winnerName, gameState.teamAScore, gameState.teamBScore);
       _watchService.sendWinnerUpdate(gameState.winner, gameState.teamAScore, gameState.teamBScore);
       _autoResetTimer?.cancel();
       _autoResetTimer = Timer(Duration(seconds: autoResetDelay.value), () {

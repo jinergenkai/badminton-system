@@ -88,23 +88,19 @@ class TtsService {
   }
 
   Future<void> announceWinner(
-    String winner,
+    String winnerName,
     int teamAScore,
     int teamBScore,
   ) async {
     if (!_isInitialized) return;
 
     try {
-      // Đọc người thắng kèm tỉ số theo ngôn ngữ
       String announcement;
       if (_currentLanguage.value.startsWith('vi')) {
-        announcement = winner == 'Team A'
-            ? 'Gâu Gâu thắng $teamAScore $teamBScore'
-            : 'Meo Meo thắng $teamBScore $teamAScore';
+        // For Vietnamese, we still use the "thắng" pattern
+        announcement = "$winnerName thắng $teamAScore $teamBScore";
       } else {
-        announcement = winner == 'Team A'
-            ? "$winner wins $teamAScore $teamBScore"
-            : "$winner wins $teamBScore $teamAScore";
+        announcement = "$winnerName wins $teamAScore $teamBScore";
       }
 
       print('🔊 [TTS] 🏆 Announcing: "$announcement"');

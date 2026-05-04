@@ -48,7 +48,8 @@ class _WinDialogState extends State<WinDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isTeamA = widget.winner == 'Team A' || widget.winner == widget.teamAName;
+    final isTeamA = widget.winner == 'A' || widget.winner == widget.teamAName;
+    final winnerName = isTeamA ? widget.teamAName : widget.teamBName;
     final winnerScore = isTeamA ? widget.teamAScore : widget.teamBScore;
     final loserScore = isTeamA ? widget.teamBScore : widget.teamAScore;
     final winnerColor = isTeamA ? Colors.redAccent : Colors.blueAccent;
@@ -141,7 +142,7 @@ class _WinDialogState extends State<WinDialog> {
                 const SizedBox(height: 8),
 
                 Text(
-                  widget.winner.toUpperCase(),
+                  winnerName.toUpperCase(),
                   style: TextStyle(
                     fontSize: 36,
                     fontWeight: FontWeight.w900,
@@ -237,13 +238,14 @@ class _WinDialogState extends State<WinDialog> {
                           widget.onNewGame();
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
+                          backgroundColor: winnerColor,
+                          foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 18),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
-                          elevation: 0,
+                          elevation: 10,
+                          shadowColor: winnerColor.withOpacity(0.5),
                         ),
                         child: const Text(
                           'START NEW MATCH',

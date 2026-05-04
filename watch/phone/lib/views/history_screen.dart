@@ -171,9 +171,9 @@ class _MatchCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isTeamAWinner = match.winner == 'Team A';
+    final isTeamAWinner = match.winner == 'A';
     final teamAColor = isTeamAWinner ? Colors.green : Colors.grey;
-    final teamBColor = !isTeamAWinner && match.winner == 'Team B'
+    final teamBColor = !isTeamAWinner && match.winner == 'B'
         ? Colors.green
         : Colors.grey;
 

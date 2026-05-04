@@ -56,8 +56,8 @@ class Match extends HiveObject {
   }
 
   String get winnerDisplay {
-    if (winner == 'Team A') return teamAName;
-    if (winner == 'Team B') return teamBName;
+    if (winner == 'A') return teamAName;
+    if (winner == 'B') return teamBName;
     return 'Draw';
   }
 }

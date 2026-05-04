@@ -4,7 +4,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../features/hype_voice/models/hype_display_event.dart';
 
-class KillOverlay extends StatelessWidget {
+class KillOverlay extends StatefulWidget {
   final HypeDisplayEvent event;
   final String mascotAsset;
 
@@ -15,127 +15,146 @@ class KillOverlay extends StatelessWidget {
   });
 
   @override
+  State<KillOverlay> createState() => _KillOverlayState();
+}
+
+class _KillOverlayState extends State<KillOverlay> {
+  // Controlled by real Timer — immune to disableAnimations / animator scale
+  double _opacity = 1.0;
+
+  @override
+  void initState() {
+    super.initState();
+    // After 1200ms real time, start fade-out regardless of system animation settings
+    Future.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) setState(() => _opacity = 0.0);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     final mascotSize = (size.width * 0.72).clamp(180.0, 380.0);
-    final fontSize = _fontSize(event.displayText);
+    final fontSize = _fontSize(widget.event.displayText);
 
-    return IgnorePointer(
-      child: SizedBox.expand(
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // ── 1. Background Layers ──────────────────────────────────────
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: RadialGradient(
-                    colors: [
-                      Colors.black.withOpacity(0.1),
-                      Colors.black.withOpacity(0.6),
-                    ],
+    // AnimatedOpacity handles the smooth fade — even if system disables animation
+    // (300ms becomes instant), the 1200ms visible window is always guaranteed by Timer.
+    return AnimatedOpacity(
+      opacity: _opacity,
+      duration: const Duration(milliseconds: 300),
+      child: IgnorePointer(
+        child: SizedBox.expand(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // ── 1. Background Layers ──────────────────────────────────────
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      colors: [
+                        Colors.black.withOpacity(0.1),
+                        Colors.black.withOpacity(0.6),
+                      ],
+                    ),
                   ),
                 ),
+              ).animate().fadeIn(duration: 300.ms),
+
+              // Rotating Cinematic Rays
+              Positioned.fill(
+                child: _RotatingRays(color: widget.event.glowColor.withOpacity(0.15)),
+              ).animate().fadeIn(delay: 200.ms),
+
+              // Animated Speed Lines
+              Positioned.fill(
+                child: _AnimatedSpeedLines(color: widget.event.glowColor),
               ),
-            ).animate().fadeIn(duration: 300.ms),
 
-            // Rotating Cinematic Rays
-            Positioned.fill(
-              child: _RotatingRays(color: event.glowColor.withOpacity(0.15)),
-            ).animate().fadeIn(delay: 200.ms),
-
-            // Animated Speed Lines
-            Positioned.fill(
-              child: _AnimatedSpeedLines(color: event.glowColor),
-            ),
-
-            // ── 2. Impact Burst (Particles) ───────────────────────────────
-            Positioned.fill(
-              child: _ParticleBurst(color: event.glowColor),
-            ),
-
-            // ── 3. Mascot Content (Multi-layered for Motion Blur) ─────────
-            Center(
-              child: Stack(
-                alignment: Alignment.center,
-                children: [
-                  // Motion Blur Ghost 1
-                  Image.asset(mascotAsset, width: mascotSize, height: mascotSize, fit: BoxFit.contain, color: event.glowColor.withOpacity(0.3))
-                      .animate()
-                      .scale(begin: const Offset(0.1, 0.1), end: const Offset(1.3, 1.3), duration: 300.ms, curve: Curves.easeOut)
-                      .fadeOut(duration: 300.ms),
-
-                  // Main Mascot
-                  Image.asset(
-                    mascotAsset,
-                    width: mascotSize,
-                    height: mascotSize,
-                    fit: BoxFit.contain,
-                  )
-                      .animate()
-                      .scale(begin: const Offset(0.2, 0.2), end: const Offset(1.0, 1.0), duration: 500.ms, curve: Curves.elasticOut)
-                      .rotate(begin: -0.2, end: 0, duration: 500.ms, curve: Curves.elasticOut)
-                      .then()
-                      .shake(duration: 600.ms, hz: 10, offset: const Offset(8, 8))
-                      // IDLE ANIMATION: Float & Breathe
-                      .animate(onPlay: (c) => c.repeat(reverse: true))
-                      .moveY(begin: -10, end: 10, duration: 2000.ms, curve: Curves.easeInOut)
-                      .scale(begin: const Offset(1.0, 1.0), end: const Offset(1.04, 1.04), duration: 1500.ms, curve: Curves.easeInOut),
-                ],
+              // ── 2. Impact Burst (Particles) ───────────────────────────────
+              Positioned.fill(
+                child: _ParticleBurst(color: widget.event.glowColor),
               ),
-            ),
 
-            // ── 4. Overwhelming Text ──────────────────────────────────────
-            Positioned(
-              bottom: size.height * 0.15,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Text Glow Aura
-                      Text(
-                        event.displayText,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.orbitron(
-                          fontSize: fontSize,
-                          fontWeight: FontWeight.w900,
-                          color: event.glowColor.withOpacity(0.5),
-                          letterSpacing: 4,
-                        ),
-                      ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(begin: const Offset(1.0, 1.0), end: const Offset(1.2, 1.2), duration: 1000.ms).blur(begin: const Offset(5, 5), end: const Offset(15, 15)),
+              // ── 3. Mascot Content (Multi-layered for Motion Blur) ─────────
+              Center(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Motion Blur Ghost
+                    Image.asset(widget.mascotAsset, width: mascotSize, height: mascotSize, fit: BoxFit.contain, color: widget.event.glowColor.withOpacity(0.3))
+                        .animate()
+                        .scale(begin: const Offset(0.1, 0.1), end: const Offset(1.3, 1.3), duration: 300.ms, curve: Curves.easeOut)
+                        .fadeOut(duration: 300.ms),
 
-                      // Main Text
-                      Text(
-                        event.displayText,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.orbitron(
-                          fontSize: fontSize,
-                          fontWeight: FontWeight.w900,
-                          color: Colors.white,
-                          letterSpacing: 2,
-                          shadows: [
-                            Shadow(color: event.glowColor, blurRadius: 30),
-                            const Shadow(color: Colors.black, offset: Offset(0, 5), blurRadius: 15),
-                          ],
-                        ),
-                      )
-                          .animate()
-                          .scale(begin: const Offset(4, 4), end: const Offset(1, 1), duration: 400.ms, curve: Curves.easeOutExpo)
-                          .fadeIn()
-                          .then()
-                          .animate(onPlay: (c) => c.repeat())
-                          .shimmer(duration: 2000.ms, color: event.glowColor)
-                          .shake(duration: 2000.ms, hz: 2, offset: const Offset(2, 0)),
-                    ],
-                  ),
-                ],
+                    // Main Mascot
+                    Image.asset(
+                      widget.mascotAsset,
+                      width: mascotSize,
+                      height: mascotSize,
+                      fit: BoxFit.contain,
+                    )
+                        .animate()
+                        .scale(begin: const Offset(0.2, 0.2), end: const Offset(1.0, 1.0), duration: 500.ms, curve: Curves.elasticOut)
+                        .rotate(begin: -0.2, end: 0, duration: 500.ms, curve: Curves.elasticOut)
+                        .then()
+                        .shake(duration: 600.ms, hz: 10, offset: const Offset(8, 8))
+                        .animate(onPlay: (c) => c.repeat(reverse: true))
+                        .moveY(begin: -10, end: 10, duration: 2000.ms, curve: Curves.easeInOut)
+                        .scale(begin: const Offset(1.0, 1.0), end: const Offset(1.04, 1.04), duration: 1500.ms, curve: Curves.easeInOut),
+                  ],
+                ),
               ),
-            ),
-          ],
+
+              // ── 4. Hype Text ──────────────────────────────────────────────
+              Positioned(
+                bottom: size.height * 0.15,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Glow aura (looping)
+                    Text(
+                      widget.event.displayText,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.orbitron(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.w900,
+                        color: widget.event.glowColor.withOpacity(0.5),
+                        letterSpacing: 4,
+                      ),
+                    ).animate(onPlay: (c) => c.repeat(reverse: true))
+                        .scale(begin: const Offset(1.0, 1.0), end: const Offset(1.2, 1.2), duration: 1000.ms)
+                        .blur(begin: const Offset(5, 5), end: const Offset(15, 15)),
+
+                    // Main text
+                    Text(
+                      widget.event.displayText,
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.orbitron(
+                        fontSize: fontSize,
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white,
+                        letterSpacing: 2,
+                        shadows: [
+                          Shadow(color: widget.event.glowColor, blurRadius: 30),
+                          const Shadow(color: Colors.black, offset: Offset(0, 5), blurRadius: 15),
+                        ],
+                      ),
+                    )
+                        .animate()
+                        .scale(begin: const Offset(4, 4), end: const Offset(1, 1), duration: 400.ms, curve: Curves.easeOutExpo)
+                        .fadeIn()
+                        .then()
+                        .animate(onPlay: (c) => c.repeat())
+                        .shimmer(duration: 2000.ms, color: widget.event.glowColor)
+                        .shake(duration: 2000.ms, hz: 2, offset: const Offset(2, 0)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-      ).animate().fadeOut(delay: 1200.ms, duration: 300.ms),
+      ),
     );
   }
 

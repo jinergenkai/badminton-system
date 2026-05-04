@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import '../controllers/score_controller.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
@@ -77,8 +78,7 @@ class ScoreScreen extends StatelessWidget {
                                     isActive: state.isGameActive,
                                     mascotAsset: 'assets/image/cat_dropshot.png',
                                   ),
-                                ),
-                              ],
+                                ),                              ],
                             );
                           },
                         );
@@ -117,54 +117,88 @@ class ScoreScreen extends StatelessWidget {
 
   Widget _buildEpicWinOverlay(ScoreController controller) {
     final winner = controller.gameState.winner;
-    final isTeamA = winner == controller.gameState.teamAName;
+    final winnerName = controller.gameState.winnerName;
+    final isTeamA = winner == 'A';
     final winColor = isTeamA ? Colors.redAccent : Colors.blueAccent;
     final mascot = isTeamA ? 'assets/image/dog_smash.png' : 'assets/image/cat_dropshot.png';
     final delay = controller.autoResetDelay.value;
 
-    return Container(
-      color: Colors.black.withOpacity(0.92),
-      width: double.infinity,
-      height: double.infinity,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Mascot large celebratory image
-          Image.asset(mascot, width: 160, height: 160, fit: BoxFit.contain)
-              .animate()
-              .scale(duration: 600.ms, curve: Curves.elasticOut)
-              .then()
-              .shake(duration: 400.ms, hz: 4),
-          const SizedBox(height: 16),
-          Text(
-            'WINNER',
-            style: TextStyle(
-                color: Colors.white70,
-                fontSize: 28,
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.mediumImpact();
+        controller.resetGame();
+      },
+      child: Container(
+        color: Colors.black.withOpacity(0.92),
+        width: double.infinity,
+        height: double.infinity,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Mascot large celebratory image
+            Image.asset(mascot, width: 160, height: 160, fit: BoxFit.contain)
+                .animate()
+                .scale(duration: 600.ms, curve: Curves.elasticOut)
+                .then()
+                .shake(duration: 400.ms, hz: 4),
+            const SizedBox(height: 16),
+            Text(
+              'WINNER',
+              style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 8),
+            ).animate().fadeIn(delay: 300.ms),
+            const SizedBox(height: 8),
+            Text(
+              winnerName.toUpperCase(),
+              style: TextStyle(
+                color: winColor,
+                fontSize: 60,
                 fontWeight: FontWeight.w900,
-                letterSpacing: 8),
-          ).animate().fadeIn(delay: 300.ms),
-          const SizedBox(height: 8),
-          Text(
-            winner.toUpperCase(),
-            style: TextStyle(
-              color: winColor,
-              fontSize: 80,
-              fontWeight: FontWeight.w900,
-              shadows: [Shadow(color: winColor, blurRadius: 40)],
-            ),
-            textAlign: TextAlign.center,
-          ).animate().scale(
-              delay: 500.ms, duration: 400.ms, curve: Curves.easeOutBack),
-          const SizedBox(height: 40),
-          Text(
-            'Next match in ${delay}s...',
-            style: const TextStyle(
-                color: Colors.white24,
-                fontSize: 16,
-                fontStyle: FontStyle.italic),
-          ).animate().fadeIn(delay: 1500.ms),
-        ],
+                shadows: [Shadow(color: winColor, blurRadius: 40)],
+              ),
+              textAlign: TextAlign.center,
+            ).animate().scale(
+                delay: 500.ms, duration: 400.ms, curve: Curves.easeOutBack),
+            const SizedBox(height: 40),
+
+            // NEXT MATCH BUTTON (IMMEDIATE)
+            ElevatedButton(
+              onPressed: () {
+                HapticFeedback.mediumImpact();
+                controller.resetGame();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: winColor,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                elevation: 10,
+                shadowColor: winColor.withOpacity(0.5),
+              ),
+              child: const Text(
+                'NEXT MATCH NOW',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1,
+                ),
+              ),
+            ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
+
+            const SizedBox(height: 24),
+
+            Text(
+              'Tap anywhere or wait ${delay}s to reset',
+              style: const TextStyle(
+                  color: Colors.white24,
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic),
+            ).animate().fadeIn(delay: 1000.ms),
+          ],
+        ),
       ),
     ).animate().fadeIn(duration: 400.ms);
   }
