@@ -135,7 +135,7 @@ class KillOverlay extends StatelessWidget {
             ),
           ],
         ),
-      ).animate().fadeOut(delay: 5600.ms, duration: 400.ms),
+      ).animate().fadeOut(delay: 1200.ms, duration: 300.ms),
     );
   }
 

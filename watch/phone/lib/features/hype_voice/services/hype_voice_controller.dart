@@ -16,7 +16,8 @@ class HypeVoiceController extends GetxController {
   final RxDouble volume = 0.8.obs;
   final RxBool koEffectEnabled = true.obs;
 
-  /// Set by _prepareHype, consumed by ScoreScreen overlay. Auto-clears after 6s.
+  final RxString currentStreakTeam = ''.obs;
+  final RxInt streakCount = 0.obs;
   final Rx<HypeDisplayEvent?> displayEvent = Rx<HypeDisplayEvent?>(null);
   DateTime? _lastEventTime;
 
@@ -73,8 +74,6 @@ class HypeVoiceController extends GetxController {
   // Called when MP3 is missing — ScoreController injects this to speak via TTS
   Function(String text)? onTtsFallback;
 
-  String? _currentStreakTeam;
-  int _streakCount = 0;
   int _lastOpponentStreak = 0;
   int _maxDeficitTeamA = 0;
   int _maxDeficitTeamB = 0;
@@ -145,8 +144,8 @@ class HypeVoiceController extends GetxController {
     if (!isEnabled.value) return;
 
     _historyStack.add(HypeStateSnapshot(
-      currentStreakTeam: _currentStreakTeam,
-      streakCount: _streakCount,
+      currentStreakTeam: currentStreakTeam.value,
+      streakCount: streakCount.value,
       lastOpponentStreak: _lastOpponentStreak,
       maxDeficitTeamA: _maxDeficitTeamA,
       maxDeficitTeamB: _maxDeficitTeamB,
@@ -156,12 +155,12 @@ class HypeVoiceController extends GetxController {
 
     final String scoringTeam = newA > oldA ? 'A' : 'B';
 
-    if (_currentStreakTeam == scoringTeam) {
-      _streakCount++;
+    if (currentStreakTeam.value == scoringTeam) {
+      streakCount.value++;
     } else {
-      _lastOpponentStreak = _streakCount;
-      _currentStreakTeam = scoringTeam;
-      _streakCount = 1;
+      _lastOpponentStreak = streakCount.value;
+      currentStreakTeam.value = scoringTeam;
+      streakCount.value = 1;
     }
 
     final int deficitA = newB - newA;
@@ -189,25 +188,25 @@ class HypeVoiceController extends GetxController {
           if (isBWin && scoringTeam == 'B' && _maxDeficitTeamB >= 5) isMatch = true;
           break;
         case 'shutdown':
-          if (_lastOpponentStreak >= 5 && _streakCount == 1) isMatch = true;
+          if (_lastOpponentStreak >= 5 && streakCount.value == 1) isMatch = true;
           break;
         case 'streak_7_plus':
-          if (_streakCount >= 7) isMatch = true;
+          if (streakCount.value >= 7) isMatch = true;
           break;
         case 'streak_6':
-          if (_streakCount == 6) isMatch = true;
+          if (streakCount.value == 6) isMatch = true;
           break;
         case 'streak_5':
-          if (_streakCount == 5) isMatch = true;
+          if (streakCount.value == 5) isMatch = true;
           break;
         case 'streak_4':
-          if (_streakCount == 4) isMatch = true;
+          if (streakCount.value == 4) isMatch = true;
           break;
         case 'streak_3':
-          if (_streakCount == 3) isMatch = true;
+          if (streakCount.value == 3) isMatch = true;
           break;
         case 'streak_2':
-          if (_streakCount == 2) isMatch = true;
+          if (streakCount.value == 2) isMatch = true;
           break;
         case 'first_point_of_match':
           break;
@@ -242,7 +241,7 @@ class HypeVoiceController extends GetxController {
       // Allow interruption if the previous event has been showing for a while (2.5s+)
       final now = DateTime.now();
       if (displayEvent.value != null && _lastEventTime != null) {
-        if (now.difference(_lastEventTime!).inMilliseconds < 2500) {
+        if (now.difference(_lastEventTime!).inMilliseconds < 1500) {
           print('🔥 [Hype] Overlay too recent, skipping: $chosen');
           return;
         }
@@ -253,11 +252,11 @@ class HypeVoiceController extends GetxController {
         voiceId: chosen,
         displayText: _displayTexts[chosen] ??
             chosen.toUpperCase().replaceAll('_', ' '),
-        team: _currentStreakTeam ?? 'A',
+        team: currentStreakTeam.value ?? 'A',
         glowColor: _glowColor(chosen),
       );
-      // Auto-clear after overlay animation completes (~6s)
-      Future.delayed(const Duration(milliseconds: 6000), () {
+      // Auto-clear after overlay animation completes (~1.5s)
+      Future.delayed(const Duration(milliseconds: 1800), () {
         if (displayEvent.value?.voiceId == chosen) {
           displayEvent.value = null;
         }
@@ -312,8 +311,8 @@ class HypeVoiceController extends GetxController {
   void handleUndo() {
     if (_historyStack.isEmpty) return;
     final snapshot = _historyStack.removeLast();
-    _currentStreakTeam = snapshot.currentStreakTeam;
-    _streakCount = snapshot.streakCount;
+    currentStreakTeam.value = snapshot.currentStreakTeam ?? '';
+    streakCount.value = snapshot.streakCount;
     _lastOpponentStreak = snapshot.lastOpponentStreak;
     _maxDeficitTeamA = snapshot.maxDeficitTeamA;
     _maxDeficitTeamB = snapshot.maxDeficitTeamB;
@@ -323,8 +322,8 @@ class HypeVoiceController extends GetxController {
   }
 
   void resetState() {
-    _currentStreakTeam = null;
-    _streakCount = 0;
+    currentStreakTeam.value = '';
+    streakCount.value = 0;
     _lastOpponentStreak = 0;
     _maxDeficitTeamA = 0;
     _maxDeficitTeamB = 0;

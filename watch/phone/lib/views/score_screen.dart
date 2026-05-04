@@ -52,6 +52,7 @@ class ScoreScreen extends StatelessWidget {
                                 Expanded(
                                   flex: 10,
                                   child: TeamCard(
+                                    teamId: 'A',
                                     teamName: state.teamAName,
                                     score: state.teamAScore,
                                     primaryColor: Colors.redAccent,
@@ -66,6 +67,7 @@ class ScoreScreen extends StatelessWidget {
                                 Expanded(
                                   flex: 10,
                                   child: TeamCard(
+                                    teamId: 'B',
                                     teamName: state.teamBName,
                                     score: state.teamBScore,
                                     primaryColor: Colors.blueAccent,
