@@ -5,6 +5,7 @@ import 'package:flex_color_picker/flex_color_picker.dart';
 import '../models/team_config.dart';
 import '../services/database_service.dart';
 import '../services/music_service.dart';
+import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
@@ -270,6 +271,20 @@ class _SettingsScreenState extends State<SettingsScreen> {
             trailing: const Text('1.0s',
                 style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
           ),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+          Obx(() {
+            final hype = Get.find<HypeVoiceController>();
+            return _buildSettingsTile(
+              icon: Icons.bolt,
+              title: 'K.O Effect',
+              subtitle: 'Speed lines on every point',
+              trailing: Switch(
+                value: hype.koEffectEnabled.value,
+                onChanged: (v) => hype.koEffectEnabled.value = v,
+                activeColor: Colors.amber,
+              ),
+            );
+          }),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
           Obx(() => Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),

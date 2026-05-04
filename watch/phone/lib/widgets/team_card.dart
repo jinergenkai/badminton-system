@@ -12,7 +12,7 @@ class TeamCard extends StatelessWidget {
   final VoidCallback onIncrement;
   final VoidCallback onDecrement;
   final bool isActive;
-  final String? mascotAsset; // e.g. 'assets/image/dog_smash.png'
+  final String? mascotAsset;
 
   const TeamCard({
     super.key,
@@ -75,31 +75,24 @@ class TeamCard extends StatelessWidget {
                 ),
                 child: Stack(
                   children: [
-                    // Layer 1 — Mascot watermark (behind everything)
                     if (mascotAsset != null)
-                      _buildMascotWatermark(mascotAsset!, width, height),
-
-                    // Layer 2 — Main score + name area
-                    _buildMaximizedScoreArea(width, height, isTablet),
-
-                    // Layer 3 — Micro controls on top
+                      _buildWatermark(mascotAsset!, width, height),
+                    _buildScoreArea(width, height, isTablet),
                     Positioned(
                       top: 8,
                       left: 8,
-                      child: _buildMicroControl(
-                        icon: Icons.remove,
-                        onTap: onDecrement,
-                        size: isTablet ? 48 : 36,
-                      ),
+                      child: _buildControl(
+                          icon: Icons.remove,
+                          onTap: onDecrement,
+                          size: isTablet ? 48 : 36),
                     ),
                     Positioned(
                       top: 8,
                       right: 8,
-                      child: _buildMicroControl(
-                        icon: Icons.add,
-                        onTap: onIncrement,
-                        size: isTablet ? 48 : 36,
-                      ),
+                      child: _buildControl(
+                          icon: Icons.add,
+                          onTap: onIncrement,
+                          size: isTablet ? 48 : 36),
                     ),
                   ],
                 ),
@@ -111,38 +104,23 @@ class TeamCard extends StatelessWidget {
     );
   }
 
-  /// Large semi-transparent mascot sitting at the bottom of the card.
-  /// Sized to ~65% of card width, clamped so it never overflows.
-  Widget _buildMascotWatermark(String asset, double width, double height) {
-    // Image takes at most 65% of width and 55% of height
-    final double imgSize = (width * 0.85).clamp(80.0, 360.0);
-    final double maxH = height * 0.65;
-    final double size = imgSize.clamp(0.0, maxH);
-
+  Widget _buildWatermark(String asset, double w, double h) {
+    final double size = (w * 0.85).clamp(80.0, 360.0).clamp(0.0, h * 0.65);
     return Positioned(
-      bottom: -size * 0.08, // slightly peek below so it feels "grounded"
+      bottom: -size * 0.08,
       right: -size * 0.05,
       child: Opacity(
         opacity: 0.13,
-        child: Image.asset(
-          asset,
-          width: size,
-          height: size,
-          fit: BoxFit.contain,
-          // TODO(animation): swap this Image for an AnimatedWidget
-          // to trigger K.O / kill-point effect on score change
-        ),
+        child: Image.asset(asset, width: size, height: size, fit: BoxFit.contain),
       ),
     );
   }
 
-  Widget _buildMaximizedScoreArea(double width, double height, bool isTablet) {
-    double scoreFontSize = isTablet
-        ? (height * 0.75).clamp(150, 500)
-        : (height * 0.7).clamp(100, 250);
-
-    if (score > 9) scoreFontSize *= 0.8;
-
+  Widget _buildScoreArea(double w, double h, bool isTablet) {
+    double fontSize = isTablet
+        ? (h * 0.75).clamp(150, 500)
+        : (h * 0.7).clamp(100, 250);
+    if (score > 9) fontSize *= 0.8;
     final double iconSize = isTablet ? 32.0 : 22.0;
 
     return Material(
@@ -164,19 +142,13 @@ class TeamCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               const Spacer(flex: 1),
-
-              // Team name row — icon + text
               Row(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   if (mascotAsset != null) ...[
-                    Image.asset(
-                      mascotAsset!,
-                      width: iconSize,
-                      height: iconSize,
-                      fit: BoxFit.contain,
-                    ),
+                    Image.asset(mascotAsset!,
+                        width: iconSize, height: iconSize, fit: BoxFit.contain),
                     SizedBox(width: isTablet ? 10 : 6),
                   ],
                   Text(
@@ -191,13 +163,11 @@ class TeamCard extends StatelessWidget {
                   ),
                 ],
               ).animate().fadeIn(),
-
-              // GIANT SCORE
               Text(
                 '$score',
                 key: ValueKey(score),
                 style: GoogleFonts.orbitron(
-                  fontSize: scoreFontSize,
+                  fontSize: fontSize,
                   fontWeight: FontWeight.w900,
                   color: Colors.white,
                   height: 1.0,
@@ -220,7 +190,6 @@ class TeamCard extends StatelessWidget {
                   .shimmer(
                       duration: 1500.ms,
                       color: Colors.white.withOpacity(0.3)),
-
               const Spacer(flex: 2),
             ],
           ),
@@ -229,7 +198,7 @@ class TeamCard extends StatelessWidget {
     );
   }
 
-  Widget _buildMicroControl({
+  Widget _buildControl({
     required IconData icon,
     required VoidCallback onTap,
     required double size,

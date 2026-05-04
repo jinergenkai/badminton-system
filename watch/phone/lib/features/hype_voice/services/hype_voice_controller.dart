@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../models/hype_state_snapshot.dart';
+import '../models/hype_display_event.dart';
 
 class HypeVoiceController extends GetxController {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -12,6 +14,58 @@ class HypeVoiceController extends GetxController {
 
   final RxBool isEnabled = true.obs;
   final RxDouble volume = 0.8.obs;
+  final RxBool koEffectEnabled = true.obs;
+
+  /// Set by _prepareHype, consumed by ScoreScreen overlay. Auto-clears after 6s.
+  final Rx<HypeDisplayEvent?> displayEvent = Rx<HypeDisplayEvent?>(null);
+  DateTime? _lastEventTime;
+
+  static const Map<String, String> _displayTexts = {
+    'double_kill': 'DOUBLE KILL',
+    'double_shot': 'DOUBLE SHOT',
+    'nice_pair': 'NICE PAIR',
+    'triple_kill': 'TRIPLE KILL',
+    'triple_shot': 'TRIPLE SHOT',
+    'hat_trick': 'HAT TRICK',
+    'quadra_kill': 'QUADRA KILL',
+    'quadra_shot': 'QUADRA SHOT',
+    'dominating': 'DOMINATING',
+    'penta_shot': 'PENTA SHOT',
+    'unstoppable': 'UNSTOPPABLE',
+    'badminton_slayer': 'BADMINTON\nSLAYER',
+    'rampage': 'RAMPAGE',
+    'did_you_see_that': 'DID YOU\nSEE THAT?',
+    'godlike': 'GODLIKE',
+    'legendary': 'LEGENDARY',
+    'to_the_moon': 'TO THE MOON',
+    'the_chosen_one': 'THE CHOSEN ONE',
+    'mom_are_you_watching': 'MOM, ARE YOU\nWATCHING?',
+    'shutdown': 'SHUTDOWN!',
+    'comeback_king': 'COMEBACK\nKING',
+    'unbelievable': 'UNBELIEVABLE',
+    'written_in_history': 'WRITTEN IN\nHISTORY',
+    'game_on': 'GAME ON',
+    'lets_dance': "LET'S DANCE",
+    'here_we_go': 'HERE WE GO',
+  };
+
+  static Color _glowColor(String id) {
+    const legendary = {
+      'godlike', 'legendary', 'to_the_moon', 'the_chosen_one',
+      'mom_are_you_watching', 'comeback_king', 'written_in_history',
+      'unbelievable',
+    };
+    const fire = {
+      'penta_shot', 'unstoppable', 'badminton_slayer', 'rampage',
+      'did_you_see_that', 'streak_7_plus',
+    };
+    const danger = {'shutdown'};
+
+    if (legendary.contains(id)) return Colors.amberAccent;
+    if (fire.contains(id)) return Colors.deepOrangeAccent;
+    if (danger.contains(id)) return Colors.redAccent;
+    return Colors.cyanAccent; // default streaks
+  }
 
   // Called after hype audio finishes (or immediately if no hype queued)
   Function? onPlaybackCompleted;
@@ -182,6 +236,33 @@ class HypeVoiceController extends GetxController {
     if (_recentVoiceIds.length > 3) _recentVoiceIds.removeAt(0);
 
     print('🔥 [Hype] Trigger: $triggerId → pending: $chosen');
+
+    // Emit display event for full-screen overlay
+    if (koEffectEnabled.value) {
+      // Allow interruption if the previous event has been showing for a while (2.5s+)
+      final now = DateTime.now();
+      if (displayEvent.value != null && _lastEventTime != null) {
+        if (now.difference(_lastEventTime!).inMilliseconds < 2500) {
+          print('🔥 [Hype] Overlay too recent, skipping: $chosen');
+          return;
+        }
+      }
+
+      _lastEventTime = now;
+      displayEvent.value = HypeDisplayEvent(
+        voiceId: chosen,
+        displayText: _displayTexts[chosen] ??
+            chosen.toUpperCase().replaceAll('_', ' '),
+        team: _currentStreakTeam ?? 'A',
+        glowColor: _glowColor(chosen),
+      );
+      // Auto-clear after overlay animation completes (~6s)
+      Future.delayed(const Duration(milliseconds: 6000), () {
+        if (displayEvent.value?.voiceId == chosen) {
+          displayEvent.value = null;
+        }
+      });
+    }
   }
 
   /// Play pending hype. Called after TTS finishes.

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/score_controller.dart';
+import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../widgets/team_card.dart';
+import '../widgets/kill_overlay.dart';
 import '../widgets/cooldown_bar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'history_screen.dart';
@@ -94,6 +96,17 @@ class ScoreScreen extends StatelessWidget {
               return _buildEpicWinOverlay(controller);
             }
             return const SizedBox.shrink();
+          }),
+
+          // KILL / HYPE OVERLAY (full screen, above everything)
+          Obx(() {
+            final hype = Get.find<HypeVoiceController>();
+            final event = hype.displayEvent.value;
+            if (event == null) return const SizedBox.shrink();
+            final mascot = event.team == 'A'
+                ? 'assets/image/dog_smash.png'
+                : 'assets/image/cat_dropshot.png';
+            return KillOverlay(key: ValueKey(event.voiceId), event: event, mascotAsset: mascot);
           }),
         ],
       ),
