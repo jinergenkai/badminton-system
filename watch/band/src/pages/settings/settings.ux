@@ -1,0 +1,123 @@
+<template>
+  <div class="settings-page">
+    <div class="header">
+      <text class="title">SETTINGS</text>
+    </div>
+
+    <list class="settings-list">
+      <list-item type="setting" class="item" onclick="onReconnect">
+        <text class="item-text">Reconnect Watch</text>
+      </list-item>
+      
+      <list-item type="setting" class="item" onclick="onSync">
+        <text class="item-text">Force Sync Score</text>
+      </list-item>
+
+      <list-item type="setting" class="item danger" onclick="onReset">
+        <text class="item-text">Reset Match</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onBack">
+        <text class="item-text">Back to Game</text>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import router from '@system.router'
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+
+  export default {
+    protected: {
+      connected: false,
+      scoreA: 0,
+      scoreB: 0
+    },
+
+    onReconnect() {
+      const connect = interconnect.instance()
+      if (connect) {
+        prompt.showToast({ message: 'Reconnecting...' })
+        connect.send({ data: { action: 'request_sync' } })
+      }
+      router.back()
+    },
+
+    onSync() {
+      const connect = interconnect.instance()
+      if (connect) {
+        prompt.showToast({ message: 'Force Syncing...' })
+        connect.send({ data: { action: 'request_sync' } })
+      }
+      router.back()
+    },
+
+    onReset() {
+      const connect = interconnect.instance()
+      if (connect) {
+        prompt.showToast({ message: 'Resetting Match...' })
+        connect.send({ 
+          data: { 
+            action: 'undo', // Use undo/reset logic on phone
+            scoreA: 0, 
+            scoreB: 0,
+            reset: true 
+          } 
+        })
+      }
+      router.back()
+    },
+
+    onBack() {
+      router.back()
+    }
+  }
+</script>
+
+<style>
+  .settings-page {
+    flex-direction: column;
+    background-color: #0F172A;
+    padding: 20px;
+  }
+
+  .header {
+    height: 80px;
+    justify-content: center;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .title {
+    color: #FFFFFF;
+    font-size: 32px;
+    font-weight: bold;
+  }
+
+  .settings-list {
+    flex: 1;
+    width: 100%;
+  }
+
+  .item {
+    width: 100%;
+    height: 100px;
+    margin-top: 20px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    justify-content: center;
+    padding-left: 30px;
+  }
+
+  .danger {
+    background-color: rgba(255, 82, 82, 0.1);
+  }
+
+  .item-text {
+    color: #FFFFFF;
+    font-size: 28px;
+  }
+</style>
