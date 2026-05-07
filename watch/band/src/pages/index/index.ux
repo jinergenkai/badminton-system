@@ -1,48 +1,66 @@
 <template>
-  <div class="container">
-    <!-- Header: Score & Status - Giờ là vùng bấm Reconnect -->
-    <div class="header" onclick="manualReconnect">
-      <div class="score-display">
-        <text class="score-num color-a {{ isWinnerA ? 'winner-pulse' : '' }}">{{ scoreA }}</text>
-        <text class="score-sep">:</text>
-        <text class="score-num color-b {{ isWinnerB ? 'winner-pulse' : '' }}">{{ scoreB }}</text>
-      </div>
-      
-      <div class="status-row">
-        <text class="status-dot {{ connected ? 'online' : 'offline' }}">●</text>
-        <text class="status-info">{{ connected ? 'PHONE LINKED' : (isConnecting ? 'CONNECTING...' : 'OFFLINE - TAP TO FIX') }}</text>
+  <stack class="root-stack">
+    <!-- MAIN GAME UI -->
+    <div class="container">
+      <!-- ZONE 1: SETTINGS (TOP - 20%) -->
+      <div class="settings-area" onclick="openSettings">
+        <div class="status-indicator {{ connected ? 'online' : 'offline' }}"></div>
+        <text class="settings-label">SETTINGS & SYNC</text>
+        <div class="progress-bar">
+          <div class="progress-inner" style="width: {{ cooldownProgress }}%"></div>
+        </div>
       </div>
 
-      <!-- Thanh Progress Line chống spam -->
-      <div class="progress-container">
-        <div class="progress-line" style="width: {{ cooldownProgress }}%"></div>
+      <!-- ZONE 2 & 3: SCORES (MIDDLE - 60%) -->
+      <div class="score-area">
+        <!-- TEAM A (LEFT) -->
+        <stack class="score-btn card-a" onclick="onScoreA">
+          <image src="/common/dog.png" class="score-watermark"></image>
+          <div class="score-content">
+            <text class="score-text">{{ scoreA }}</text>
+          </div>
+        </stack>
+
+        <!-- TEAM B (RIGHT) -->
+        <stack class="score-btn card-b" onclick="onScoreB">
+          <image src="/common/cat.png" class="score-watermark"></image>
+          <div class="score-content">
+            <text class="score-text">{{ scoreB }}</text>
+          </div>
+        </stack>
+      </div>
+
+      <!-- ZONE 4: UNDO (BOTTOM - 20%) -->
+      <div class="undo-area" onclick="onUndo">
+        <text class="undo-text">undo</text>
       </div>
     </div>
 
-    <!-- Main Giant Buttons Area -->
-    <div class="main-touch-area">
-      <div class="huge-btn btn-a" onclick="onScoreA">
-        <img src="/common/cat.png" class="huge-img" />
-      </div>
-      <div class="huge-btn btn-b" onclick="onScoreB">
-        <img src="/common/dog.png" class="huge-img" />
-      </div>
+    <!-- WIN OVERLAY -->
+    <div class="win-overlay" if="{{ isWinnerA || isWinnerB }}">
+      <stack class="win-container">
+        <div class="win-backdrop"></div>
+        <div class="win-content">
+          <image src="{{ isWinnerA ? '/common/dog.png' : '/common/cat.png' }}" class="win-mascot"></image>
+          <text class="win-title">WINNER</text>
+          <text class="win-team {{ isWinnerA ? 'color-a' : 'color-b' }}">{{ isWinnerA ? 'TEAM A' : 'TEAM B' }}</text>
+          
+          <div class="win-actions">
+            <div class="win-btn reset-btn" onclick="resetGame">
+              <text class="btn-text">NEXT MATCH</text>
+            </div>
+          </div>
+        </div>
+      </stack>
     </div>
-
-    <!-- Undo Giant Button -->
-    <div class="undo-touch-area" onclick="onUndo">
-      <text class="undo-huge-text">UNDO</text>
-    </div>
-
-    <div class="footer-spacer"></div>
-  </div>
+  </stack>
 </template>
 
 <script>
   import interconnect from '@system.interconnect'
   import prompt from '@system.prompt'
+  import router from '@system.router'
   import app from '@system.app'
-  
 
   export default {
     private: {
@@ -72,7 +90,6 @@
           this.connect.onopen = (data) => {
             this.connected = true
             this.isConnecting = false
-            // YÊU CẦU SYNC NGAY KHI MỞ APP
             this.requestSync()
           }
           this.connect.onclose = () => {
@@ -82,13 +99,12 @@
           this.connect.onmessage = (data) => {
             try {
               const msg = JSON.parse(data.data)
-              // NHẬN DATA TỪ ĐIỆN THOẠI
               if (msg.scoreA !== undefined && msg.scoreB !== undefined) {
                 this.scoreA = msg.scoreA
                 this.scoreB = msg.scoreB
                 this.checkWinner()
                 if (msg.action === 'sync' || msg.action === 'manual_sync') {
-                   prompt.showToast({ message: 'Score Synced' })
+                   prompt.showToast({ message: 'Synced' })
                 }
               }
             } catch (e) {}
@@ -114,13 +130,28 @@
       })
     },
 
-    manualReconnect() {
-      if (this.connected) {
-        this.requestSync()
-        return
-      }
-      prompt.showToast({ message: 'Reconnecting...' })
-      this.initConnect()
+    resetGame() {
+      // Save current state to history so we can UNDO the reset
+      this.history.push({ a: this.scoreA, b: this.scoreB })
+      if (this.history.length > 20) this.history.shift()
+
+      this.scoreA = 0
+      this.scoreB = 0
+      this.isWinnerA = false
+      this.isWinnerB = false
+      this.sendUpdate('reset', true)
+      prompt.showToast({ message: 'New Match Started' })
+    },
+
+    openSettings() {
+      router.push({
+        uri: 'pages/settings',
+        params: {
+          connected: this.connected,
+          scoreA: this.scoreA,
+          scoreB: this.scoreB
+        }
+      })
     },
 
     checkWinner() {
@@ -138,14 +169,9 @@
       this.isLocked = true
       this.cooldownProgress = 100
       this.cooldownTimer = setInterval(() => {
-        if (this.cooldownProgress > 0) this.cooldownProgress -= 5
+        if (this.cooldownProgress > 0) this.cooldownProgress -= 10
         else this.stopCooldown()
       }, 50)
-    },
-
-    
-    onExitApp() {
-       app.terminate()
     },
 
     stopCooldown() {
@@ -178,7 +204,7 @@
       this.sendUpdate('undo')
     },
 
-    sendUpdate(action) {
+    sendUpdate(action, isReset = false) {
       this.checkWinner()
       this.startCooldown()
       if (!this.connect) return
@@ -187,13 +213,8 @@
           action: action,
           scoreA: this.scoreA,
           scoreB: this.scoreB,
+          reset: isReset,
           timestamp: Date.now(),
-        },
-        fail: (data, code) => {
-          // Nếu gửi lỗi, ta có thể khôi phục lại từ history nếu cần
-          // Ở đây đơn giản là hiện lỗi
-          // vẫn tính điểm bình thường vì trong case dùng đồng hồ tính điểm mà không sync tới điện thoại
-          // prompt.showToast({ message: 'Sync fail: ' + code })
         }
       })
     }
@@ -201,119 +222,183 @@
 </script>
 
 <style>
+  .root-stack {
+    width: 100%;
+    height: 100%;
+    background-color: #0F172A;
+  }
+
   .container {
     flex-direction: column;
     width: 100%;
     height: 100%;
-    background-color: #000000;
   }
 
-  .header {
+  /* ZONE 1: SETTINGS Area (20%) */
+  .settings-area {
     width: 100%;
-    height: 125px;
+    height: 100px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background-color: #111111;
+    background-color: rgba(255, 255, 255, 0.05);
   }
 
-  .score-display {
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
+  .status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
   }
 
-  .score-num {
-    font-size: 50px;
+  .online { background-color: #448AFF; }
+  .offline { background-color: #FF5252; }
+
+  .settings-label {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.4);
     font-weight: bold;
   }
 
-  .winner-pulse {
-    color: #FFD700;
-  }
-
-  .score-sep {
-    font-size: 36px;
-    color: #333333;
-    margin: 0 12px;
-  }
-
-  .color-a { color: #1E88E5; }
-  .color-b { color: #EF5350; }
-
-  .status-row {
-    flex-direction: row;
-    align-items: center;
-    margin-top: 2px;
-  }
-
-  .status-dot {
-    font-size: 8px;
-    margin-right: 4px;
-  }
-
-  .status-info {
-    font-size: 10px;
-    color: #666666;
-    font-weight: bold;
-  }
-
-  .online { color: #4caf50; }
-  .offline { color: #f44336; }
-
-  .progress-container {
-    width: 120px;
+  .progress-bar {
+    width: 100px;
     height: 2px;
-    background-color: #222222;
-    margin-top: 6px;
-    border-radius: 1px;
+    background-color: rgba(255, 255, 255, 0.1);
+    margin-top: 8px;
+  }
+
+  .progress-inner {
+    height: 100%;
+    background-color: #448AFF;
+  }
+
+  /* ZONE 2 & 3: SCORES Area (60%) */
+  .score-area {
+    flex: 1;
+    width: 100%;
+    flex-direction: row;
+    padding: 8px;
+  }
+
+  .score-btn {
+    flex: 1;
+    height: 100%;
+    margin: 4px;
+    border-radius: 20px;
     overflow: hidden;
   }
 
-  .progress-line {
-    height: 100%;
-    background-color: #1E88E5;
-  }
+  .card-a { background-color: #FF5252; }
+  .card-b { background-color: #448AFF; }
 
-  .main-touch-area {
-    width: 100%;
-    height: 300px;
-    flex-direction: row;
-  }
-
-  .huge-btn {
-    flex: 1;
-    height: 100%;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .btn-a { background-color: #1E88E5; }
-  .btn-b { background-color: #EF5350; }
-
-  .huge-img {
-    width: 90px;
-    height: 90px;
+  .score-watermark {
+    width: 80%;
+    height: 80%;
     object-fit: contain;
+    opacity: 0.25;
+    position: absolute;
+    bottom: -15px;
+    align-self: center;
   }
 
-  .undo-touch-area {
+  .score-content {
     width: 100%;
-    height: 120px;
-    background-color: #222222;
+    height: 100%;
     justify-content: center;
     align-items: center;
   }
 
-  .undo-huge-text {
-    color: #888888;
+  .score-text {
+    font-size: 65px;
+    font-weight: bold;
+    color: #FFFFFF;
+    text-shadow: 0px 4px 10px rgba(0,0,0,0.3);
+  }
+
+  /* ZONE 4: UNDO Area (20%) */
+  .undo-area {
+    width: 100%;
+    height: 100px;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .undo-text {
+    color: rgba(255, 255, 255, 0.3);
     font-size: 32px;
     font-weight: bold;
   }
 
-  .footer-spacer {
-    flex: 1;
+  /* WIN OVERLAY */
+  .win-overlay {
     width: 100%;
-    background-color: #000000;
+    height: 100%;
+  }
+
+  .win-container {
+    width: 100%;
+    height: 100%;
+  }
+
+  .win-backdrop {
+    width: 100%;
+    height: 100%;
+    background-color: rgba(15, 23, 42, 0.98);
+  }
+
+  .win-content {
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .win-mascot {
+    width: 130px;
+    height: 130px;
+    object-fit: contain;
+    margin-bottom: 8px;
+  }
+
+  .win-title {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 22px;
+    font-weight: bold;
+    letter-spacing: 3px;
+  }
+
+  .win-team {
+    font-size: 38px;
+    font-weight: 900;
+    margin-bottom: 24px;
+  }
+
+  .color-a { color: #FF5252; }
+  .color-b { color: #448AFF; }
+
+  .win-actions {
+    flex-direction: column;
+    width: 100%;
+    align-items: center;
+  }
+
+  .win-btn {
+    width: 170px;
+    height: 54px;
+    border-radius: 27px;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .reset-btn { background-color: #FF5252; }
+
+  .btn-text {
+    color: #FFFFFF;
+    font-size: 18px;
+    font-weight: bold;
   }
 </style>
