@@ -164,30 +164,6 @@ class ScoreScreen extends StatelessWidget {
                 delay: 500.ms, duration: 400.ms, curve: Curves.easeOutBack),
             const SizedBox(height: 40),
 
-            // NEXT MATCH BUTTON (IMMEDIATE)
-            ElevatedButton(
-              onPressed: () {
-                HapticFeedback.mediumImpact();
-                controller.resetGame();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: winColor,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 18),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                elevation: 10,
-                shadowColor: winColor.withOpacity(0.5),
-              ),
-              child: const Text(
-                'NEXT MATCH NOW',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1,
-                ),
-              ),
-            ).animate().fadeIn(delay: 600.ms).slideY(begin: 0.2, end: 0),
-
             const SizedBox(height: 24),
 
             Text(

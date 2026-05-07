@@ -19,7 +19,7 @@ class MusicService extends GetxController {
   // Settings
   final RxBool winMusicEnabled = true.obs;
   final RxBool tensionMusicEnabled = true.obs;
-  final RxDouble winVolume = 0.7.obs;
+  final RxDouble winVolume = 1.0.obs;
   final RxDouble tensionVolume = 0.45.obs;
   final RxInt tensionThreshold = 20.obs;
   final RxString playMode = 'random'.obs; // 'random' | 'sequential'
@@ -229,7 +229,7 @@ class MusicService extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     winMusicEnabled.value = prefs.getBool('${_pref}win_enabled') ?? true;
     tensionMusicEnabled.value = prefs.getBool('${_pref}tension_enabled') ?? true;
-    winVolume.value = prefs.getDouble('${_pref}win_volume') ?? 0.7;
+    winVolume.value = prefs.getDouble('${_pref}win_volume') ?? 1.0;
     tensionVolume.value = prefs.getDouble('${_pref}tension_volume') ?? 0.45;
     tensionThreshold.value = prefs.getInt('${_pref}tension_threshold') ?? 20;
     playMode.value = prefs.getString('${_pref}play_mode') ?? 'random';

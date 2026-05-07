@@ -36,7 +36,7 @@ class ScoreController extends GetxController {
   Timer? _autoResetTimer;
 
   // Configurable delay before auto-starting next game after a win
-  final RxInt autoResetDelay = 30.obs;
+  final RxInt autoResetDelay = 60.obs;
 
   TeamConfig? _teamConfig;
   StreamSubscription? _watchCommandSubscription;
@@ -70,7 +70,7 @@ class ScoreController extends GetxController {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-    autoResetDelay.value = prefs.getInt('auto_reset_delay') ?? 30;
+    autoResetDelay.value = prefs.getInt('auto_reset_delay') ?? 60;
   }
 
   Future<void> setAutoResetDelay(int seconds) async {
