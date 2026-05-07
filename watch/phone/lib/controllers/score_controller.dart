@@ -60,9 +60,9 @@ class ScoreController extends GetxController {
     super.onInit();
     _loadTeamConfig();
     _loadSettings();
-    _initializeVoiceService();
+    // _initializeVoiceService(); // DISABLED: Picovoice wake-word
     _ttsService.initialize();
-    _initializeForegroundService();
+    // _initializeForegroundService(); // DISABLED: foreground notification
     _initializeWatchSync();
     _setupAudioChain();
     _musicService.initialize();
@@ -194,7 +194,7 @@ class ScoreController extends GetxController {
         _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB);
         _ttsService.announceScore(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
         _checkTensionMusic();
-        ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
+        // ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
         _checkGameEnd();
       }
     }
@@ -293,7 +293,7 @@ class ScoreController extends GetxController {
     }
     _checkTensionMusic();
     if (fromVoice) _startCooldown();
-    ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
+    // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
     _checkGameEnd();
   }
 
@@ -315,7 +315,7 @@ class ScoreController extends GetxController {
     }
     _checkTensionMusic();
     if (fromVoice) _startCooldown();
-    ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
+    // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
     _checkGameEnd();
   }
 
@@ -442,7 +442,7 @@ class ScoreController extends GetxController {
     _hypeController.resetState();
     _musicService.stopMusic(fadeOut: true);
     _hypeController.playStartOfMatchHype();
-    ForegroundService.updateScores(teamAScore: 0, teamBScore: 0);
+    // ForegroundService.updateScores(teamAScore: 0, teamBScore: 0);
     if (!_isSyncingFromWatch) {
       _watchService.sendScoreUpdate(gameState, action: 'reset');
     }
@@ -459,10 +459,10 @@ class ScoreController extends GetxController {
     _cooldownTimer?.cancel();
     _autoResetTimer?.cancel();
     _watchCommandSubscription?.cancel();
-    _voiceService.dispose();
+    // _voiceService.dispose(); // DISABLED: Picovoice
     _ttsService.dispose();
     _watchService.dispose();
-    ForegroundService.stop();
+    // ForegroundService.stop(); // DISABLED: foreground notification
     super.onClose();
   }
 }

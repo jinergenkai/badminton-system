@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../controllers/score_controller.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../widgets/team_card.dart';
@@ -10,8 +11,25 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
 
-class ScoreScreen extends StatelessWidget {
+class ScoreScreen extends StatefulWidget {
   const ScoreScreen({super.key});
+
+  @override
+  State<ScoreScreen> createState() => _ScoreScreenState();
+}
+
+class _ScoreScreenState extends State<ScoreScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WakelockPlus.enable();
+  }
+
+  @override
+  void dispose() {
+    WakelockPlus.disable();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
