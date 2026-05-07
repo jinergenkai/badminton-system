@@ -16,7 +16,7 @@
         <!-- TEAM A (LEFT) -->
         <stack class="score-btn card-a" onclick="onScoreA">
           <image src="/common/dog.png" class="score-watermark"></image>
-          <div class="score-content">
+          <div class="score-content {{ isWinnerA ? 'winner-glow' : '' }}">
             <text class="score-text">{{ scoreA }}</text>
           </div>
         </stack>
@@ -24,7 +24,7 @@
         <!-- TEAM B (RIGHT) -->
         <stack class="score-btn card-b" onclick="onScoreB">
           <image src="/common/cat.png" class="score-watermark"></image>
-          <div class="score-content">
+          <div class="score-content {{ isWinnerB ? 'winner-glow' : '' }}">
             <text class="score-text">{{ scoreB }}</text>
           </div>
         </stack>
@@ -44,7 +44,7 @@
           <image src="{{ isWinnerA ? '/common/dog.png' : '/common/cat.png' }}" class="win-mascot"></image>
           <text class="win-title">WINNER</text>
           <text class="win-team {{ isWinnerA ? 'color-a' : 'color-b' }}">{{ isWinnerA ? 'TEAM A' : 'TEAM B' }}</text>
-          
+
           <div class="win-actions">
             <div class="win-btn reset-btn" onclick="resetGame">
               <text class="btn-text">NEXT MATCH</text>
@@ -66,7 +66,7 @@
     private: {
       scoreA: 0,
       scoreB: 0,
-      history: [], 
+      history: [],
       connected: false,
       isConnecting: false,
       connect: null,
@@ -85,7 +85,7 @@
       try {
         this.isConnecting = true
         this.connect = interconnect.instance()
-        
+
         if (this.connect) {
           this.connect.onopen = (data) => {
             this.connected = true
@@ -128,6 +128,7 @@
       this.connect.send({
         data: { action: 'request_sync' }
       })
+      prompt.showToast({ message: 'Sync Requested' })
     },
 
     resetGame() {
