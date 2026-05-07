@@ -100,6 +100,13 @@
             try {
               const msg = JSON.parse(data.data)
               if (msg.scoreA !== undefined && msg.scoreB !== undefined) {
+                // Mirror phone-originated state changes into local history so undo stays aligned
+                if (msg.action === 'score_A' || msg.action === 'score_B' || msg.action === 'reset') {
+                  this.history.push({ a: this.scoreA, b: this.scoreB })
+                  if (this.history.length > 20) this.history.shift()
+                } else if (msg.action === 'undo') {
+                  if (this.history.length > 0) this.history.pop()
+                }
                 this.scoreA = msg.scoreA
                 this.scoreB = msg.scoreB
                 this.checkWinner()
@@ -215,6 +222,9 @@
           scoreA: this.scoreA,
           scoreB: this.scoreB,
           reset: isReset,
+          // index.ux always mutates local state before sending; phone must NOT echo back
+          // (otherwise we'd double-push history). Settings page omits this so phone echoes.
+          silent: true,
           timestamp: Date.now(),
         }
       })
@@ -368,7 +378,6 @@
     color: rgba(255, 255, 255, 0.5);
     font-size: 22px;
     font-weight: bold;
-    letter-spacing: 3px;
   }
 
   .win-team {
