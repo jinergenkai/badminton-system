@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.xiaomi.xms.wearable.Wearable
@@ -39,7 +40,7 @@ data class ScoreEvent(
     val time: String
 )
 
-// ─── Shared state ───────────────────────────────────────────
+// ─── Shared state (Restore from old_logic.md) ───────────────
 object AppState {
     var scoreA by mutableStateOf(0)
     var scoreB by mutableStateOf(0)
@@ -62,7 +63,7 @@ object AppState {
     }
 }
 
-// ─── Main Activity ───────────────────────────────────────────
+// ─── Main Activity (Restore from old_logic.md) ──────────────
 class MainActivity : ComponentActivity() {
 
     private val TAG = "BandCounter"
@@ -77,7 +78,7 @@ class MainActivity : ComponentActivity() {
         try {
             val json = JSONObject(raw)
             val action = json.getString("action")
-            
+
             runOnUiThread {
                 if (action == "request_sync") {
                     sendSyncToWatch(nodeId, "sync")
@@ -156,64 +157,93 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+// ─── UI (Centered Bigger Scoreboard) ────────────────────────
 @Composable
 fun BandCounterApp(onReconnect: () -> Unit, onSync: () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize().background(Color(0xFF0D0D0D)).padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+    var showLog by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF0D0D0D))
+            .padding(32.dp)
     ) {
-        Text("Band Counter Pro", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        
-        Surface(
-            modifier = Modifier.padding(vertical = 12.dp).clickable { onReconnect() },
-            color = Color(0xFF1A1A1A),
-            shape = MaterialTheme.shapes.small
-        ) {
-            Text(
-                AppState.statusText,
-                fontSize = 12.sp,
-                color = if (AppState.isConnected) Color(0xFF4CAF50) else Color(0xFFE57373),
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-            )
+        // Top: Status
+        Column(modifier = Modifier.align(Alignment.TopCenter), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("BAND COUNTER PRO", fontSize = 24.sp, fontWeight = FontWeight.Black, color = Color.White, letterSpacing = 2.sp)
+            Surface(
+                modifier = Modifier.padding(top = 12.dp).clickable { onReconnect() },
+                color = Color(0xFF1A1A1A),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Text(
+                    AppState.statusText,
+                    fontSize = 12.sp,
+                    color = if (AppState.isConnected) Color(0xFF4CAF50) else Color(0xFFE57373),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+                )
+            }
         }
 
+        // Center: Giant Scores
         Row(
-            horizontalArrangement = Arrangement.spacedBy(40.dp),
-            modifier = Modifier.padding(vertical = 20.dp)
+            modifier = Modifier.fillMaxWidth().align(Alignment.Center),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            ScoreCard("TEAM A", AppState.scoreA, Color(0xFF1E88E5))
-            ScoreCard("TEAM B", AppState.scoreB, Color(0xFFEF5350))
+            ScoreColumn("TEAM A", AppState.scoreA, Color(0xFF1E88E5), Modifier.weight(1f))
+            Text(":", fontSize = 120.sp, fontWeight = FontWeight.Black, color = Color(0xFF222222))
+            ScoreColumn("TEAM B", AppState.scoreB, Color(0xFFEF5350), Modifier.weight(1f))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Button(onClick = onReconnect, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))) {
-                Text("Reconnect")
-            }
-            Button(onClick = onSync, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))) {
-                Text("Sync")
-            }
-            OutlinedButton(onClick = { AppState.scoreA = 0; AppState.scoreB = 0; AppState.eventLog.clear(); onSync() }) {
-                Text("Reset")
-            }
-        }
-
-        Spacer(Modifier.height(24.dp))
-        Text("Match Log", fontSize = 14.sp, color = Color.Gray, modifier = Modifier.align(Alignment.Start).padding(bottom = 8.dp))
-
-        LazyColumn(
-            modifier = Modifier.fillMaxWidth().weight(1f).background(Color(0xFF141414), MaterialTheme.shapes.medium).padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        // Bottom: Controls
+        Column(
+            modifier = Modifier.align(Alignment.BottomCenter),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            items(AppState.eventLog) { EventRow(it) }
+            if (showLog) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth().height(200.dp).padding(bottom = 16.dp),
+                    color = Color(0xFF141414),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    LazyColumn(modifier = Modifier.padding(16.dp)) {
+                        items(AppState.eventLog) { event ->
+                            EventRow(event)
+                        }
+                    }
+                }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Button(onClick = { showLog = !showLog }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF333333))) {
+                    Text(if (showLog) "Hide Log" else "Show Log")
+                }
+                Button(onClick = onSync, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF1565C0))) {
+                    Text("Sync")
+                }
+                OutlinedButton(onClick = { 
+                    AppState.scoreA = 0; AppState.scoreB = 0; AppState.eventLog.clear(); onSync() 
+                }) {
+                    Text("Reset")
+                }
+            }
         }
     }
 }
 
 @Composable
-fun ScoreCard(label: String, score: Int, color: Color) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = Color.Gray, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Text(score.toString(), fontSize = 64.sp, fontWeight = FontWeight.Bold, color = color)
+fun ScoreColumn(label: String, score: Int, color: Color, modifier: Modifier) {
+    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(label, color = Color.Gray, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(
+            score.toString(), 
+            fontSize = 350.sp, 
+            fontWeight = FontWeight.Black, 
+            color = color,
+            lineHeight = 350.sp,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -225,9 +255,9 @@ fun EventRow(event: ScoreEvent) {
         "undo"    -> "UNDO" to Color(0xFFFFB74D)
         else      -> event.action to Color.Gray
     }
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = color, fontWeight = FontWeight.Bold, modifier = Modifier.width(50.dp))
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = color, fontWeight = FontWeight.Bold, fontSize = 16.sp)
         Text("${event.scoreA} - ${event.scoreB}", color = Color.White, fontSize = 16.sp)
-        Text(event.time, color = Color(0xFF444444), fontSize = 11.sp)
+        Text(event.time, color = Color.DarkGray, fontSize = 12.sp)
     }
 }
