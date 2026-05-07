@@ -101,9 +101,6 @@ class ScoreController extends GetxController {
   Future<void> _initializeWatchSync() async {
     try {
       await _watchService.initialize();
-      ever<GameState>(_gameState, (gameState) {
-        if (!_isSyncingFromWatch) _watchService.sendScoreUpdate(gameState);
-      });
       _watchCommandSubscription = _watchService.watchCommandStream.listen((event) {
         _handleWatchCommand(event);
       });
@@ -121,54 +118,85 @@ class ScoreController extends GetxController {
     final action = event['action'] as String;
     final int newScoreA = event['scoreA'] ?? -1;
     final int newScoreB = event['scoreB'] ?? -1;
+    final bool isResetFromWatch = event['reset'] == true;
+    // `silent` = sender already mutated its local state (e.g., watch index page).
+    // When false (e.g., from settings page), phone MUST echo back so watch index can mirror.
+    final bool silent = event['silent'] == true;
 
-    if (action == 'request_sync') {
+    print('⌚ [Controller] Command from watch: $action (Scores: $newScoreA-$newScoreB, silent=$silent)');
+
+    // Handle sync requests
+    if (action == 'request_sync' || action == 'sync') {
       _watchService.sendScoreUpdate(gameState, action: 'sync');
       return;
     }
 
-    if (gameState.hasWinner && (action == 'score_A' || action == 'score_B')) {
+    // Handle reset/next match
+    if (action == 'reset' || action == 'next_match') {
+      if (silent) _isSyncingFromWatch = true;
       resetGame();
+      if (silent) _isSyncingFromWatch = false;
       return;
     }
 
+    // Handle undo
     if (action == 'undo') {
+      if (!gameState.canUndo) {
+        // Phone stack empty (e.g., app just started) — realign watch with phone's current state
+        _watchService.sendScoreUpdate(gameState, action: 'sync');
+        return;
+      }
+      if (silent) _isSyncingFromWatch = true;
       undo();
+      if (silent) _isSyncingFromWatch = false;
       return;
     }
 
-    if ((action == 'score_A' || action == 'score_B') && newScoreA >= 0 && newScoreB >= 0) {
-      final int oldA = gameState.teamAScore;
-      final int oldB = gameState.teamBScore;
-      // Duplicate-message guard: band may retry if no ack received
-      if (newScoreA == oldA && newScoreB == oldB) return;
-
-      // Suppress ever() echo so band doesn't receive its own score back
-      _isSyncingFromWatch = true;
-
-      // Build stack snapshot and score update in ONE mutation so ever() fires
-      // exactly once with the new score — avoids sending stale score back to band.
-      final currentStack = List<GameState>.from(gameState.stateStack);
-      final snapshot = gameState.copyWith(stateStack: []);
-      currentStack.add(snapshot);
-      if (currentStack.length > 10) currentStack.removeAt(0);
-
-      _gameState.value = gameState.copyWith(
-        teamAScore: newScoreA,
-        teamBScore: newScoreB,
-        stateStack: currentStack,
-        history: [...gameState.history, 'Watch: $action'],
-      );
-
-      _isSyncingFromWatch = false;
-
-      _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB);
-      if (!gameState.hasWinner) {
-        _ttsService.announceScore(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
+    // Handle score updates
+    if (action == 'score_A' || action == 'score_B') {
+      // If game ended, any score button from watch resets the game
+      if (gameState.hasWinner) {
+        resetGame();
+        return;
       }
-      _checkTensionMusic();
-      ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
-      _checkGameEnd();
+
+      if (newScoreA >= 0 && newScoreB >= 0) {
+        final int oldA = gameState.teamAScore;
+        final int oldB = gameState.teamBScore;
+        
+        // Duplicate-message guard
+        if (newScoreA == oldA && newScoreB == oldB) return;
+
+        // DEFENSIVE LOGIC: If watch sends a score that is lower than phone (and not a reset), 
+        // it likely means the watch app just restarted and hasn't synced yet.
+        if (!isResetFromWatch && (newScoreA < oldA || newScoreB < oldB)) {
+          print('⌚ [Controller] Rejected lower scores from watch. Forcing sync back.');
+          _watchService.sendScoreUpdate(gameState, action: 'sync');
+          return;
+        }
+
+        _isSyncingFromWatch = true;
+        
+        final currentStack = List<GameState>.from(gameState.stateStack);
+        final snapshot = gameState.copyWith(stateStack: []);
+        currentStack.add(snapshot);
+        if (currentStack.length > 20) currentStack.removeAt(0);
+
+        _gameState.value = gameState.copyWith(
+          teamAScore: newScoreA,
+          teamBScore: newScoreB,
+          stateStack: currentStack,
+          history: [...gameState.history, 'Watch: $action'],
+        );
+
+        _isSyncingFromWatch = false;
+
+        _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB);
+        _ttsService.announceScore(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
+        _checkTensionMusic();
+        ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
+        _checkGameEnd();
+      }
     }
   }
 
@@ -243,7 +271,7 @@ class ScoreController extends GetxController {
     final currentStack = List<GameState>.from(gameState.stateStack);
     final snapshot = gameState.copyWith(stateStack: []);
     currentStack.add(snapshot);
-    if (currentStack.length > 10) currentStack.removeAt(0);
+    if (currentStack.length > 20) currentStack.removeAt(0);
     _gameState.value = gameState.copyWith(stateStack: currentStack);
   }
 
@@ -256,8 +284,10 @@ class ScoreController extends GetxController {
       teamAScore: gameState.teamAScore + 1,
       history: [...gameState.history, '${gameState.teamAName} scored'],
     );
+    if (!_isSyncingFromWatch) {
+      _watchService.sendScoreUpdate(gameState, action: 'score_A');
+    }
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
-    // Skip score announcement on winning point — _checkGameEnd handles it
     if (!gameState.hasWinner) {
       _ttsService.announceScore(gameState.teamAScore, gameState.teamBScore, 'A');
     }
@@ -276,8 +306,10 @@ class ScoreController extends GetxController {
       teamBScore: gameState.teamBScore + 1,
       history: [...gameState.history, '${gameState.teamBName} scored'],
     );
+    if (!_isSyncingFromWatch) {
+      _watchService.sendScoreUpdate(gameState, action: 'score_B');
+    }
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
-    // Skip score announcement on winning point — _checkGameEnd handles it
     if (!gameState.hasWinner) {
       _ttsService.announceScore(gameState.teamAScore, gameState.teamBScore, 'B');
     }
@@ -300,6 +332,9 @@ class ScoreController extends GetxController {
     if (gameState.teamAScore > 0) {
       _pushStateToStack();
       _gameState.value = gameState.copyWith(teamAScore: gameState.teamAScore - 1);
+      if (!_isSyncingFromWatch) {
+        _watchService.sendScoreUpdate(gameState, action: 'score_A');
+      }
     }
   }
 
@@ -307,6 +342,9 @@ class ScoreController extends GetxController {
     if (gameState.teamBScore > 0) {
       _pushStateToStack();
       _gameState.value = gameState.copyWith(teamBScore: gameState.teamBScore - 1);
+      if (!_isSyncingFromWatch) {
+        _watchService.sendScoreUpdate(gameState, action: 'score_B');
+      }
     }
   }
 
@@ -316,6 +354,9 @@ class ScoreController extends GetxController {
     final previousState = stack.removeLast();
     final undoneTeam = gameState.teamAScore > previousState.teamAScore ? 'A' : 'B';
     _gameState.value = previousState.copyWith(stateStack: stack);
+    if (!_isSyncingFromWatch) {
+      _watchService.sendScoreUpdate(gameState, action: 'undo');
+    }
     _hypeController.handleUndo();
     _ttsService.announceUndo(previousState.teamAScore, previousState.teamBScore, undoneTeam);
   }
@@ -325,7 +366,6 @@ class ScoreController extends GetxController {
       _gameState.value = gameState.copyWith(isGameActive: false);
       isGameEnded.value = true;
       _saveMatchToDatabase();
-      // Stop tension music, then: TTS winner → hype (comeback_king etc.) → win music
       _musicService.stopMusic(fadeOut: true);
       _ttsService.announceWinner(gameState.winnerName, gameState.teamAScore, gameState.teamBScore);
       _watchService.sendWinnerUpdate(gameState.winner, gameState.teamAScore, gameState.teamBScore);
@@ -378,13 +418,21 @@ class ScoreController extends GetxController {
   }
 
   void resetGame() {
-    final teamAName = gameState.teamAName;
-    final teamBName = gameState.teamBName;
+    final oldState = gameState;
+    final teamAName = oldState.teamAName;
+    final teamBName = oldState.teamBName;
+    
+    final newStack = List<GameState>.from(oldState.stateStack);
+    newStack.add(oldState.copyWith(stateStack: []));
+    if (newStack.length > 20) newStack.removeAt(0);
+
     _gameState.value = GameState(
       teamAName: teamAName,
       teamBName: teamBName,
       startTime: DateTime.now(),
+      stateStack: newStack,
     );
+    
     lastCommand.value = '';
     isGameEnded.value = false;
     _cooldownTimer?.cancel();
@@ -395,7 +443,9 @@ class ScoreController extends GetxController {
     _musicService.stopMusic(fadeOut: true);
     _hypeController.playStartOfMatchHype();
     ForegroundService.updateScores(teamAScore: 0, teamBScore: 0);
-    _watchService.sendGameReset();
+    if (!_isSyncingFromWatch) {
+      _watchService.sendScoreUpdate(gameState, action: 'reset');
+    }
   }
 
   void startNewGame() => resetGame();
