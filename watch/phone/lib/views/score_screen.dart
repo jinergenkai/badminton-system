@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:voice_counter/services/music_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import '../controllers/score_controller.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
@@ -254,47 +255,151 @@ class _ScoreScreenState extends State<ScoreScreen> {
   }
 
   Widget _buildBottomControls(ScoreController controller) {
+    final MusicService musicService = Get.find<MusicService>();
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
       decoration: BoxDecoration(
         color: Colors.black.withOpacity(0.5),
         border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Voice status indicator (Static, no button needed)
+          Row(
+            children: [
+              // Music Controls Area
+              Expanded(
+                child: Obx(() {
+                  final isPlaying = musicService.isPlaying.value;
+                  final trackName = musicService.currentTrackName.value;
+                  final isNonStop = musicService.isNonStop.value;
+                  final playMode = musicService.playMode.value;
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      children: [
+                        // Play/Pause
+                        _buildMusicAction(
+                          icon: isPlaying ? Icons.pause : Icons.play_arrow,
+                          onTap: () => isPlaying ? musicService.pause() : musicService.resume(),
+                          color: isPlaying ? Colors.greenAccent : Colors.white70,
+                        ),
+                        
+                        const SizedBox(width: 8),
+
+                        // Track Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                trackName.isEmpty ? 'MUSIC STANDBY' : trackName.toUpperCase(),
+                                style: TextStyle(
+                                  color: trackName.isEmpty ? Colors.white24 : Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => musicService.toggleNonStop(),
+                                    child: Text(
+                                      isNonStop ? 'NON-STOP ON' : 'SINGLE PLAY',
+                                      style: TextStyle(
+                                        color: isNonStop ? Colors.orangeAccent : Colors.white24,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: () {
+                                      musicService.playMode.value = (playMode == 'random' ? 'sequential' : 'random');
+                                      musicService.savePreferences();
+                                    },
+                                    child: Text(
+                                      playMode.toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Colors.blueAccent,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Next Track
+                        _buildMusicAction(
+                          icon: Icons.skip_next,
+                          onTap: () => musicService.next(),
+                          color: Colors.white70,
+                          isSmall: true,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+
+              const SizedBox(width: 16),
+
+              // Action Buttons
+              _buildCircleAction(icon: Icons.undo, color: Colors.orangeAccent, onTap: () => controller.undo(), isEnabled: true),
+              const SizedBox(width: 12),
+              _buildCircleAction(icon: Icons.refresh, color: Colors.redAccent, onTap: () => _confirmReset(controller), isEnabled: true),
+            ],
+          ),
+          
+          // Voice Status (Mini)
+          const SizedBox(height: 8),
           Obx(() {
             final isListening = controller.isVoiceActive.value;
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: BoxDecoration(
-                color: isListening ? Colors.greenAccent.withOpacity(0.1) : Colors.white.withOpacity(0.02),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: isListening ? Colors.greenAccent.withOpacity(0.3) : Colors.white10),
-              ),
-              child: Row(
-                children: [
-                  Icon(isListening ? Icons.mic : Icons.mic_none, color: isListening ? Colors.greenAccent : Colors.white24, size: 20),
-                  const SizedBox(width: 12),
-                  Text(
-                    isListening ? 'VOICE READY' : 'VOICE INACTIVE',
-                    style: TextStyle(color: isListening ? Colors.greenAccent : Colors.white24, fontWeight: FontWeight.bold, fontSize: 12),
-                  ),
-                ],
-              ),
+            if (!isListening) return const SizedBox.shrink();
+            return Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.mic, color: Colors.greenAccent, size: 12),
+                const SizedBox(width: 4),
+                const Text('VOICE LISTENING', style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold)),
+              ],
             );
           }),
-
-          const Spacer(),
-
-          _buildCircleAction(icon: Icons.undo, color: Colors.orangeAccent, onTap: () => controller.undo(), isEnabled: true),
-          const SizedBox(width: 16),
-          _buildCircleAction(icon: Icons.refresh, color: Colors.redAccent, onTap: () => _confirmReset(controller), isEnabled: true),
         ],
       ),
     );
   }
+
+  Widget _buildMusicAction({required IconData icon, required VoidCallback onTap, required Color color, bool isSmall = false}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: EdgeInsets.all(isSmall ? 6 : 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: color, size: isSmall ? 18 : 22),
+      ),
+    );
+  }
+
 
   Widget _buildCircleAction({required IconData icon, required Color color, required VoidCallback onTap, required bool isEnabled}) {
     return InkWell(
