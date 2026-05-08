@@ -1,27 +1,31 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show Directory, File, FileSystemEntity;
 import 'dart:math';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class MusicService extends GetxController {
   final AudioPlayer _player = AudioPlayer();
+  final Random _random = Random();
 
   // Reactive state
   final RxList<String> playlist = <String>[].obs;
   final RxBool isPlaying = false.obs;
   final RxBool isTensionMode = false.obs;
+  final RxBool isNonStop = false.obs;
+  final RxString currentTrackName = ''.obs;
 
   // Settings
   final RxBool winMusicEnabled = true.obs;
   final RxBool tensionMusicEnabled = true.obs;
   final RxDouble winVolume = 1.0.obs;
   final RxDouble tensionVolume = 0.45.obs;
-  final RxInt tensionThreshold = 20.obs;
+  final RxInt tensionThreshold = 15.obs;
   final RxString playMode = 'random'.obs; // 'random' | 'sequential'
 
   int _sequentialIndex = 0;
@@ -41,10 +45,17 @@ class MusicService extends GetxController {
     _player.onPlayerComplete.listen((_) {
       isPlaying.value = false;
       isTensionMode.value = false;
+      if (isNonStop.value) {
+        next();
+      }
     });
   }
 
   Future<void> initialize() async {
+    if (kIsWeb) {
+      await scanMusicFolder();
+      return;
+    }
     await _ensureMusicFolder();
     await _seedDefaultTracks();
     await scanMusicFolder();
@@ -53,13 +64,14 @@ class MusicService extends GetxController {
   /// Copy bundled default tracks from assets → device folder.
   /// Runs every launch but only copies files not already present — safe to re-run.
   Future<void> _seedDefaultTracks() async {
-    if (_musicFolderPath == null) return;
+    if (kIsWeb || _musicFolderPath == null) return;
     try {
       final manifestJson = await rootBundle.loadString('AssetManifest.json');
       final manifest = json.decode(manifestJson) as Map<String, dynamic>;
       final bundled = manifest.keys
           .where((k) => k.startsWith('assets/audio/music/') &&
               (k.endsWith('.mp3') || k.endsWith('.m4a') || k.endsWith('.aac')))
+          .map((k) => Uri.decodeFull(k))
           .toList();
 
       if (bundled.isEmpty) {
@@ -81,6 +93,7 @@ class MusicService extends GetxController {
   }
 
   Future<void> _ensureMusicFolder() async {
+    if (kIsWeb) return;
     try {
       // Try external app-specific storage first (no permission needed, user-visible)
       Directory? base = await getExternalStorageDirectory();
@@ -96,6 +109,11 @@ class MusicService extends GetxController {
   }
 
   Future<void> scanMusicFolder() async {
+    if (kIsWeb) {
+      await _scanAssetsOnly();
+      return;
+    }
+
     if (_musicFolderPath == null) await _ensureMusicFolder();
     if (_musicFolderPath == null) {
       print('🎵 [Music] Cannot scan: folder path is null');
@@ -125,61 +143,122 @@ class MusicService extends GetxController {
     }
   }
 
-  String get musicFolderPath => _musicFolderPath ?? '(unavailable)';
+  Future<void> _scanAssetsOnly() async {
+    try {
+      final manifestJson = await rootBundle.loadString('AssetManifest.json');
+      final manifest = json.decode(manifestJson) as Map<String, dynamic>;
+      final bundled = manifest.keys
+          .where((k) => k.startsWith('assets/audio/music/') &&
+              (k.endsWith('.mp3') || k.endsWith('.m4a') || k.endsWith('.aac')))
+          .map((k) => Uri.decodeFull(k))
+          .toList();
+      playlist.value = bundled;
+      print('🎵 [Music] Assets scanned: ${bundled.length} tracks');
+    } catch (e) {
+      print('🎵 [Music] Assets scan error: $e');
+    }
+  }
 
-  String _getNextTrack() {
+  String get musicFolderPath => _musicFolderPath ?? (kIsWeb ? '(assets)' : '(unavailable)');
+
+  String _getNextTrackPath() {
     if (playlist.isEmpty) return '';
     if (playMode.value == 'sequential') {
       final path = playlist[_sequentialIndex % playlist.length];
       _sequentialIndex = (_sequentialIndex + 1) % playlist.length;
       return path;
     }
-    return playlist[Random().nextInt(playlist.length)];
+    return playlist[_random.nextInt(playlist.length)];
   }
 
   Future<void> playWinMusic() async {
     if (!winMusicEnabled.value || playlist.isEmpty) return;
-    final track = _getNextTrack();
+    final track = _getNextTrackPath();
     if (track.isEmpty) return;
 
     await stopMusic(fadeOut: isTensionMode.value);
     isTensionMode.value = false;
 
-    try {
-      _currentVolume = 0.0;
-      await _player.setVolume(0.0);
-      await _player.play(DeviceFileSource(track));
-      _fadeIn(winVolume.value, durationMs: 2500);
-      print('🎵 [Music] Win: ${track.split('/').last}');
-    } catch (e) {
-      print('🎵 [Music] Win play error: $e');
-    }
+    await _playTrack(track, volume: winVolume.value, fadeDurationMs: 2500);
+    print('🎵 [Music] Win: ${track.split('/').last}');
   }
 
   Future<void> playTensionMusic() async {
     if (!tensionMusicEnabled.value || isPlaying.value || playlist.isEmpty) return;
 
-    // Prefer a file named "tension" if exists, else random
-    final track = playlist.firstWhere(
-      (p) => p.toLowerCase().contains('tension'),
-      orElse: () => playlist[Random().nextInt(playlist.length)],
-    );
+    // Filter tracks containing "tension"
+    final tensionTracks = playlist.where(
+      (p) => p.toLowerCase().contains('tension')
+    ).toList();
 
+    String track;
+    if (tensionTracks.isNotEmpty) {
+      // If multiple tension tracks, pick one randomly or sequentially
+      if (playMode.value == 'random') {
+        track = tensionTracks[_random.nextInt(tensionTracks.length)];
+      } else {
+        track = tensionTracks[0]; // Or we could maintain a separate index, but 0 is okay for now
+      }
+    } else {
+      track = _getNextTrackPath();
+    }
+
+    await _playTrack(track, volume: tensionVolume.value, fadeDurationMs: 3000);
+    isTensionMode.value = true;
+    print('🎵 [Music] Tension: ${track.split('/').last}');
+  }
+
+
+  Future<void> _playTrack(String track, {required double volume, int fadeDurationMs = 2000}) async {
     try {
       _currentVolume = 0.0;
       await _player.setVolume(0.0);
-      await _player.play(DeviceFileSource(track));
-      isTensionMode.value = true;
-      _fadeIn(tensionVolume.value, durationMs: 3000);
-      print('🎵 [Music] Tension: ${track.split('/').last}');
+      
+      if (track.startsWith('assets/')) {
+        final assetPath = track.replaceFirst('assets/', '');
+        await _player.play(AssetSource(assetPath));
+      } else {
+        await _player.play(DeviceFileSource(track));
+      }
+      
+      currentTrackName.value = track.split('/').last;
+      _fadeIn(volume, durationMs: fadeDurationMs);
     } catch (e) {
-      print('🎵 [Music] Tension play error: $e');
+      print('🎵 [Music] Play error: $e');
     }
+  }
+
+  Future<void> pause() async {
+    if (isPlaying.value) {
+      await _player.pause();
+    }
+  }
+
+  Future<void> resume() async {
+    if (!isPlaying.value && currentTrackName.isNotEmpty) {
+      await _player.resume();
+    } else if (!isPlaying.value && playlist.isNotEmpty) {
+      await next();
+    }
+  }
+
+  Future<void> next() async {
+    final track = _getNextTrackPath();
+    if (track.isNotEmpty) {
+      await stopMusic(fadeOut: false);
+      await _playTrack(track, volume: isTensionMode.value ? tensionVolume.value : winVolume.value);
+    }
+  }
+
+  Future<void> toggleNonStop() async {
+    isNonStop.value = !isNonStop.value;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('${_pref}non_stop', isNonStop.value);
   }
 
   Future<void> stopMusic({bool fadeOut = true}) async {
     _fadeTimer?.cancel();
-    if (!isPlaying.value) {
+    if (!isPlaying.value && _player.state != PlayerState.paused) {
       isTensionMode.value = false;
       return;
     }
@@ -190,6 +269,7 @@ class MusicService extends GetxController {
     _currentVolume = 0.0;
     isPlaying.value = false;
     isTensionMode.value = false;
+    currentTrackName.value = '';
   }
 
   void _fadeIn(double target, {int durationMs = 2000}) {
@@ -231,8 +311,9 @@ class MusicService extends GetxController {
     tensionMusicEnabled.value = prefs.getBool('${_pref}tension_enabled') ?? true;
     winVolume.value = prefs.getDouble('${_pref}win_volume') ?? 1.0;
     tensionVolume.value = prefs.getDouble('${_pref}tension_volume') ?? 0.45;
-    tensionThreshold.value = prefs.getInt('${_pref}tension_threshold') ?? 20;
+    tensionThreshold.value = prefs.getInt('${_pref}tension_threshold') ?? 15;
     playMode.value = prefs.getString('${_pref}play_mode') ?? 'random';
+    isNonStop.value = prefs.getBool('${_pref}non_stop') ?? false;
   }
 
   Future<void> savePreferences() async {

@@ -175,12 +175,6 @@ class ScoreController extends GetxController {
 
     // Handle score updates
     if (action == 'score_A' || action == 'score_B') {
-      // If game ended, any score button from watch resets the game
-      if (gameState.hasWinner) {
-        resetGame();
-        return;
-      }
-
       if (newScoreA >= 0 && newScoreB >= 0) {
         final int oldA = gameState.teamAScore;
         final int oldB = gameState.teamBScore;
@@ -190,9 +184,16 @@ class ScoreController extends GetxController {
 
         // DEFENSIVE LOGIC: If watch sends a score that is lower than phone (and not a reset), 
         // it likely means the watch app just restarted and hasn't synced yet.
+        // We catch this BEFORE the 'hasWinner' reset check to avoid accidental match resets.
         if (!isResetFromWatch && (newScoreA < oldA || newScoreB < oldB)) {
           print('⌚ [Controller] Rejected lower scores from watch. Forcing sync back.');
           _watchService.sendScoreUpdate(gameState, action: 'sync');
+          return;
+        }
+
+        // If game ended, any score button from watch resets the game (if it's not a stale update from restart)
+        if (gameState.hasWinner) {
+          resetGame();
           return;
         }
 
@@ -219,6 +220,7 @@ class ScoreController extends GetxController {
         _checkGameEnd();
       }
     }
+
   }
 
   void _loadTeamConfig() {
