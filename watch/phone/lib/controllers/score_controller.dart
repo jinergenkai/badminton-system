@@ -141,14 +141,35 @@ class ScoreController extends GetxController {
 
     // Handle undo
     if (action == 'undo') {
-      if (!gameState.canUndo) {
-        // Phone stack empty (e.g., app just started) — realign watch with phone's current state
-        _watchService.sendScoreUpdate(gameState, action: 'sync');
-        return;
+      if (newScoreA >= 0 && newScoreB >= 0) {
+        // Watch sends post-undo target scores — use them as source of truth.
+        // Phone's undo stack is independent and may diverge from watch history;
+        // using watch scores prevents the score mismatch / feedback loop.
+        final int oldA = gameState.teamAScore;
+        final int oldB = gameState.teamBScore;
+        if (oldA == newScoreA && oldB == newScoreB) return; // duplicate guard
+        final String undoneTeam = oldA > newScoreA ? 'A' : 'B';
+
+        final stack = List<GameState>.from(gameState.stateStack);
+        if (stack.isNotEmpty) stack.removeLast(); // best-effort stack trim
+
+        _gameState.value = gameState.copyWith(
+          teamAScore: newScoreA,
+          teamBScore: newScoreB,
+          stateStack: stack,
+        );
+        _hypeController.handleUndo();
+        _ttsService.announceUndo(newScoreA, newScoreB, undoneTeam);
+        // Do NOT send sync back — watch already applied undo locally (silent=true).
+        // Sending phone's own stack result was the root cause of score corruption.
+      } else {
+        // No target scores provided — fall back to phone's own stack
+        if (!gameState.canUndo) {
+          _watchService.sendScoreUpdate(gameState, action: 'sync');
+          return;
+        }
+        undo();
       }
-      if (silent) _isSyncingFromWatch = true;
-      undo();
-      if (silent) _isSyncingFromWatch = false;
       return;
     }
 

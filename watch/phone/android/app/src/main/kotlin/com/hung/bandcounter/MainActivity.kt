@@ -40,13 +40,17 @@ class MainActivity : FlutterActivity() {
             val action = json.getString("action")
             val sA = json.optInt("scoreA", -1)
             val sB = json.optInt("scoreB", -1)
+            val silent = json.optBoolean("silent", false)
+            val reset = json.optBoolean("reset", false)
 
             scope.launch(Dispatchers.Main) {
                 eventSink?.success(mapOf(
                     "type" to "command",
                     "action" to action,
                     "scoreA" to sA,
-                    "scoreB" to sB
+                    "scoreB" to sB,
+                    "silent" to silent,
+                    "reset" to reset
                 ))
             }
         } catch (e: Exception) { Log.e(TAG, "Parse error: ${e.message}") }
