@@ -46,10 +46,14 @@
           <text class="win-team {{ isWinnerA ? 'color-a' : 'color-b' }}">{{ isWinnerA ? 'TEAM A' : 'TEAM B' }}</text>
 
           <div class="win-actions">
+            <div class="win-btn undo-btn" onclick="onUndo">
+              <text class="btn-text">UNDO WIN</text>
+            </div>
             <div class="win-btn reset-btn" onclick="resetGame">
               <text class="btn-text">NEXT MATCH</text>
             </div>
           </div>
+
         </div>
       </stack>
     </div>
@@ -405,6 +409,7 @@
   }
 
   .reset-btn { background-color: #FF5252; }
+  .undo-btn { background-color: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); }
 
   .btn-text {
     color: #FFFFFF;
