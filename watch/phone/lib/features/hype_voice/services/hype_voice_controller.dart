@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:voice_counter/services/tts_service.dart';
 import '../models/hype_state_snapshot.dart';
 import '../models/hype_display_event.dart';
 
@@ -132,6 +133,18 @@ class HypeVoiceController extends GetxController {
   }
 
   void _setupAudio() {
+    // Use transient AudioFocus so hype sounds (short, foreground) yield focus back
+    // to tension music automatically after playback ends — prevents music staying
+    // silently paused because it received AUDIOFOCUS_LOSS (permanent) from hype.
+    _audioPlayer.setAudioContext(AudioContext(
+      android: AudioContextAndroid(
+        audioFocus: AndroidAudioFocus.gainTransient,
+        contentType: AndroidContentType.music,
+        usageType: AndroidUsageType.media,
+        stayAwake: false,
+        isSpeakerphoneOn: false,
+      ),
+    ));
     _audioPlayer.setVolume(volume.value);
     volume.listen((v) => _audioPlayer.setVolume(v));
     // Fire onPlaybackCompleted when audio finishes naturally
@@ -140,7 +153,7 @@ class HypeVoiceController extends GetxController {
     });
   }
 
-  void processScoreUpdate(int oldA, int oldB, int newA, int newB) {
+  void processScoreUpdate(int oldA, int oldB, int newA, int newB, {String? manualHype}) {
     if (!isEnabled.value) return;
 
     _historyStack.add(HypeStateSnapshot(
@@ -168,7 +181,87 @@ class HypeVoiceController extends GetxController {
     if (deficitA > _maxDeficitTeamA) _maxDeficitTeamA = deficitA;
     if (deficitB > _maxDeficitTeamB) _maxDeficitTeamB = deficitB;
 
-    _evaluateTriggers(newA, newB, scoringTeam);
+    if (manualHype != null) {
+      // Check if manualHype is a trigger ID (for randomization from pool)
+      final bool isTrigger = _triggers.any((t) => t['id'] == manualHype);
+      if (isTrigger) {
+        print('🔥 [Hype] Manual trigger group: $manualHype');
+        _prepareHype(manualHype);
+      } else {
+        print('🔥 [Hype] Manual specific sound: $manualHype');
+        _prepareHypeDirectly(manualHype);
+      }
+    } else {
+      _evaluateTriggers(newA, newB, scoringTeam);
+    }
+  }
+
+  void _prepareHypeDirectly(String voiceId) {
+    _pendingHypeId = voiceId;
+    
+    // Trigger display overlay immediately
+    if (koEffectEnabled.value) {
+      displayEvent.value = HypeDisplayEvent(
+        voiceId: voiceId,
+        displayText: _displayTexts[voiceId] ?? voiceId.toUpperCase().replaceAll('_', ' '),
+        team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
+        glowColor: _glowColor(voiceId),
+      );
+      Future.delayed(const Duration(milliseconds: 1800), () {
+        if (displayEvent.value?.voiceId == voiceId) {
+          displayEvent.value = null;
+        }
+      });
+    }
+    print('🔥 [Hype] Manual trigger via score update: $voiceId');
+  }
+
+  List<Map<String, String>> getHypeList() {
+    return _ttsFallback.keys.map((id) {
+      return {
+        'id': id,
+        'name': _displayTexts[id] ?? id.toUpperCase().replaceAll('_', ' '),
+      };
+    }).toList();
+  }
+
+  Future<void> playManualHype(String voiceId) async {
+    // 1. Set as pending (overwrites auto-hype for the next playback slot)
+    _pendingHypeId = voiceId;
+    
+    // 2. Trigger display overlay immediately
+    if (koEffectEnabled.value) {
+      displayEvent.value = HypeDisplayEvent(
+        voiceId: voiceId,
+        displayText: _displayTexts[voiceId] ?? voiceId.toUpperCase().replaceAll('_', ' '),
+        team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
+        glowColor: _glowColor(voiceId),
+      );
+      Future.delayed(const Duration(milliseconds: 1800), () {
+        if (displayEvent.value?.voiceId == voiceId) {
+          displayEvent.value = null;
+        }
+      });
+    }
+
+    // 3. Play logic:
+    // If TTS is active, we do nothing. ScoreController.onSpeechCompleted will 
+    // eventually call playHype() which will pick up our _pendingHypeId.
+    // If TTS is silent, play immediately.
+    try {
+      final ttsService = Get.find<TtsService>();
+      if (!ttsService.isSpeaking.value) {
+        await playHype();
+      }
+    } catch (e) {
+      // Fallback if TtsService not found
+      await playHype();
+    }
+  }
+
+  Future<void> stopAudio() async {
+    _pendingHypeId = null;
+    await _audioPlayer.stop();
   }
 
   void _evaluateTriggers(int newA, int newB, String scoringTeam) {

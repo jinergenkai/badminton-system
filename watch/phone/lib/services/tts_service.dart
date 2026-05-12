@@ -2,10 +2,11 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
 
-class TtsService {
+class TtsService extends GetxService {
   final FlutterTts _flutterTts = FlutterTts();
   bool _isInitialized = false;
   final RxString _currentLanguage = 'en-US'.obs;
+  final RxBool isSpeaking = false.obs;
 
   // Callback when speech finishes
   Function? onSpeechCompleted;
@@ -14,15 +15,26 @@ class TtsService {
     try {
       print('🔊 [TTS] Initializing Text-to-Speech...');
 
-      // Setup completion handler
+      // Setup handlers
+      _flutterTts.setStartHandler(() {
+        isSpeaking.value = true;
+      });
+
       _flutterTts.setCompletionHandler(() {
         print('🔊 [TTS] Speech completed');
+        isSpeaking.value = false;
         if (onSpeechCompleted != null) {
           onSpeechCompleted!();
         }
       });
 
-      // Load saved language
+      _flutterTts.setErrorHandler((msg) {
+        isSpeaking.value = false;
+      });
+
+      _flutterTts.setCancelHandler(() {
+        isSpeaking.value = false;
+      });
       final prefs = await SharedPreferences.getInstance();
       _currentLanguage.value = prefs.getString('tts_language') ?? 'en-US';
 

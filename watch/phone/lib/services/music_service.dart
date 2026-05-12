@@ -161,6 +161,25 @@ class MusicService extends GetxController {
 
   String get musicFolderPath => _musicFolderPath ?? (kIsWeb ? '(assets)' : '(unavailable)');
 
+  List<Map<String, String>> getMusicList() {
+    return playlist.map((path) {
+      return {
+        'id': path,
+        'name': path.split('/').last.replaceAll('.mp3', '').replaceAll('.m4a', '').replaceAll('.aac', '').replaceAll('_', ' ').toUpperCase(),
+      };
+    }).toList();
+  }
+
+  Future<void> playTrackByPath(String path) async {
+    if (!playlist.contains(path)) {
+      // If not in playlist, check if it's an asset path
+      if (!path.startsWith('assets/')) return;
+    }
+    
+    await stopMusic(fadeOut: isPlaying.value);
+    await _playTrack(path, volume: winVolume.value);
+  }
+
   String _getNextTrackPath() {
     if (playlist.isEmpty) return '';
     if (playMode.value == 'sequential') {
@@ -184,7 +203,21 @@ class MusicService extends GetxController {
   }
 
   Future<void> playTensionMusic() async {
-    if (!tensionMusicEnabled.value || isPlaying.value || playlist.isEmpty) return;
+    if (!tensionMusicEnabled.value || playlist.isEmpty) {
+      print('🎵 [Music] Tension skipped: enabled=${tensionMusicEnabled.value}, empty=${playlist.isEmpty}');
+      return;
+    }
+    
+    if (isTensionMode.value && isPlaying.value) {
+      print('🎵 [Music] Already in Tension mode');
+      return;
+    }
+
+    // Stop current normal music to transition to tension
+    if (isPlaying.value) {
+      print('🎵 [Music] Interrupting normal music for Tension');
+      await stopMusic(fadeOut: true);
+    }
 
     // Filter tracks containing "tension"
     final tensionTracks = playlist.where(
@@ -193,19 +226,18 @@ class MusicService extends GetxController {
 
     String track;
     if (tensionTracks.isNotEmpty) {
-      // If multiple tension tracks, pick one randomly or sequentially
       if (playMode.value == 'random') {
         track = tensionTracks[_random.nextInt(tensionTracks.length)];
       } else {
-        track = tensionTracks[0]; // Or we could maintain a separate index, but 0 is okay for now
+        track = tensionTracks[0];
       }
     } else {
       track = _getNextTrackPath();
     }
 
+    print('🎵 [Music] Starting Tension: ${track.split('/').last} at volume ${tensionVolume.value}');
     await _playTrack(track, volume: tensionVolume.value, fadeDurationMs: 3000);
     isTensionMode.value = true;
-    print('🎵 [Music] Tension: ${track.split('/').last}');
   }
 
 
@@ -222,7 +254,8 @@ class MusicService extends GetxController {
       }
       
       currentTrackName.value = track.split('/').last;
-      _fadeIn(volume, durationMs: fadeDurationMs);
+      print('🎵 [Music] Playing track: ${currentTrackName.value} (target vol: $volume)');
+      _fadeIn(volume > 0 ? volume : 0.5, durationMs: fadeDurationMs);
     } catch (e) {
       print('🎵 [Music] Play error: $e');
     }

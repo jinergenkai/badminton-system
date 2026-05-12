@@ -1,5 +1,10 @@
 # 🏸 Badminton Voice Counter
 
+```
+flutter build apk --release
+  adb install build/app/outputs/flutter-apk/app-release.apk
+```
+
 A voice-controlled badminton score counter app built with Flutter, GetX, and Picovoice.
 
 ## Features
@@ -24,6 +29,7 @@ A voice-controlled badminton score counter app built with Flutter, GetX, and Pic
 ### Testing Without Voice (Demo Mode)
 
 The app includes test buttons (A and B) in the bottom right corner for testing:
+
 - Press **A** button to add a point to Team A
 - Press **B** button to add a point to Team B
 - Tap the microphone icon to toggle voice listening state
@@ -62,12 +68,14 @@ To enable actual voice commands, you need to:
 ### Adding Permissions
 
 #### Android (android/app/src/main/AndroidManifest.xml)
+
 ```xml
 <uses-permission android:name="android.permission.RECORD_AUDIO" />
 <uses-permission android:name="android.permission.INTERNET" />
 ```
 
 #### iOS (ios/Runner/Info.plist)
+
 ```xml
 <key>NSMicrophoneUsageDescription</key>
 <string>This app needs microphone access for voice commands</string>
@@ -102,6 +110,7 @@ lib/
 ## Screenshots
 
 The app features:
+
 - Gradient backgrounds with vibrant colors
 - Animated score displays with elastic animations
 - Voice indicator with wave effects
@@ -111,6 +120,7 @@ The app features:
 ## Voice Command Examples
 
 Once configured with Picovoice, you can say:
+
 - "Team A" → +1 point for Team A
 - "Team B" → +1 point for Team B
 - Or custom commands you define in your Rhino context
@@ -124,6 +134,7 @@ Once configured with Picovoice, you can say:
 ## Development
 
 Built with ❤️ using:
+
 - Flutter SDK
 - GetX for state management
 - Picovoice for voice recognition
@@ -139,6 +150,7 @@ Built with ❤️ using:
 ## Support
 
 For Picovoice setup help:
+
 - [Picovoice Documentation](https://picovoice.ai/docs/)
 - [Picovoice Console](https://console.picovoice.ai/)
 - [Flutter Package](https://pub.dev/packages/picovoice_flutter)

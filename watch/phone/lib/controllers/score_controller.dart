@@ -17,8 +17,8 @@ import '../features/hype_voice/services/hype_voice_controller.dart';
 
 class ScoreController extends GetxController {
   final VoiceService _voiceService = VoiceService();
-  final TtsService _ttsService = TtsService();
-  final WatchConnectivityService _watchService = WatchConnectivityService();
+  final TtsService _ttsService = Get.put(TtsService());
+  final WatchConnectivityService _watchService = Get.put(WatchConnectivityService());
   final HypeVoiceController _hypeController = Get.put(HypeVoiceController());
   final MusicService _musicService = Get.put(MusicService());
   final Uuid _uuid = const Uuid();
@@ -85,10 +85,17 @@ class ScoreController extends GetxController {
       _hypeController.playHype();
     };
 
-    // Hype done (or skipped) → win music if game ended
+    // Hype done (or skipped) → win music OR resume/start tension music.
+    // Tension music is started HERE (not during score update) so it never
+    // competes with TTS or hype for AudioFocus.
     _hypeController.onPlaybackCompleted = () {
       if (isGameEnded.value) {
         _musicService.playWinMusic();
+      } else if (_musicService.isTensionMode.value && !_musicService.isPlaying.value) {
+        // Tension was paused by hype's AudioFocus — resume it
+        _musicService.resume();
+      } else {
+        _checkTensionMusic();
       }
     };
 
@@ -178,9 +185,10 @@ class ScoreController extends GetxController {
       if (newScoreA >= 0 && newScoreB >= 0) {
         final int oldA = gameState.teamAScore;
         final int oldB = gameState.teamBScore;
+        final String? manualHype = event['manualHype'];
         
         // Duplicate-message guard
-        if (newScoreA == oldA && newScoreB == oldB) return;
+        if (newScoreA == oldA && newScoreB == oldB && manualHype == null) return;
 
         // DEFENSIVE LOGIC: If watch sends a score that is lower than phone (and not a reset), 
         // it likely means the watch app just restarted and hasn't synced yet.
@@ -208,14 +216,14 @@ class ScoreController extends GetxController {
           teamAScore: newScoreA,
           teamBScore: newScoreB,
           stateStack: currentStack,
-          history: [...gameState.history, 'Watch: $action'],
+          history: [...gameState.history, 'Watch: $action${manualHype != null ? " ($manualHype)" : ""}'],
         );
 
         _isSyncingFromWatch = false;
 
-        _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB);
+        _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB, manualHype: manualHype);
         _ttsService.announceScore(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
-        _checkTensionMusic();
+        // _checkTensionMusic() moved to onPlaybackCompleted — avoids AudioFocus conflict
         // ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
         _checkGameEnd();
       }
@@ -314,7 +322,6 @@ class ScoreController extends GetxController {
     if (!gameState.hasWinner) {
       _ttsService.announceScore(gameState.teamAScore, gameState.teamBScore, 'A');
     }
-    _checkTensionMusic();
     if (fromVoice) _startCooldown();
     // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
     _checkGameEnd();
@@ -336,7 +343,6 @@ class ScoreController extends GetxController {
     if (!gameState.hasWinner) {
       _ttsService.announceScore(gameState.teamAScore, gameState.teamBScore, 'B');
     }
-    _checkTensionMusic();
     if (fromVoice) _startCooldown();
     // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
     _checkGameEnd();

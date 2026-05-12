@@ -1,9 +1,13 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
+import 'package:voice_counter/controllers/score_controller.dart';
 import '../models/game_state.dart';
+import 'music_service.dart';
+import '../features/hype_voice/services/hype_voice_controller.dart';
 
 /// Service for communicating with Xiaomi Wearable SDK watch
-class WatchConnectivityService {
+class WatchConnectivityService extends GetxService {
   static const platform = MethodChannel('com.voice_counter/watch');
   static const eventChannel = EventChannel('com.voice_counter/watch_events');
 
@@ -31,6 +35,7 @@ class WatchConnectivityService {
           (event) {
             if (event is Map) {
               final command = Map<String, dynamic>.from(event);
+              _handleWatchCommand(command);
               _commandController.add(command);
               print('⌚ [WatchService] Received from watch: $command');
             }
@@ -44,6 +49,49 @@ class WatchConnectivityService {
       }
     } catch (e) {
       print('⌚ [WatchService] Initialization error: $e');
+    }
+  }
+
+  void _handleWatchCommand(Map<String, dynamic> command) {
+    final action = command['action'];
+    if (action == 'request_media_list') {
+      sendMediaList();
+    } else if (action == 'play_music') {
+      final path = command['id'];
+      if (path != null) Get.find<MusicService>().playTrackByPath(path);
+    } else if (action == 'play_hype') {
+      final id = command['id'];
+      if (id != null) {
+        Get.find<HypeVoiceController>().playManualHype(id);
+      }
+    } else if (action == 'stop_all_media') {
+      Get.find<MusicService>().stopMusic();
+      Get.find<HypeVoiceController>().stopAudio();
+      try {
+        final scoreController = Get.find<ScoreController>();
+        scoreController.ttsService.stop();
+      } catch (e) {}
+    }
+  }
+
+  /// Send media list to connected watch
+  Future<void> sendMediaList() async {
+    if (!_isInitialized) return;
+
+    final musicList = Get.find<MusicService>().getMusicList();
+    final hypeList = Get.find<HypeVoiceController>().getHypeList();
+
+    try {
+      await platform.invokeMethod('sendMessage', {
+        'data': {
+          'action': 'media_list',
+          'music': musicList,
+          'hype': hypeList,
+        },
+      });
+      print('⌚ [WatchService] Media list sent: ${musicList.length} music, ${hypeList.length} hype');
+    } catch (e) {
+      print('⌚ [WatchService] Error sending media list: $e');
     }
   }
 

@@ -1,9 +1,19 @@
 {
   "triggers": [
     {
+      "id": "manual_trigger",
+      "priority": 1000,
+      "pool": ["nice_pair", "did_you_see_that_1", "cu_danh_dep"]
+    },
+    {
       "id": "comeback_king",
       "priority": 100,
-      "pool": ["comeback_king_1", "unbelievable_1", "unbelievable_2", "written_in_history_1"]
+      "pool": [
+        "comeback_king_1",
+        "unbelievable_1",
+        "unbelievable_2",
+        "written_in_history_1"
+      ]
     },
     {
       "id": "shutdown",
@@ -13,7 +23,13 @@
     {
       "id": "streak_7_plus",
       "priority": 80,
-      "pool": ["legendary_1", "to_the_moon_1", "to_the_moon_2", "the_chosen_one_1", "mom_are_you_watching_1"]
+      "pool": [
+        "legendary_1",
+        "to_the_moon_1",
+        "to_the_moon_2",
+        "the_chosen_one_1",
+        "mom_are_you_watching_1"
+      ]
     },
     {
       "id": "streak_6",
@@ -23,7 +39,13 @@
     {
       "id": "streak_5",
       "priority": 60,
-      "pool": ["penta_shot_1", "unstoppable_1", "unstoppable_2", "unstoppable_3", "badminton_slayer_1"]
+      "pool": [
+        "penta_shot_1",
+        "unstoppable_1",
+        "unstoppable_2",
+        "unstoppable_3",
+        "badminton_slayer_1"
+      ]
     },
     {
       "id": "streak_4",
@@ -38,7 +60,13 @@
     {
       "id": "streak_2",
       "priority": 30,
-      "pool": ["double_kill_1", "double_shot_1", "hai_lien_tiep", "hai_lien_tiep_2", "cu_danh_dep"]
+      "pool": [
+        "double_kill_1",
+        "double_shot_1",
+        "hai_lien_tiep",
+        "hai_lien_tiep_2",
+        "cu_danh_dep"
+      ]
     },
     {
       "id": "first_point_of_match",

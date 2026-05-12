@@ -37,21 +37,16 @@ class MainActivity : FlutterActivity() {
         Log.d(TAG, "RAW From Watch: $raw")
         try {
             val json = JSONObject(raw)
-            val action = json.getString("action")
-            val sA = json.optInt("scoreA", -1)
-            val sB = json.optInt("scoreB", -1)
-            val silent = json.optBoolean("silent", false)
-            val reset = json.optBoolean("reset", false)
+            val map = mutableMapOf<String, Any?>()
+            val keys = json.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                map[key] = json.get(key)
+            }
+            map["type"] = "command" // Ensure type is command for ScoreController
 
             scope.launch(Dispatchers.Main) {
-                eventSink?.success(mapOf(
-                    "type" to "command",
-                    "action" to action,
-                    "scoreA" to sA,
-                    "scoreB" to sB,
-                    "silent" to silent,
-                    "reset" to reset
-                ))
+                eventSink?.success(map)
             }
         } catch (e: Exception) { Log.e(TAG, "Parse error: ${e.message}") }
     }

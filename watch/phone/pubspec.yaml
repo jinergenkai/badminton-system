@@ -24,10 +24,10 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
-  glassmorphism: ^3.0.0
+  # glassmorphism: ^3.0.0  # REMOVED: not used in code
   shimmer: ^3.0.0
   confetti: ^0.7.0
-  lottie: ^3.0.0
+  # lottie: ^3.0.0  # REMOVED: not used in code
 
   settings_ui: ^2.0.2
   flex_color_picker: ^3.4.1
