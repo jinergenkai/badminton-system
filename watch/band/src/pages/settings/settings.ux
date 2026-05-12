@@ -5,6 +5,10 @@
     </div>
 
     <list class="settings-list">
+      <list-item type="setting" class="item" onclick="onMediaControl">
+        <text class="item-text">Media Control</text>
+      </list-item>
+
       <list-item type="setting" class="item" onclick="onReconnect">
         <text class="item-text">Reconnect Watch</text>
       </list-item>
@@ -34,6 +38,12 @@
       connected: false,
       scoreA: 0,
       scoreB: 0
+    },
+
+    onMediaControl() {
+      router.push({
+        uri: 'pages/media_list'
+      })
     },
 
     onReconnect() {

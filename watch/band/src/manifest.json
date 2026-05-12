@@ -25,6 +25,9 @@
       },
       "pages/settings": {
         "component": "settings"
+      },
+      "pages/media_list": {
+        "component": "media_list"
       }
     }
   },

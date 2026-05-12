@@ -14,7 +14,7 @@
       <!-- ZONE 2 & 3: SCORES (MIDDLE - 60%) -->
       <div class="score-area">
         <!-- TEAM A (LEFT) -->
-        <stack class="score-btn card-a" onclick="onScoreA">
+        <stack class="score-btn card-a" onclick="onScoreA" onlongpress="onQuickHypeA">
           <image src="/common/dog.png" class="score-watermark"></image>
           <div class="score-content {{ isWinnerA ? 'winner-glow' : '' }}">
             <text class="score-text">{{ scoreA }}</text>
@@ -22,7 +22,7 @@
         </stack>
 
         <!-- TEAM B (RIGHT) -->
-        <stack class="score-btn card-b" onclick="onScoreB">
+        <stack class="score-btn card-b" onclick="onScoreB" onlongpress="onQuickHypeB">
           <image src="/common/cat.png" class="score-watermark"></image>
           <div class="score-content {{ isWinnerB ? 'winner-glow' : '' }}">
             <text class="score-text">{{ scoreB }}</text>
@@ -79,58 +79,74 @@
       cooldownTimer: null,
       isWinnerA: false,
       isWinnerB: false,
+      lastLongPressTime: 0, // Flag to prevent double trigger
     },
 
     onInit() {
-      this.initConnect()
+      // Keep instance but don't set listeners yet
+      this.connect = interconnect.instance()
     },
 
-    initConnect() {
-      try {
-        this.isConnecting = true
-        this.connect = interconnect.instance()
+    onShow() {
+      this.setupConnect()
+    },
 
-        if (this.connect) {
-          this.connect.onopen = (data) => {
-            this.connected = true
-            this.isConnecting = false
-            this.requestSync()
-          }
-          this.connect.onclose = () => {
-            this.connected = false
-            this.isConnecting = false
-          }
-          this.connect.onmessage = (data) => {
-            try {
-              const msg = JSON.parse(data.data)
-              if (msg.scoreA !== undefined && msg.scoreB !== undefined) {
-                // Mirror phone-originated state changes into local history so undo stays aligned
-                if (msg.action === 'score_A' || msg.action === 'score_B' || msg.action === 'reset') {
-                  this.history.push({ a: this.scoreA, b: this.scoreB })
-                  if (this.history.length > 20) this.history.shift()
-                } else if (msg.action === 'undo') {
-                  if (this.history.length > 0) this.history.pop()
-                }
-                this.scoreA = msg.scoreA
-                this.scoreB = msg.scoreB
-                this.checkWinner()
-                if (msg.action === 'sync' || msg.action === 'manual_sync') {
-                   prompt.showToast({ message: 'Synced' })
-                }
-              }
-            } catch (e) {}
-          }
-          this.connect.getReadyState({
-            success: (data) => {
-              this.connected = (data.status === 1)
-              this.isConnecting = false
-              if (this.connected) this.requestSync()
-            },
-            fail: () => { this.isConnecting = false }
-          })
-        }
-      } catch (e) {
+    setupConnect() {
+      if (!this.connect) return
+      
+      this.connect.onopen = (data) => {
+        this.connected = true
         this.isConnecting = false
+        this.requestSync()
+      }
+      this.connect.onclose = () => {
+        this.connected = false
+        this.isConnecting = false
+      }
+      this.connect.onmessage = (data) => {
+        try {
+          const msg = JSON.parse(data.data)
+          
+          // Handle media list sync
+          if (msg.action === 'media_list') {
+            this.$app.$def.musicList = msg.music || []
+            this.$app.$def.hypeList = msg.hype || []
+            console.info('⌚ [Index] Media list updated globally')
+            return
+          }
+
+          if (msg.scoreA !== undefined && msg.scoreB !== undefined) {
+            // Mirror phone-originated state changes into local history so undo stays aligned
+            if (msg.action === 'score_A' || msg.action === 'score_B' || msg.action === 'reset') {
+              this.history.push({ a: this.scoreA, b: this.scoreB })
+              if (this.history.length > 20) this.history.shift()
+            } else if (msg.action === 'undo') {
+              if (this.history.length > 0) this.history.pop()
+            }
+            this.scoreA = msg.scoreA
+            this.scoreB = msg.scoreB
+            this.checkWinner()
+            if (msg.action === 'sync' || msg.action === 'manual_sync') {
+                prompt.showToast({ message: 'Synced' })
+            }
+          }
+        } catch (e) {}
+      }
+      
+      this.connect.getReadyState({
+        success: (data) => {
+          this.connected = (data.status === 1)
+          if (this.connected) this.requestSync()
+        }
+      })
+    },
+
+    onHide() {
+      // Clear listeners to avoid memory leaks or conflicting messages
+      if (this.connect) {
+        this.connect.onmessage = null
+        this.connect.onopen = null
+        this.connect.onclose = null
       }
     },
 
@@ -138,6 +154,10 @@
       if (!this.connect) return
       this.connect.send({
         data: { action: 'request_sync' }
+      })
+      // Also request media list on connection
+      this.connect.send({
+        data: { action: 'request_media_list' }
       })
       prompt.showToast({ message: 'Sync Requested' })
     },
@@ -162,6 +182,15 @@
           connected: this.connected,
           scoreA: this.scoreA,
           scoreB: this.scoreB
+        }
+      })
+    },
+
+    openMediaList() {
+      router.push({
+        uri: 'pages/media_list',
+        params: {
+          connected: this.connected
         }
       })
     },
@@ -193,6 +222,9 @@
     },
 
     onScoreA() {
+      // If a long press was just handled, ignore the click (release)
+      if (Date.now() - this.lastLongPressTime < 500) return
+      
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
       this.history.push({ a: this.scoreA, b: this.scoreB })
       if (this.history.length > 20) this.history.shift()
@@ -201,11 +233,33 @@
     },
 
     onScoreB() {
+      if (Date.now() - this.lastLongPressTime < 500) return
+
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
       this.history.push({ a: this.scoreA, b: this.scoreB })
       if (this.history.length > 20) this.history.shift()
       this.scoreB++
       this.sendUpdate('score_B')
+    },
+
+    onQuickHypeA() {
+      if (this.isLocked || this.isWinnerA || this.isWinnerB) return
+      this.lastLongPressTime = Date.now()
+      this.history.push({ a: this.scoreA, b: this.scoreB })
+      if (this.history.length > 20) this.history.shift()
+      this.scoreA++
+      this.sendUpdate('score_A', false, 'manual_trigger')
+      prompt.showToast({ message: 'Point + Nice Pair!' })
+    },
+
+    onQuickHypeB() {
+      if (this.isLocked || this.isWinnerA || this.isWinnerB) return
+      this.lastLongPressTime = Date.now()
+      this.history.push({ a: this.scoreA, b: this.scoreB })
+      if (this.history.length > 20) this.history.shift()
+      this.scoreB++
+      this.sendUpdate('score_B', false, 'manual_trigger')
+      prompt.showToast({ message: 'Point + Nice Pair!' })
     },
 
     onUndo() {
@@ -216,7 +270,7 @@
       this.sendUpdate('undo')
     },
 
-    sendUpdate(action, isReset = false) {
+    sendUpdate(action, isReset = false, manualHype = null) {
       this.checkWinner()
       this.startCooldown()
       if (!this.connect) return
@@ -226,6 +280,7 @@
           scoreA: this.scoreA,
           scoreB: this.scoreB,
           reset: isReset,
+          manualHype: manualHype,
           // index.ux always mutates local state before sending; phone must NOT echo back
           // (otherwise we'd double-push history). Settings page omits this so phone echoes.
           silent: true,

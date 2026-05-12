@@ -1,5 +1,7 @@
 <script>
 export default {
+  musicList: [],
+  hypeList: [],
   onCreate() {
     console.info('Application onCreate');
   },

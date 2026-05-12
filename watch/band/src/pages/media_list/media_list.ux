@@ -1,0 +1,282 @@
+<template>
+  <div class="container">
+    <div class="header">
+      <text class="title">MEDIA</text>
+      <div class="sync-btn" onclick="requestMediaList">
+        <text class="sync-text">SYNC</text>
+      </div>
+    </div>
+
+    <list class="media-list">
+      <list-item type="control" class="item-control">
+        <div class="stop-btn" onclick="stopAll">
+          <text class="stop-text">STOP ALL AUDIO</text>
+        </div>
+      </list-item>
+
+      <!-- HYPE SECTION -->
+      <list-item type="header" class="section-header">
+        <text class="section-title">HYPE & SFX</text>
+      </list-item>
+      
+      <list-item type="hype" for="{{ hypeList }}" class="media-item" onclick="playHype($item.id)">
+        <div class="item-content">
+          <text class="item-name">{{ $item.name }}</text>
+          <div class="play-icon"></div>
+        </div>
+      </list-item>
+
+      <list-item type="empty" if="{{ hypeList.length === 0 }}" class="empty-item">
+        <text class="empty-text">Empty. Please tap SYNC.</text>
+      </list-item>
+
+      <!-- MUSIC SECTION -->
+      <list-item type="header" class="section-header">
+        <text class="section-title">MUSIC PLAYLIST</text>
+      </list-item>
+
+      <list-item type="music" for="{{ musicList }}" class="media-item" onclick="playMusic($item.id)">
+        <div class="item-content">
+          <text class="item-name">{{ $item.name }}</text>
+          <div class="play-icon music-icon"></div>
+        </div>
+      </list-item>
+
+      <list-item type="empty" if="{{ musicList.length === 0 }}" class="empty-item">
+        <text class="empty-text">Empty. Please tap SYNC.</text>
+      </list-item>
+
+      <list-item type="footer" class="list-footer">
+        <text class="footer-text">Swipe to go back</text>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+  import router from '@system.router'
+
+  export default {
+    private: {
+      connect: null,
+      musicList: [],
+      hypeList: []
+    },
+
+    onInit() {
+      this.connect = interconnect.instance()
+      this.syncFromGlobal()
+    },
+
+    onShow() {
+      this.setupConnect()
+      this.syncFromGlobal()
+      // Always request list when entering this screen to ensure fresh data
+      this.requestMediaList()
+    },
+
+    syncFromGlobal() {
+      if (this.$app.$def.musicList) {
+        this.musicList = this.$app.$def.musicList
+        console.info('⌚ [Media] Synced from global: ' + this.musicList.length + ' music')
+      }
+      if (this.$app.$def.hypeList) {
+        this.hypeList = this.$app.$def.hypeList
+        console.info('⌚ [Media] Synced from global: ' + this.hypeList.length + ' hype')
+      }
+    },
+
+    setupConnect() {
+      if (!this.connect) return
+      
+      this.connect.onmessage = (data) => {
+        try {
+          console.info('⌚ [Media] DATA: ' + data.data)
+          const msg = JSON.parse(data.data)
+          if (msg.action === 'media_list') {
+            this.musicList = msg.music || []
+            this.hypeList = msg.hype || []
+            // Update global
+            this.$app.$def.musicList = this.musicList
+            this.$app.$def.hypeList = this.hypeList
+            prompt.showToast({ message: 'List Updated: ' + (this.musicList.length + this.hypeList.length) })
+          }
+        } catch (e) {
+          console.error('⌚ [Media] Parse error: ' + e.message)
+        }
+      }
+    },
+
+    onHide() {
+      if (this.connect) {
+        this.connect.onmessage = null
+      }
+    },
+
+    requestMediaList() {
+      if (!this.connect) return
+      console.info('⌚ [Media] Requesting media list...')
+      this.connect.send({
+        data: { action: 'request_media_list' }
+      })
+      prompt.showToast({ message: 'Requesting...' })
+    },
+
+    playMusic(path) {
+      if (!this.connect) return
+      this.connect.send({
+        data: { 
+          action: 'play_music',
+          id: path
+        }
+      })
+      prompt.showToast({ message: 'Playing Music' })
+    },
+
+    playHype(id) {
+      if (!this.connect) return
+      this.connect.send({
+        data: { 
+          action: 'play_hype',
+          id: id
+        }
+      })
+      prompt.showToast({ message: 'Triggered Hype' })
+    },
+
+    stopAll() {
+      if (!this.connect) return
+      this.connect.send({
+        data: { action: 'stop_all_media' }
+      })
+      prompt.showToast({ message: 'All Stopped' })
+    }
+  }
+</script>
+
+<style>
+  .container {
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background-color: #0F172A;
+  }
+
+  .header {
+    width: 100%;
+    height: 60px;
+    padding: 0 15px;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .sync-btn {
+    padding: 6px 15px;
+    background-color: #448AFF;
+    border-radius: 12px;
+  }
+
+  .sync-text {
+    font-size: 16px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .media-list {
+    flex: 1;
+    width: 100%;
+  }
+
+  .item-control {
+    width: 100%;
+    padding: 15px 15px 5px 15px;
+  }
+
+  .stop-btn {
+    width: 100%;
+    height: 60px;
+    background-color: #FF5252;
+    border-radius: 15px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .stop-text {
+    font-size: 18px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .section-header {
+    padding: 20px 20px 5px 20px;
+  }
+
+  .section-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #448AFF;
+  }
+
+  .media-item {
+    padding: 15px 20px;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .item-content {
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .item-name {
+    font-size: 20px;
+    color: #E2E8F0;
+    flex: 1;
+  }
+
+  .play-icon {
+    width: 20px;
+    height: 20px;
+    background-color: #448AFF;
+    border-radius: 10px;
+    margin-left: 10px;
+  }
+
+  .music-icon {
+    background-color: #8B5CF6;
+  }
+
+  .empty-item {
+    padding: 20px;
+    justify-content: center;
+  }
+
+  .empty-text {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.3);
+    text-align: center;
+  }
+
+  .list-footer {
+    padding: 50px 20px;
+    justify-content: center;
+  }
+
+  .footer-text {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.2);
+    text-align: center;
+  }
+</style>
