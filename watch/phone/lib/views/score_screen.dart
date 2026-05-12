@@ -20,10 +20,13 @@ class ScoreScreen extends StatefulWidget {
 }
 
 class _ScoreScreenState extends State<ScoreScreen> {
+  late final ScoreController controller;
+
   @override
   void initState() {
     super.initState();
     WakelockPlus.enable();
+    controller = Get.put(ScoreController());
   }
 
   @override
@@ -34,8 +37,6 @@ class _ScoreScreenState extends State<ScoreScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final ScoreController controller = Get.put(ScoreController());
-
     return Scaffold(
       body: Stack(
         children: [

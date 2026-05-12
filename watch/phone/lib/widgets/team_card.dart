@@ -1,5 +1,5 @@
 import 'dart:math' as math;
-import 'dart:ui';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -337,7 +337,21 @@ class _PulsingScoreState extends State<_PulsingScore>
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 600),
-    )..repeat();
+    );
+    if (widget.streak >= 2) _ctrl.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _PulsingScore old) {
+    super.didUpdateWidget(old);
+    final bool wasActive = old.streak >= 2;
+    final bool isActive = widget.streak >= 2;
+    if (isActive && !wasActive) {
+      _ctrl.repeat();
+    } else if (!isActive && wasActive) {
+      _ctrl.stop();
+      _ctrl.value = 0; // reset so Transform.scale returns 1.0
+    }
   }
 
   @override
@@ -402,6 +416,16 @@ class _PulsingScoreState extends State<_PulsingScore>
 }
 
 // ── MODERN FIRE EFFECT (Stylized vertical streaks) ───────────────────
+class _FireStreak {
+  final double xNorm;       // 0..1 — position along width
+  final double height;      // 40..140
+  final double phaseOffset; // 0..1 — random phase per streak
+  _FireStreak(math.Random r)
+      : xNorm = r.nextDouble(),
+        height = 40 + r.nextDouble() * 100,
+        phaseOffset = r.nextDouble();
+}
+
 class _ModernFireEffect extends StatefulWidget {
   final Color color;
   const _ModernFireEffect({required this.color});
@@ -412,9 +436,12 @@ class _ModernFireEffect extends StatefulWidget {
 class _ModernFireEffectState extends State<_ModernFireEffect>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
+  late final List<_FireStreak> _streaks;
   @override
   void initState() {
     super.initState();
+    final r = math.Random(42);
+    _streaks = List.generate(25, (_) => _FireStreak(r));
     _controller =
         AnimationController(vsync: this, duration: const Duration(seconds: 1))
           ..repeat();
@@ -426,10 +453,16 @@ class _ModernFireEffectState extends State<_ModernFireEffect>
   }
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) => CustomPaint(
-        painter: _FirePainter(progress: _controller.value, color: widget.color),
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => CustomPaint(
+          painter: _FirePainter(
+            progress: _controller.value,
+            color: widget.color,
+            streaks: _streaks,
+          ),
+        ),
       ),
     );
   }
@@ -438,31 +471,37 @@ class _ModernFireEffectState extends State<_ModernFireEffect>
 class _FirePainter extends CustomPainter {
   final double progress;
   final Color color;
-  _FirePainter({required this.progress, required this.color});
+  final List<_FireStreak> streaks;
+  _FirePainter({
+    required this.progress,
+    required this.color,
+    required this.streaks,
+  });
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..style = PaintingStyle.fill;
-    final random = math.Random(42);
-    for (int i = 0; i < 25; i++) {
-      final double x = random.nextDouble() * size.width;
-      final double h = 40 + random.nextDouble() * 100;
-      final double p = (progress + random.nextDouble()) % 1.0;
+    for (final s in streaks) {
+      final double x = s.xNorm * size.width;
+      final double p = (progress + s.phaseOffset) % 1.0;
       final double y = size.height - (p * size.height * 1.2);
       final double w = (1.0 - p) * 12;
+      final double rectHeight = s.height * (1.0 - p);
 
-      final rect = Rect.fromLTWH(x - w / 2, y, w, h * (1.0 - p));
-      paint.shader = LinearGradient(
-        begin: Alignment.bottomCenter,
-        end: Alignment.topCenter,
-        colors: [color.withOpacity(0.8 * (1.0 - p)), Colors.transparent],
-      ).createShader(rect);
+      // ui.Gradient.linear bypasses Material LinearGradient wrapper allocation.
+      paint.shader = ui.Gradient.linear(
+        Offset(0, y + rectHeight), // bottom
+        Offset(0, y),               // top
+        [color.withOpacity(0.8 * (1.0 - p)), const Color(0x00000000)],
+      );
 
+      final rect = Rect.fromLTWH(x - w / 2, y, w, rectHeight);
       canvas.drawRRect(
           RRect.fromRectAndRadius(rect, const Radius.circular(10)), paint);
     }
   }
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _FirePainter old) =>
+      old.progress != progress || old.color != color;
 }
 
 // ── BALLOON CELEBRATION EFFECT ──────────────────────────────────────
@@ -492,13 +531,15 @@ class _BalloonEffectState extends State<_BalloonEffect>
   }
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) => CustomPaint(
-        painter: _BalloonPainter(
-            balloons: _balloons,
-            progress: _controller.value,
-            color: widget.color),
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => CustomPaint(
+          painter: _BalloonPainter(
+              balloons: _balloons,
+              progress: _controller.value,
+              color: widget.color),
+        ),
       ),
     );
   }
@@ -542,5 +583,6 @@ class _BalloonPainter extends CustomPainter {
     }
   }
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant _BalloonPainter old) =>
+      old.progress != progress || old.color != color;
 }

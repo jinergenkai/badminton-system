@@ -34,6 +34,7 @@ class ScoreController extends GetxController {
   final int cooldownDurationMs = 1000;
   Timer? _cooldownTimer;
   Timer? _autoResetTimer;
+  Timer? _watchConnectionPoll;
 
   // Configurable delay before auto-starting next game after a win
   final RxInt autoResetDelay = 60.obs;
@@ -111,7 +112,8 @@ class ScoreController extends GetxController {
       _watchCommandSubscription = _watchService.watchCommandStream.listen((event) {
         _handleWatchCommand(event);
       });
-      Timer.periodic(const Duration(seconds: 5), (timer) async {
+      _watchConnectionPoll?.cancel();
+      _watchConnectionPoll = Timer.periodic(const Duration(seconds: 5), (timer) async {
         isWatchConnected.value = await _watchService.isWatchConnected();
       });
     } catch (e) {
@@ -216,7 +218,7 @@ class ScoreController extends GetxController {
           teamAScore: newScoreA,
           teamBScore: newScoreB,
           stateStack: currentStack,
-          history: [...gameState.history, 'Watch: $action${manualHype != null ? " ($manualHype)" : ""}'],
+          history: _appendHistory('Watch: $action${manualHype != null ? " ($manualHype)" : ""}'),
         );
 
         _isSyncingFromWatch = false;
@@ -298,6 +300,14 @@ class ScoreController extends GetxController {
     }
   }
 
+  // Bound history to last 50 entries — list copy on every score otherwise grows O(n).
+  List<String> _appendHistory(String entry) {
+    const int maxHistory = 50;
+    final h = gameState.history;
+    if (h.length < maxHistory) return [...h, entry];
+    return [...h.sublist(h.length - maxHistory + 1), entry];
+  }
+
   void _pushStateToStack() {
     final currentStack = List<GameState>.from(gameState.stateStack);
     final snapshot = gameState.copyWith(stateStack: []);
@@ -313,7 +323,7 @@ class ScoreController extends GetxController {
     _pushStateToStack();
     _gameState.value = gameState.copyWith(
       teamAScore: gameState.teamAScore + 1,
-      history: [...gameState.history, '${gameState.teamAName} scored'],
+      history: _appendHistory('${gameState.teamAName} scored'),
     );
     if (!_isSyncingFromWatch) {
       _watchService.sendScoreUpdate(gameState, action: 'score_A');
@@ -334,7 +344,7 @@ class ScoreController extends GetxController {
     _pushStateToStack();
     _gameState.value = gameState.copyWith(
       teamBScore: gameState.teamBScore + 1,
-      history: [...gameState.history, '${gameState.teamBName} scored'],
+      history: _appendHistory('${gameState.teamBName} scored'),
     );
     if (!_isSyncingFromWatch) {
       _watchService.sendScoreUpdate(gameState, action: 'score_B');
@@ -487,6 +497,7 @@ class ScoreController extends GetxController {
   void onClose() {
     _cooldownTimer?.cancel();
     _autoResetTimer?.cancel();
+    _watchConnectionPoll?.cancel();
     _watchCommandSubscription?.cancel();
     // _voiceService.dispose(); // DISABLED: Picovoice
     _ttsService.dispose();

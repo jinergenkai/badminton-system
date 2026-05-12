@@ -187,9 +187,11 @@ class _RotatingRaysState extends State<_RotatingRays> with SingleTickerProviderS
   }
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) => CustomPaint(painter: RayPainter(color: widget.color, rotation: _controller.value * 2 * math.pi)),
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => CustomPaint(painter: RayPainter(color: widget.color, rotation: _controller.value * 2 * math.pi)),
+      ),
     );
   }
 }
@@ -241,9 +243,11 @@ class _ParticleBurstState extends State<_ParticleBurst> with SingleTickerProvide
   }
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) => CustomPaint(painter: ParticlePainter(particles: _particles, progress: _controller.value, color: widget.color)),
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => CustomPaint(painter: ParticlePainter(particles: _particles, progress: _controller.value, color: widget.color)),
+      ),
     );
   }
 }
@@ -269,7 +273,8 @@ class ParticlePainter extends CustomPainter {
     }
   }
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant ParticlePainter old) =>
+      old.progress != progress || old.color != color;
 }
 
 // ── Animated Speed Lines (Improved) ──────────────────────────────────
@@ -294,9 +299,11 @@ class _AnimatedSpeedLinesState extends State<_AnimatedSpeedLines> with SingleTic
   }
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) => CustomPaint(painter: SpeedLinesPainter(color: widget.color.withOpacity(0.4), progress: _controller.value)),
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, child) => CustomPaint(painter: SpeedLinesPainter(color: widget.color.withOpacity(0.4), progress: _controller.value)),
+      ),
     );
   }
 }
@@ -322,5 +329,6 @@ class SpeedLinesPainter extends CustomPainter {
     }
   }
   @override
-  bool shouldRepaint(CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant SpeedLinesPainter old) =>
+      old.progress != progress || old.color != color;
 }
