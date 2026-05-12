@@ -5,6 +5,7 @@ import 'package:flex_color_picker/flex_color_picker.dart';
 import '../models/team_config.dart';
 import '../services/database_service.dart';
 import '../services/music_service.dart';
+import '../services/tts_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -285,6 +286,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             );
           }),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+          _buildLanguageRow(),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
           Obx(() => Padding(
                 padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
@@ -616,6 +619,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ],
           )),
+    );
+  }
+
+  Widget _buildLanguageRow() {
+    final tts = Get.find<TtsService>();
+    return Obx(() {
+      final isVi = tts.currentLanguageRx.value.startsWith('vi');
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.language, color: Colors.white70, size: 20),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Language',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 15)),
+                      Text('Score & TTS announcement language',
+                          style: TextStyle(
+                              color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                _buildLangChip('English', !isVi, () => tts.setLanguage('en-US')),
+                const SizedBox(width: 8),
+                _buildLangChip('Tiếng Việt', isVi, () => tts.setLanguage('vi-VN')),
+              ],
+            ),
+          ],
+        ),
+      );
+    });
+  }
+
+  Widget _buildLangChip(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: selected ? Colors.amber.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+              color: selected ? Colors.amber : Colors.white24, width: 1),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+              color: selected ? Colors.amber : Colors.white54,
+              fontSize: 12,
+              fontWeight: selected ? FontWeight.bold : FontWeight.normal),
+        ),
+      ),
     );
   }
 

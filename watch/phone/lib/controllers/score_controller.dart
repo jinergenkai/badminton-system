@@ -9,6 +9,7 @@ import '../models/match.dart';
 import '../models/team_config.dart';
 import '../services/voice_service.dart';
 import '../services/tts_service.dart';
+import '../services/score_announcer_service.dart';
 import '../services/foreground_service.dart';
 import '../services/database_service.dart';
 import '../services/watch_connectivity_service.dart';
@@ -18,6 +19,7 @@ import '../features/hype_voice/services/hype_voice_controller.dart';
 class ScoreController extends GetxController {
   final VoiceService _voiceService = VoiceService();
   final TtsService _ttsService = Get.put(TtsService());
+  final ScoreAnnouncerService _scoreAnnouncer = Get.put(ScoreAnnouncerService());
   final WatchConnectivityService _watchService = Get.put(WatchConnectivityService());
   final HypeVoiceController _hypeController = Get.put(HypeVoiceController());
   final MusicService _musicService = Get.put(MusicService());
@@ -63,6 +65,7 @@ class ScoreController extends GetxController {
     _loadSettings();
     // _initializeVoiceService(); // DISABLED: Picovoice wake-word
     _ttsService.initialize();
+    _scoreAnnouncer.initialize();
     // _initializeForegroundService(); // DISABLED: foreground notification
     _initializeWatchSync();
     _setupAudioChain();
@@ -81,7 +84,15 @@ class ScoreController extends GetxController {
   }
 
   void _setupAudioChain() {
-    // TTS done → hype voice (or TTS fallback for missing MP3)
+    // Score/undo/winner announcement done → hype voice. Two completion
+    // sources converge:
+    //   1. ScoreAnnouncerService finishes its MP3 chain (score/undo MP3 path)
+    //   2. TtsService finishes (covers: winner — always TTS since team name
+    //      is dynamic — and any score/undo fallback path)
+    // Both wired to the same hype trigger so the chain stays consistent.
+    _scoreAnnouncer.onAnnouncementCompleted = () {
+      _hypeController.playHype();
+    };
     _ttsService.onSpeechCompleted = () {
       _hypeController.playHype();
     };
@@ -168,7 +179,7 @@ class ScoreController extends GetxController {
           stateStack: stack,
         );
         _hypeController.handleUndo();
-        _ttsService.announceUndo(newScoreA, newScoreB, undoneTeam);
+        _scoreAnnouncer.announceUndo(newScoreA, newScoreB, undoneTeam);
         // Do NOT send sync back — watch already applied undo locally (silent=true).
         // Sending phone's own stack result was the root cause of score corruption.
       } else {
@@ -224,7 +235,7 @@ class ScoreController extends GetxController {
         _isSyncingFromWatch = false;
 
         _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB, manualHype: manualHype);
-        _ttsService.announceScore(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
+        _scoreAnnouncer.announceScore(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
         // _checkTensionMusic() moved to onPlaybackCompleted — avoids AudioFocus conflict
         // ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
         _checkGameEnd();
@@ -330,7 +341,7 @@ class ScoreController extends GetxController {
     }
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
     if (!gameState.hasWinner) {
-      _ttsService.announceScore(gameState.teamAScore, gameState.teamBScore, 'A');
+      _scoreAnnouncer.announceScore(gameState.teamAScore, gameState.teamBScore, 'A');
     }
     if (fromVoice) _startCooldown();
     // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
@@ -351,7 +362,7 @@ class ScoreController extends GetxController {
     }
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
     if (!gameState.hasWinner) {
-      _ttsService.announceScore(gameState.teamAScore, gameState.teamBScore, 'B');
+      _scoreAnnouncer.announceScore(gameState.teamAScore, gameState.teamBScore, 'B');
     }
     if (fromVoice) _startCooldown();
     // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
@@ -397,7 +408,7 @@ class ScoreController extends GetxController {
       _watchService.sendScoreUpdate(gameState, action: 'undo');
     }
     _hypeController.handleUndo();
-    _ttsService.announceUndo(previousState.teamAScore, previousState.teamBScore, undoneTeam);
+    _scoreAnnouncer.announceUndo(previousState.teamAScore, previousState.teamBScore, undoneTeam);
   }
 
   void _checkGameEnd() {
@@ -406,7 +417,7 @@ class ScoreController extends GetxController {
       isGameEnded.value = true;
       _saveMatchToDatabase();
       _musicService.stopMusic(fadeOut: true);
-      _ttsService.announceWinner(gameState.winnerName, gameState.teamAScore, gameState.teamBScore);
+      _scoreAnnouncer.announceWinner(gameState.winnerName, gameState.teamAScore, gameState.teamBScore);
       _watchService.sendWinnerUpdate(gameState.winner, gameState.teamAScore, gameState.teamBScore);
       _autoResetTimer?.cancel();
       _autoResetTimer = Timer(Duration(seconds: autoResetDelay.value), () {

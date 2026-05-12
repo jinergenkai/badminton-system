@@ -59,5 +59,7 @@ flutter:
     - assets/models/meow-meow_en_android_v4_0_0.ppn
     - assets/audio/hype/
     - assets/audio/music/
+    - assets/audio/score/vi/
+    - assets/audio/score/en/
     - assets/config/hype_voice_config.json
     - assets/image/
