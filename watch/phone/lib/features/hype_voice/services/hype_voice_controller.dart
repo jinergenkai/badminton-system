@@ -22,6 +22,21 @@ class HypeVoiceController extends GetxController {
   final Rx<HypeDisplayEvent?> displayEvent = Rx<HypeDisplayEvent?>(null);
   DateTime? _lastEventTime;
 
+  // Set to true the first time a team has trailed by >=4 within the current
+  // match; cleared when that team scores and reaches tied/leading (comeback
+  // fired). Allowed to be re-armed if the team later trails again by 4+.
+  bool _comebackPendingA = false;
+  bool _comebackPendingB = false;
+
+  // Global per-file play count for least-played-random selection.
+  // Single namespace for the whole match: a file selected from one pool
+  // cannot immediately re-fire from another pool that also contains it.
+  // Reset on resetState (new match), restored from snapshot on undo.
+  final Map<String, int> _playCounts = {};
+
+  static const int _setPoint = 21;
+  static const int _comebackDeficitThreshold = 4;
+
   static const Map<String, String> _displayTexts = {
     'double_kill': 'DOUBLE KILL',
     'double_shot': 'DOUBLE SHOT',
@@ -78,7 +93,6 @@ class HypeVoiceController extends GetxController {
   int _lastOpponentStreak = 0;
   int _maxDeficitTeamA = 0;
   int _maxDeficitTeamB = 0;
-  final List<String> _recentVoiceIds = [];
 
   List<dynamic> _triggers = [];
   String? _pendingHypeId;
@@ -127,8 +141,65 @@ class HypeVoiceController extends GetxController {
       final data = json.decode(response);
       _triggers = data['triggers'];
       print('🔥 [Hype] Config loaded: ${_triggers.length} triggers');
+      await _validateConfigAgainstAssets();
     } catch (e) {
       print('🔥 [Hype] Config load error: $e');
+    }
+  }
+
+  /// Cross-checks the config pools against bundled mp3 files. Purely
+  /// informational — logs warnings, never throws. Helps catch:
+  ///   • files dropped into assets/audio/hype/ but forgotten in config
+  ///   • files referenced in config but missing on disk (rename/typo)
+  Future<void> _validateConfigAgainstAssets() async {
+    try {
+      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
+      const String dir = 'assets/audio/hype/';
+      const String ext = '.mp3';
+      final bundled = <String>{
+        for (final p in manifest.listAssets())
+          if (p.startsWith(dir) && p.endsWith(ext))
+            p.substring(dir.length, p.length - ext.length),
+      };
+
+      final referenced = <String>{};
+      for (final t in _triggers) {
+        final pool = t['pool'];
+        if (pool is List) {
+          for (final f in pool) {
+            referenced.add(f.toString());
+          }
+        }
+      }
+
+      final unreferenced = bundled.difference(referenced).toList()..sort();
+      final missing = referenced.difference(bundled).toList()..sort();
+
+      if (unreferenced.isEmpty && missing.isEmpty) {
+        print('🔥 [Hype] ✓ Config valid: ${bundled.length} files wired up');
+        return;
+      }
+      if (unreferenced.isNotEmpty) {
+        print('🔥 [Hype] ⚠️  Unreferenced mp3 files (drop them into a pool in hype_voice_config.json):');
+        for (final f in unreferenced) {
+          print('🔥 [Hype]    • $f');
+        }
+      }
+      if (missing.isNotEmpty) {
+        print('🔥 [Hype] ⚠️  Missing mp3 files (referenced in config but not bundled):');
+        for (final f in missing) {
+          final users = _triggers
+              .where((t) {
+                final pool = t['pool'];
+                return pool is List && pool.contains(f);
+              })
+              .map((t) => t['id'])
+              .join(', ');
+          print('🔥 [Hype]    • $f (used by: $users)');
+        }
+      }
+    } catch (e) {
+      print('🔥 [Hype] Validator skipped (manifest load failed): $e');
     }
   }
 
@@ -156,49 +227,75 @@ class HypeVoiceController extends GetxController {
   void processScoreUpdate(int oldA, int oldB, int newA, int newB, {String? manualHype}) {
     if (!isEnabled.value) return;
 
-    _historyStack.add(HypeStateSnapshot(
-      currentStreakTeam: currentStreakTeam.value,
-      streakCount: streakCount.value,
-      lastOpponentStreak: _lastOpponentStreak,
-      maxDeficitTeamA: _maxDeficitTeamA,
-      maxDeficitTeamB: _maxDeficitTeamB,
-      recentVoiceIds: List.from(_recentVoiceIds),
-    ));
-    if (_historyStack.length > 20) _historyStack.removeAt(0);
+    try {
+      // Snapshot pre-event state for undo
+      _historyStack.add(HypeStateSnapshot(
+        currentStreakTeam: currentStreakTeam.value,
+        streakCount: streakCount.value,
+        lastOpponentStreak: _lastOpponentStreak,
+        maxDeficitTeamA: _maxDeficitTeamA,
+        maxDeficitTeamB: _maxDeficitTeamB,
+        comebackPendingA: _comebackPendingA,
+        comebackPendingB: _comebackPendingB,
+        playCounts: Map<String, int>.from(_playCounts),
+      ));
+      if (_historyStack.length > 20) _historyStack.removeAt(0);
 
-    final String scoringTeam = newA > oldA ? 'A' : 'B';
+      final String scoringTeam = newA > oldA ? 'A' : 'B';
 
-    if (currentStreakTeam.value == scoringTeam) {
-      streakCount.value++;
-    } else {
-      _lastOpponentStreak = streakCount.value;
-      currentStreakTeam.value = scoringTeam;
-      streakCount.value = 1;
-    }
-
-    final int deficitA = newB - newA;
-    final int deficitB = newA - newB;
-    if (deficitA > _maxDeficitTeamA) _maxDeficitTeamA = deficitA;
-    if (deficitB > _maxDeficitTeamB) _maxDeficitTeamB = deficitB;
-
-    if (manualHype != null) {
-      // Check if manualHype is a trigger ID (for randomization from pool)
-      final bool isTrigger = _triggers.any((t) => t['id'] == manualHype);
-      if (isTrigger) {
-        print('🔥 [Hype] Manual trigger group: $manualHype');
-        _prepareHype(manualHype);
+      // Streak tracking
+      if (currentStreakTeam.value == scoringTeam) {
+        streakCount.value++;
       } else {
-        print('🔥 [Hype] Manual specific sound: $manualHype');
-        _prepareHypeDirectly(manualHype);
+        _lastOpponentStreak = streakCount.value;
+        currentStreakTeam.value = scoringTeam;
+        streakCount.value = 1;
       }
-    } else {
-      _evaluateTriggers(newA, newB, scoringTeam);
+
+      // Deficit tracking (legacy max-ever)
+      final int deficitA = newB - newA;
+      final int deficitB = newA - newB;
+      if (deficitA > _maxDeficitTeamA) _maxDeficitTeamA = deficitA;
+      if (deficitB > _maxDeficitTeamB) _maxDeficitTeamB = deficitB;
+
+      // Arm comeback flag for the team currently trailing by >=4. Sticky until
+      // that team scores back to tied/leading and the comeback trigger fires.
+      if (deficitA >= _comebackDeficitThreshold) _comebackPendingA = true;
+      if (deficitB >= _comebackDeficitThreshold) _comebackPendingB = true;
+
+      if (manualHype != null) {
+        // Check if manualHype is a trigger ID (for randomization from pool)
+        final bool isTrigger = _triggers.any((t) => t['id'] == manualHype);
+        if (isTrigger) {
+          print('🔥 [Hype] Manual trigger group: $manualHype');
+          _prepareHype([manualHype]);
+        } else {
+          print('🔥 [Hype] Manual specific sound: $manualHype');
+          _prepareHypeDirectly(manualHype);
+        }
+        return;
+      }
+
+      final List<String> matched = _evaluateTriggers(newA, newB, scoringTeam);
+      if (matched.isNotEmpty) {
+        // Comeback consumes the pending flag for the scoring team.
+        if (matched.contains('comeback')) {
+          if (scoringTeam == 'A') {
+            _comebackPendingA = false;
+          } else {
+            _comebackPendingB = false;
+          }
+        }
+        _prepareHype(matched);
+      }
+    } catch (e) {
+      print('🔥 [Hype] processScoreUpdate error: $e');
     }
   }
 
   void _prepareHypeDirectly(String voiceId) {
     _pendingHypeId = voiceId;
-    
+
     // Trigger display overlay immediately
     if (koEffectEnabled.value) {
       displayEvent.value = HypeDisplayEvent(
@@ -228,7 +325,7 @@ class HypeVoiceController extends GetxController {
   Future<void> playManualHype(String voiceId) async {
     // 1. Set as pending (overwrites auto-hype for the next playback slot)
     _pendingHypeId = voiceId;
-    
+
     // 2. Trigger display overlay immediately
     if (koEffectEnabled.value) {
       displayEvent.value = HypeDisplayEvent(
@@ -245,7 +342,7 @@ class HypeVoiceController extends GetxController {
     }
 
     // 3. Play logic:
-    // If TTS is active, we do nothing. ScoreController.onSpeechCompleted will 
+    // If TTS is active, we do nothing. ScoreController.onSpeechCompleted will
     // eventually call playHype() which will pick up our _pendingHypeId.
     // If TTS is silent, play immediately.
     try {
@@ -264,70 +361,124 @@ class HypeVoiceController extends GetxController {
     await _audioPlayer.stop();
   }
 
-  void _evaluateTriggers(int newA, int newB, String scoringTeam) {
-    String? matchedId;
+  /// Returns ALL matched trigger ids at the top priority (so their pools can
+  /// be merged in `_prepareHype`). Empty list if nothing matched.
+  ///
+  /// Same-priority triggers are intentionally additive: e.g. when streak=2
+  /// both `streak_low` (generic) and `streak_2` (audio says "double") match
+  /// at priority 50 and their pools merge.
+  List<String> _evaluateTriggers(int newA, int newB, String scoringTeam) {
     int highestPriority = -1;
+    final List<String> winners = [];
 
-    for (var trigger in _triggers) {
+    for (final trigger in _triggers) {
       final String id = trigger['id'];
       final int priority = trigger['priority'];
-      bool isMatch = false;
 
-      switch (id) {
-        case 'comeback_king':
-          final isAWin = (newA >= 21 && (newA - newB) >= 2) || newA == 30;
-          final isBWin = (newB >= 21 && (newB - newA) >= 2) || newB == 30;
-          if (isAWin && scoringTeam == 'A' && _maxDeficitTeamA >= 5) isMatch = true;
-          if (isBWin && scoringTeam == 'B' && _maxDeficitTeamB >= 5) isMatch = true;
-          break;
-        case 'shutdown':
-          if (_lastOpponentStreak >= 5 && streakCount.value == 1) isMatch = true;
-          break;
-        case 'streak_7_plus':
-          if (streakCount.value >= 7) isMatch = true;
-          break;
-        case 'streak_6':
-          if (streakCount.value == 6) isMatch = true;
-          break;
-        case 'streak_5':
-          if (streakCount.value == 5) isMatch = true;
-          break;
-        case 'streak_4':
-          if (streakCount.value == 4) isMatch = true;
-          break;
-        case 'streak_3':
-          if (streakCount.value == 3) isMatch = true;
-          break;
-        case 'streak_2':
-          if (streakCount.value == 2) isMatch = true;
-          break;
-        case 'first_point_of_match':
-          break;
-      }
-
-      if (isMatch && priority > highestPriority) {
+      if (!_triggerMatches(id, newA, newB, scoringTeam)) continue;
+      if (priority > highestPriority) {
         highestPriority = priority;
-        matchedId = id;
+        winners
+          ..clear()
+          ..add(id);
+      } else if (priority == highestPriority) {
+        winners.add(id);
       }
     }
-
-    if (matchedId != null) _prepareHype(matchedId);
+    return winners;
   }
 
-  void _prepareHype(String triggerId) {
-    final trigger = _triggers.firstWhere((t) => t['id'] == triggerId);
-    final List<dynamic> pool = trigger['pool'];
+  bool _triggerMatches(String id, int newA, int newB, String scoringTeam) {
+    switch (id) {
+      case 'match_end':
+        return _hasWinner(newA, newB);
 
-    final available = pool.where((v) => !_recentVoiceIds.contains(v)).toList();
-    final finalPool = available.isEmpty ? pool : available;
-    final String chosen = finalPool[Random().nextInt(finalPool.length)];
+      case 'crucial_moment':
+        // Tied at setPoint-1 or higher; OR exactly at setPoint-1 while leading.
+        if (newA >= _setPoint - 1 && newA == newB) return true;
+        if (newA == _setPoint - 1 && newA > newB) return true;
+        if (newB == _setPoint - 1 && newB > newA) return true;
+        return false;
 
+      case 'streak_high':
+        return streakCount.value >= 4;
+
+      case 'streak_4':
+        return streakCount.value == 4;
+
+      case 'streak_5_plus':
+        return streakCount.value >= 5;
+
+      case 'comeback':
+        final bool pending = scoringTeam == 'A' ? _comebackPendingA : _comebackPendingB;
+        if (!pending) return false;
+        // Scoring brought scoring team to tied or leading.
+        return scoringTeam == 'A' ? newA >= newB : newB >= newA;
+
+      case 'streak_low':
+        final int s = streakCount.value;
+        return s >= 2 && s <= 3;
+
+      case 'streak_2':
+        return streakCount.value == 2;
+
+      case 'streak_3':
+        return streakCount.value == 3;
+
+      case 'shutdown':
+        return _lastOpponentStreak >= 5 && streakCount.value == 1;
+
+      case 'random_meme':
+        // Merges with whichever same-priority streak triggers are matching;
+        // selection within the merged pool keeps these "meme" files in
+        // rotation alongside the regular streak voices.
+        return streakCount.value >= 2;
+
+      case 'first_point_of_match':
+      case 'manual_trigger':
+        // Not auto-matched from score events. first_point_of_match is fired
+        // explicitly via playStartOfMatchHype(); manual_trigger goes through
+        // playManualHype() or the manualHype param.
+        return false;
+    }
+    return false;
+  }
+
+  bool _hasWinner(int a, int b) {
+    if (a == 30 || b == 30) return true;
+    if (a >= _setPoint && (a - b) >= 2) return true;
+    if (b >= _setPoint && (b - a) >= 2) return true;
+    return false;
+  }
+
+  void _prepareHype(List<String> triggerIds) {
+    if (triggerIds.isEmpty) return;
+
+    // Merge pools (deduped, order-preserved) across all matched triggers.
+    final List<String> mergedPool = [];
+    final Set<String> seen = {};
+    for (final id in triggerIds) {
+      final trigger = _triggers.firstWhere(
+        (t) => t['id'] == id,
+        orElse: () => null,
+      );
+      if (trigger == null) continue;
+      final pool = trigger['pool'];
+      if (pool is! List) continue;
+      for (final f in pool) {
+        final s = f.toString();
+        if (seen.add(s)) mergedPool.add(s);
+      }
+    }
+    if (mergedPool.isEmpty) {
+      print('🔥 [Hype] Empty merged pool for triggers: $triggerIds');
+      return;
+    }
+
+    final String chosen = _chooseFromPool(mergedPool);
     _pendingHypeId = chosen;
 
-    _recentVoiceIds.add(chosen);
-    if (_recentVoiceIds.length > 3) _recentVoiceIds.removeAt(0);
-
-    print('🔥 [Hype] Trigger: $triggerId → pending: $chosen');
+    print('🔥 [Hype] Triggers: $triggerIds → pending: $chosen');
 
     // Emit display event for full-screen overlay
     if (koEffectEnabled.value) {
@@ -345,7 +496,7 @@ class HypeVoiceController extends GetxController {
         voiceId: chosen,
         displayText: _displayTexts[chosen] ??
             chosen.toUpperCase().replaceAll('_', ' '),
-        team: currentStreakTeam.value ?? 'A',
+        team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
         glowColor: _glowColor(chosen),
       );
       // Auto-clear after overlay animation completes (~1.5s)
@@ -355,6 +506,23 @@ class HypeVoiceController extends GetxController {
         }
       });
     }
+  }
+
+  /// Least-played random over GLOBAL per-file counts: pick uniformly among
+  /// files in the pool with the minimum play count, then increment that
+  /// file's count. A file shared between pools rotates more slowly than a
+  /// pool-exclusive file — by design.
+  String _chooseFromPool(List<String> pool) {
+    int minCount = 1 << 30;
+    for (final f in pool) {
+      final c = _playCounts[f] ?? 0;
+      if (c < minCount) minCount = c;
+    }
+
+    final candidates = [for (final f in pool) if ((_playCounts[f] ?? 0) == minCount) f];
+    final chosen = candidates[Random().nextInt(candidates.length)];
+    _playCounts[chosen] = (_playCounts[chosen] ?? 0) + 1;
+    return chosen;
   }
 
   /// Play pending hype. Called after TTS finishes.
@@ -397,7 +565,7 @@ class HypeVoiceController extends GetxController {
   }
 
   void playStartOfMatchHype() {
-    _prepareHype('first_point_of_match');
+    _prepareHype(['first_point_of_match']);
     playHype();
   }
 
@@ -409,8 +577,13 @@ class HypeVoiceController extends GetxController {
     _lastOpponentStreak = snapshot.lastOpponentStreak;
     _maxDeficitTeamA = snapshot.maxDeficitTeamA;
     _maxDeficitTeamB = snapshot.maxDeficitTeamB;
-    _recentVoiceIds.clear();
-    _recentVoiceIds.addAll(snapshot.recentVoiceIds);
+    _comebackPendingA = snapshot.comebackPendingA;
+    _comebackPendingB = snapshot.comebackPendingB;
+    // Restore global play counts (copy so future mutations don't reach back
+    // into the snapshot).
+    _playCounts
+      ..clear()
+      ..addAll(snapshot.playCounts);
     _pendingHypeId = null;
   }
 
@@ -420,6 +593,9 @@ class HypeVoiceController extends GetxController {
     _lastOpponentStreak = 0;
     _maxDeficitTeamA = 0;
     _maxDeficitTeamB = 0;
+    _comebackPendingA = false;
+    _comebackPendingB = false;
+    _playCounts.clear();
     _historyStack.clear();
     _pendingHypeId = null;
   }

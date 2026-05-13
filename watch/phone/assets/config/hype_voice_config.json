@@ -6,25 +6,63 @@
       "pool": ["nice_pair", "did_you_see_that_1", "cu_danh_dep"]
     },
     {
-      "id": "comeback_king",
-      "priority": 100,
+      "id": "match_end",
+      "priority": 95,
+      "pool": ["written_in_history_1"]
+    },
+    {
+      "id": "crucial_moment",
+      "priority": 80,
       "pool": [
-        "comeback_king_1",
         "unbelievable_1",
         "unbelievable_2",
-        "written_in_history_1"
+        "written_in_history_1",
+        "did_you_see_that_1"
       ]
     },
     {
       "id": "shutdown",
-      "priority": 90,
-      "pool": ["shutdown_1", "shutdown_3", "cham_dut", "shutdown_4"]
+      "priority": 70,
+      "pool": ["shutdown_1", "shutdown_3", "shutdown_4", "cham_dut"]
     },
     {
-      "id": "streak_7_plus",
-      "priority": 80,
+      "id": "comeback",
+      "priority": 60,
       "pool": [
+        "comeback_king_1",
+        "unbelievable_1",
+        "unbelievable_2",
+        "written_in_history_1",
+        "mom_are_you_watching_1"
+      ]
+    },
+    {
+      "id": "streak_high",
+      "priority": 50,
+      "pool": [
+        "rampage_1",
+        "unstoppable_1",
+        "unstoppable_2",
+        "unstoppable_3",
+        "badminton_slayer_1",
+        "khong_the_can",
+        "ap_dao_1",
+        "did_you_see_that_1"
+      ]
+    },
+    {
+      "id": "streak_4",
+      "priority": 50,
+      "pool": ["quadra_shot_1"]
+    },
+    {
+      "id": "streak_5_plus",
+      "priority": 50,
+      "pool": [
+        "penta_shot_1",
+        "godlike_1",
         "legendary_1",
+        "legendary_2",
         "to_the_moon_1",
         "to_the_moon_2",
         "the_chosen_one_1",
@@ -32,45 +70,41 @@
       ]
     },
     {
-      "id": "streak_6",
-      "priority": 70,
-      "pool": ["godlike_1", "legendary_2", "rampage_1", "did_you_see_that_1"]
-    },
-    {
-      "id": "streak_5",
-      "priority": 60,
-      "pool": [
-        "penta_shot_1",
-        "unstoppable_1",
-        "unstoppable_2",
-        "unstoppable_3",
-        "badminton_slayer_1"
-      ]
-    },
-    {
-      "id": "streak_4",
+      "id": "streak_low",
       "priority": 50,
-      "pool": ["quadra_shot_1", "khong_the_can", "ap_dao_1"]
-    },
-    {
-      "id": "streak_3",
-      "priority": 40,
-      "pool": ["triple_kill_1", "triple_shot_1", "sieu_pham", "ba_lien_tiep"]
+      "pool": ["sieu_pham", "cu_danh_dep"]
     },
     {
       "id": "streak_2",
-      "priority": 30,
+      "priority": 50,
       "pool": [
         "double_kill_1",
         "double_shot_1",
         "hai_lien_tiep",
         "hai_lien_tiep_2",
-        "cu_danh_dep"
+        "nice_pair"
+      ]
+    },
+    {
+      "id": "streak_3",
+      "priority": 50,
+      "pool": ["triple_kill_1", "triple_shot_1", "ba_lien_tiep"]
+    },
+    {
+      "id": "random_meme",
+      "priority": 50,
+      "pool": [
+        "unbelievable_1",
+        "unbelievable_2",
+        "written_in_history_1",
+        "did_you_see_that_1",
+        "mom_are_you_watching_1",
+        "nice_pair"
       ]
     },
     {
       "id": "first_point_of_match",
-      "priority": 10,
+      "priority": 0,
       "pool": ["game_on_1", "game_on_2", "lets_dance_1", "here_we_go_1"]
     }
   ]

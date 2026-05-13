@@ -4,7 +4,12 @@ class HypeStateSnapshot {
   final int lastOpponentStreak;
   final int maxDeficitTeamA;
   final int maxDeficitTeamB;
-  final List<String> recentVoiceIds;
+  final bool comebackPendingA;
+  final bool comebackPendingB;
+  // Global per-file play count for the match. Single namespace across all
+  // pools so a file selected via one pool can't immediately re-fire from
+  // another pool that also contains it.
+  final Map<String, int> playCounts;
 
   HypeStateSnapshot({
     required this.currentStreakTeam,
@@ -12,7 +17,9 @@ class HypeStateSnapshot {
     required this.lastOpponentStreak,
     required this.maxDeficitTeamA,
     required this.maxDeficitTeamB,
-    required this.recentVoiceIds,
+    required this.comebackPendingA,
+    required this.comebackPendingB,
+    required this.playCounts,
   });
 
   factory HypeStateSnapshot.copy(HypeStateSnapshot other) {
@@ -22,7 +29,9 @@ class HypeStateSnapshot {
       lastOpponentStreak: other.lastOpponentStreak,
       maxDeficitTeamA: other.maxDeficitTeamA,
       maxDeficitTeamB: other.maxDeficitTeamB,
-      recentVoiceIds: List.from(other.recentVoiceIds),
+      comebackPendingA: other.comebackPendingA,
+      comebackPendingB: other.comebackPendingB,
+      playCounts: Map<String, int>.from(other.playCounts),
     );
   }
 }
