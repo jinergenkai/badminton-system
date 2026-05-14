@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -21,6 +22,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late TeamConfig _teamConfig;
   late TextEditingController _teamAController;
   late TextEditingController _teamBController;
+  Timer? _debounceTimer;
 
   @override
   void initState() {
@@ -34,7 +36,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void dispose() {
     _teamAController.dispose();
     _teamBController.dispose();
+    _debounceTimer?.cancel();
     super.dispose();
+  }
+
+  void _onTeamNameChanged() {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _saveTeamConfig();
+    });
   }
 
   Future<void> _saveTeamConfig() async {
@@ -51,16 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     } catch (e) {
       // Controller not found
     }
-
-    Get.snackbar(
-      'Settings Saved',
-      'Team configuration updated successfully',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Colors.greenAccent.withOpacity(0.8),
-      colorText: Colors.black,
-      margin: const EdgeInsets.all(16),
-      borderRadius: 12,
-    );
   }
 
   @override
@@ -74,22 +74,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.check_circle, color: Colors.greenAccent),
-            onPressed: _saveTeamConfig,
-            tooltip: 'Save Settings',
-          ),
-        ],
       ),
       body: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: [
-              const Color(0xFF0F172A),
-              const Color(0xFF1E1B4B),
+              Color(0xFF0F172A),
+              Color(0xFF1E1B4B),
             ],
           ),
         ),
@@ -98,31 +91,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: [
             _buildSectionHeader('TEAM PROFILES'),
             const SizedBox(height: 16),
-            _buildTeamSettingsCard(
-              title: 'TEAM A',
-              controller: _teamAController,
-              color: _teamConfig.teamAColor,
-              onColorTap: _pickColorForTeamA,
-              icon: Icons.shield,
-            ).animate().fadeIn(delay: 100.ms).slideX(begin: -0.1),
-            const SizedBox(height: 20),
-            _buildTeamSettingsCard(
-              title: 'TEAM B',
-              controller: _teamBController,
-              color: _teamConfig.teamBColor,
-              onColorTap: _pickColorForTeamB,
-              icon: Icons.shield_outlined,
-            ).animate().fadeIn(delay: 200.ms).slideX(begin: 0.1),
+            _buildCompactTeamCard().animate().fadeIn(delay: 100.ms).slideY(begin: 0.1),
             const SizedBox(height: 32),
             _buildSectionHeader('PREFERENCES'),
             const SizedBox(height: 16),
-            _buildPreferencesCard().animate().fadeIn(delay: 300.ms),
+            _buildPreferencesCard().animate().fadeIn(delay: 200.ms),
+            const SizedBox(height: 32),
+            _buildSectionHeader('HYPE VOICES'),
+            const SizedBox(height: 16),
+            _buildHypeCard().animate().fadeIn(delay: 300.ms),
             const SizedBox(height: 32),
             _buildSectionHeader('MUSIC'),
             const SizedBox(height: 16),
             _buildMusicCard().animate().fadeIn(delay: 400.ms),
             const SizedBox(height: 32),
-            _buildDangerZone().animate().fadeIn(delay: 450.ms),
+            _buildDangerZone().animate().fadeIn(delay: 500.ms),
           ],
         ),
       ),
@@ -154,13 +137,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildTeamSettingsCard({
-    required String title,
-    required TextEditingController controller,
-    required Color color,
-    required VoidCallback onColorTap,
-    required IconData icon,
-  }) {
+  Widget _buildCompactTeamCard() {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -169,67 +146,78 @@ class _SettingsScreenState extends State<SettingsScreen> {
         border: Border.all(color: Colors.white.withOpacity(0.1)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Row(
-                children: [
-                  Icon(icon, color: color, size: 24),
-                  const SizedBox(width: 12),
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
-                  ),
-                ],
-              ),
-              GestureDetector(
-                onTap: onColorTap,
-                child: Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white38, width: 2),
-                    boxShadow: [
-                      BoxShadow(color: color.withOpacity(0.5), blurRadius: 10)
-                    ],
-                  ),
-                  child: const Icon(Icons.palette, color: Colors.white, size: 18),
-                ),
-              ),
-            ],
+          _buildCompactTeamInput(
+            label: 'TEAM A',
+            controller: _teamAController,
+            color: _teamConfig.teamAColor,
+            onColorTap: _pickColorForTeamA,
+            icon: Icons.shield,
           ),
-          const SizedBox(height: 20),
-          TextField(
-            controller: controller,
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            decoration: InputDecoration(
-              labelText: 'Team Name',
-              labelStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: color),
-              ),
-              filled: true,
-              fillColor: Colors.black.withOpacity(0.2),
-              prefixIcon: Icon(Icons.edit, color: Colors.white.withOpacity(0.3)),
-            ),
-            textCapitalization: TextCapitalization.characters,
-            maxLength: 15,
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 16),
+            child: Divider(color: Colors.white12, height: 1),
+          ),
+          _buildCompactTeamInput(
+            label: 'TEAM B',
+            controller: _teamBController,
+            color: _teamConfig.teamBColor,
+            onColorTap: _pickColorForTeamB,
+            icon: Icons.shield_outlined,
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildCompactTeamInput({
+    required String label,
+    required TextEditingController controller,
+    required Color color,
+    required VoidCallback onColorTap,
+    required IconData icon,
+  }) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: onColorTap,
+          child: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white38, width: 2),
+              boxShadow: [
+                BoxShadow(color: color.withOpacity(0.3), blurRadius: 8)
+              ],
+            ),
+            child: Icon(icon, color: Colors.white, size: 24),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: TextField(
+            controller: controller,
+            onChanged: (_) => _onTeamNameChanged(),
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+            decoration: InputDecoration(
+              labelText: label,
+              labelStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
+              enabledBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
+              ),
+              focusedBorder: UnderlineInputBorder(
+                borderSide: BorderSide(color: color),
+              ),
+              contentPadding: const EdgeInsets.symmetric(vertical: 8),
+            ),
+            textCapitalization: TextCapitalization.characters,
+            maxLength: 15,
+            buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
+          ),
+        ),
+      ],
     );
   }
 
@@ -243,49 +231,79 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       child: Column(
         children: [
-          _buildSettingsTile(
+          Obx(() => _buildSettingsTile(
             icon: Icons.notifications_active,
             title: 'Score Announcements',
             subtitle: 'Read scores aloud after points',
             trailing: Switch(
-              value: true,
-              onChanged: (v) {},
+              value: controller.scoreAnnouncementsEnabled.value,
+              onChanged: (v) => controller.setScoreAnnouncementsEnabled(v),
               activeColor: Colors.amber,
             ),
-          ),
+          )),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          _buildSettingsTile(
+          Obx(() => _buildSettingsTile(
             icon: Icons.vibration,
             title: 'Haptic Feedback',
             subtitle: 'Vibrate on score updates',
             trailing: Switch(
-              value: true,
-              onChanged: (v) {},
+              value: controller.hapticFeedbackEnabled.value,
+              onChanged: (v) => controller.setHapticFeedbackEnabled(v),
               activeColor: Colors.amber,
             ),
-          ),
+          )),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          _buildSettingsTile(
-            icon: Icons.timer,
-            title: 'Cooldown Duration',
-            subtitle: 'Prevent accidental double scoring',
-            trailing: const Text('1.0s',
-                style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-          ),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          Obx(() {
-            final hype = Get.find<HypeVoiceController>();
-            return _buildSettingsTile(
-              icon: Icons.bolt,
-              title: 'K.O Effect',
-              subtitle: 'Speed lines on every point',
-              trailing: Switch(
-                value: hype.koEffectEnabled.value,
-                onChanged: (v) => hype.koEffectEnabled.value = v,
-                activeColor: Colors.amber,
-              ),
-            );
-          }),
+          Obx(() => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.timer, color: Colors.white70, size: 20),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Cooldown Duration',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15)),
+                          Text('Prevent accidental double scoring',
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                    Text('${controller.cooldownDuration.value.toStringAsFixed(1)}s',
+                        style: const TextStyle(
+                            color: Colors.amber,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15)),
+                  ],
+                ),
+                Slider(
+                  value: controller.cooldownDuration.value,
+                  min: 0.1,
+                  max: 3.0,
+                  divisions: 29,
+                  activeColor: Colors.amber,
+                  inactiveColor: Colors.white12,
+                  onChanged: (v) => controller.cooldownDuration.value = v,
+                  onChangeEnd: (v) => controller.setCooldownDuration(v),
+                ),
+              ],
+            ),
+          )),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
           _buildLanguageRow(),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
@@ -340,6 +358,95 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ],
                 ),
               )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHypeCard() {
+    final hype = Get.find<HypeVoiceController>();
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Obx(() => _buildSettingsTile(
+            icon: Icons.campaign,
+            title: 'Hype Announcements',
+            subtitle: 'Voice effects for streaks & highlights',
+            trailing: Switch(
+              value: hype.isEnabled.value,
+              onChanged: (v) {
+                hype.isEnabled.value = v;
+                hype.savePreferences();
+              },
+              activeColor: Colors.cyanAccent,
+            ),
+          )),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+          Obx(() => _buildSettingsTile(
+            icon: Icons.bolt,
+            title: 'K.O Effect',
+            subtitle: 'Speed lines & overlay on highlights',
+            trailing: Switch(
+              value: hype.koEffectEnabled.value,
+              onChanged: (v) {
+                hype.koEffectEnabled.value = v;
+                hype.savePreferences();
+              },
+              activeColor: Colors.cyanAccent,
+            ),
+          )),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+          _buildVolumeRow('Hype Volume', hype.volume, Colors.cyanAccent, () => hype.savePreferences()),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+          Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.list, color: Colors.white54, size: 18),
+                    const SizedBox(width: 8),
+                    const Text('Available Effects',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                    const Spacer(),
+                    Text('${hype.getHypeList().length} sounds',
+                        style: const TextStyle(
+                            color: Colors.white38,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13)),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  children: hype.getHypeList()
+                      .map((h) => GestureDetector(
+                        onTap: () => hype.playManualHype(h['id']!),
+                        child: Chip(
+                              label: Text(
+                                h['name']!,
+                                style: const TextStyle(fontSize: 11, color: Colors.white),
+                              ),
+                              backgroundColor: Colors.white10,
+                              padding: EdgeInsets.zero,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              avatar: const Icon(Icons.play_arrow, size: 12, color: Colors.cyanAccent),
+                            ),
+                      ))
+                      .toList(),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -538,7 +645,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 12),
                   count == 0
-                      ? Text(
+                      ? const Text(
                           'Copy MP3 files to the folder above, then tap Rescan.',
                           style: TextStyle(
                               color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic),
@@ -651,9 +758,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
                               fontSize: 15)),
-                      Text('Score & TTS announcement language',
+                      const Text('Score & TTS announcement language',
                           style: TextStyle(
-                              color: Colors.white.withOpacity(0.5), fontSize: 12)),
+                              color: Colors.white38, fontSize: 12)),
                     ],
                   ),
                 ),
@@ -739,11 +846,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               borderRadius: BorderRadius.circular(24),
               border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
             ),
-            child: Row(
+            child: const Row(
               children: [
-                const Icon(Icons.restore, color: Colors.redAccent),
-                const SizedBox(width: 16),
-                const Column(
+                Icon(Icons.restore, color: Colors.redAccent),
+                SizedBox(width: 16),
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -756,8 +863,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ],
                 ),
-                const Spacer(),
-                const Icon(Icons.chevron_right, color: Colors.redAccent),
+                Spacer(),
+                Icon(Icons.chevron_right, color: Colors.redAccent),
               ],
             ),
           ),
@@ -821,6 +928,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           teamAColorHex: TeamConfig.colorToHex(pickedColor),
         );
       });
+      _saveTeamConfig();
     }
   }
 
@@ -836,6 +944,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           teamBColorHex: TeamConfig.colorToHex(pickedColor),
         );
       });
+      _saveTeamConfig();
     }
   }
 

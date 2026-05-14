@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -33,13 +34,17 @@ class ScoreController extends GetxController {
 
   final RxBool isCooldownActive = false.obs;
   final RxDouble cooldownProgress = 0.0.obs;
-  final int cooldownDurationMs = 1000;
   Timer? _cooldownTimer;
   Timer? _autoResetTimer;
   Timer? _watchConnectionPoll;
 
   // Configurable delay before auto-starting next game after a win
   final RxInt autoResetDelay = 60.obs;
+
+  // New settings
+  final RxBool scoreAnnouncementsEnabled = true.obs;
+  final RxBool hapticFeedbackEnabled = true.obs;
+  final RxDouble cooldownDuration = 1.0.obs;
 
   TeamConfig? _teamConfig;
   StreamSubscription? _watchCommandSubscription;
@@ -75,12 +80,33 @@ class ScoreController extends GetxController {
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
     autoResetDelay.value = prefs.getInt('auto_reset_delay') ?? 60;
+    scoreAnnouncementsEnabled.value = prefs.getBool('score_announcements_enabled') ?? true;
+    hapticFeedbackEnabled.value = prefs.getBool('haptic_feedback_enabled') ?? true;
+    cooldownDuration.value = prefs.getDouble('cooldown_duration') ?? 1.0;
   }
 
   Future<void> setAutoResetDelay(int seconds) async {
     autoResetDelay.value = seconds;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt('auto_reset_delay', seconds);
+  }
+
+  Future<void> setScoreAnnouncementsEnabled(bool enabled) async {
+    scoreAnnouncementsEnabled.value = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('score_announcements_enabled', enabled);
+  }
+
+  Future<void> setHapticFeedbackEnabled(bool enabled) async {
+    hapticFeedbackEnabled.value = enabled;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('haptic_feedback_enabled', enabled);
+  }
+
+  Future<void> setCooldownDuration(double seconds) async {
+    cooldownDuration.value = seconds;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('cooldown_duration', seconds);
   }
 
   void _setupAudioChain() {
@@ -179,7 +205,11 @@ class ScoreController extends GetxController {
           stateStack: stack,
         );
         _hypeController.handleUndo();
-        _scoreAnnouncer.announceUndo(newScoreA, newScoreB, undoneTeam);
+        if (scoreAnnouncementsEnabled.value) {
+          _scoreAnnouncer.announceUndo(newScoreA, newScoreB, undoneTeam);
+        } else {
+          _hypeController.playHype();
+        }
         // Do NOT send sync back — watch already applied undo locally (silent=true).
         // Sending phone's own stack result was the root cause of score corruption.
       } else {
@@ -235,13 +265,25 @@ class ScoreController extends GetxController {
         _isSyncingFromWatch = false;
 
         _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB, manualHype: manualHype);
-        _scoreAnnouncer.announceScore(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
+        if (!gameState.hasWinner) {
+          _announceScoreChange(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
+        }
         // _checkTensionMusic() moved to onPlaybackCompleted — avoids AudioFocus conflict
         // ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
         _checkGameEnd();
       }
     }
 
+  }
+
+  void _announceScoreChange(int a, int b, String team) {
+    if (scoreAnnouncementsEnabled.value) {
+      _scoreAnnouncer.announceScore(a, b, team);
+    } else {
+      // If score announcement is disabled, we must trigger hype manually
+      // so the audio chain continues.
+      _hypeController.playHype();
+    }
   }
 
   void _loadTeamConfig() {
@@ -339,9 +381,14 @@ class ScoreController extends GetxController {
     if (!_isSyncingFromWatch) {
       _watchService.sendScoreUpdate(gameState, action: 'score_A');
     }
+
+    if (hapticFeedbackEnabled.value) {
+      HapticFeedback.lightImpact();
+    }
+
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
     if (!gameState.hasWinner) {
-      _scoreAnnouncer.announceScore(gameState.teamAScore, gameState.teamBScore, 'A');
+      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'A');
     }
     if (fromVoice) _startCooldown();
     // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
@@ -360,9 +407,14 @@ class ScoreController extends GetxController {
     if (!_isSyncingFromWatch) {
       _watchService.sendScoreUpdate(gameState, action: 'score_B');
     }
+
+    if (hapticFeedbackEnabled.value) {
+      HapticFeedback.lightImpact();
+    }
+
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
     if (!gameState.hasWinner) {
-      _scoreAnnouncer.announceScore(gameState.teamAScore, gameState.teamBScore, 'B');
+      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'B');
     }
     if (fromVoice) _startCooldown();
     // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
@@ -408,7 +460,11 @@ class ScoreController extends GetxController {
       _watchService.sendScoreUpdate(gameState, action: 'undo');
     }
     _hypeController.handleUndo();
-    _scoreAnnouncer.announceUndo(previousState.teamAScore, previousState.teamBScore, undoneTeam);
+    if (scoreAnnouncementsEnabled.value) {
+      _scoreAnnouncer.announceUndo(previousState.teamAScore, previousState.teamBScore, undoneTeam);
+    } else {
+      _hypeController.playHype();
+    }
   }
 
   void _checkGameEnd() {
@@ -417,7 +473,13 @@ class ScoreController extends GetxController {
       isGameEnded.value = true;
       _saveMatchToDatabase();
       _musicService.stopMusic(fadeOut: true);
-      _scoreAnnouncer.announceWinner(gameState.winnerName, gameState.teamAScore, gameState.teamBScore);
+      
+      if (scoreAnnouncementsEnabled.value) {
+        _scoreAnnouncer.announceWinner(gameState.winnerName, gameState.teamAScore, gameState.teamBScore);
+      } else {
+        _hypeController.playHype();
+      }
+      
       _watchService.sendWinnerUpdate(gameState.winner, gameState.teamAScore, gameState.teamBScore);
       _autoResetTimer?.cancel();
       _autoResetTimer = Timer(Duration(seconds: autoResetDelay.value), () {
@@ -451,7 +513,8 @@ class ScoreController extends GetxController {
     isCooldownActive.value = true;
     cooldownProgress.value = 1.0;
     const updateIntervalMs = 50;
-    final steps = cooldownDurationMs ~/ updateIntervalMs;
+    final durationMs = (cooldownDuration.value * 1000).toInt();
+    final steps = durationMs ~/ updateIntervalMs;
     var currentStep = 0;
     _cooldownTimer = Timer.periodic(
       const Duration(milliseconds: updateIntervalMs),

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voice_counter/services/tts_service.dart';
 import '../models/hype_state_snapshot.dart';
 import '../models/hype_display_event.dart';
@@ -37,6 +38,8 @@ class HypeVoiceController extends GetxController {
   static const int _setPoint = 21;
   static const int _comebackDeficitThreshold = 4;
 
+  final List<String> _bundledFiles = [];
+
   static const Map<String, String> _displayTexts = {
     'double_kill': 'DOUBLE KILL',
     'double_shot': 'DOUBLE SHOT',
@@ -66,7 +69,15 @@ class HypeVoiceController extends GetxController {
     'here_we_go': 'HERE WE GO',
   };
 
+  String _getDisplayText(String id) {
+    // Strip numeric suffixes for display (e.g., godlike_1 -> GODLIKE)
+    final baseId = id.replaceAll(RegExp(r'_\d+$'), '');
+    return _displayTexts[baseId] ?? id.toUpperCase().replaceAll('_', ' ');
+  }
+
   static Color _glowColor(String id) {
+    // Strip numeric suffixes for color lookup
+    final baseId = id.replaceAll(RegExp(r'_\d+$'), '');
     const legendary = {
       'godlike', 'legendary', 'to_the_moon', 'the_chosen_one',
       'mom_are_you_watching', 'comeback_king', 'written_in_history',
@@ -78,9 +89,9 @@ class HypeVoiceController extends GetxController {
     };
     const danger = {'shutdown'};
 
-    if (legendary.contains(id)) return Colors.amberAccent;
-    if (fire.contains(id)) return Colors.deepOrangeAccent;
-    if (danger.contains(id)) return Colors.redAccent;
+    if (legendary.contains(baseId)) return Colors.amberAccent;
+    if (fire.contains(baseId)) return Colors.deepOrangeAccent;
+    if (danger.contains(baseId)) return Colors.redAccent;
     return Colors.cyanAccent; // default streaks
   }
 
@@ -127,11 +138,28 @@ class HypeVoiceController extends GetxController {
     'here_we_go': 'Here we go!',
   };
 
+  static const String _prefPrefix = 'hype_';
+
   @override
   void onInit() {
     super.onInit();
     _loadConfig();
+    _loadPreferences();
     _setupAudio();
+  }
+
+  Future<void> _loadPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    isEnabled.value = prefs.getBool('${_prefPrefix}enabled') ?? true;
+    volume.value = prefs.getDouble('${_prefPrefix}volume') ?? 0.8;
+    koEffectEnabled.value = prefs.getBool('${_prefPrefix}ko_enabled') ?? true;
+  }
+
+  Future<void> savePreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('${_prefPrefix}enabled', isEnabled.value);
+    await prefs.setDouble('${_prefPrefix}volume', volume.value);
+    await prefs.setBool('${_prefPrefix}ko_enabled', koEffectEnabled.value);
   }
 
   Future<void> _loadConfig() async {
@@ -161,6 +189,9 @@ class HypeVoiceController extends GetxController {
           if (p.startsWith(dir) && p.endsWith(ext))
             p.substring(dir.length, p.length - ext.length),
       };
+
+      _bundledFiles.clear();
+      _bundledFiles.addAll(bundled.toList()..sort());
 
       final referenced = <String>{};
       for (final t in _triggers) {
@@ -300,7 +331,7 @@ class HypeVoiceController extends GetxController {
     if (koEffectEnabled.value) {
       displayEvent.value = HypeDisplayEvent(
         voiceId: voiceId,
-        displayText: _displayTexts[voiceId] ?? voiceId.toUpperCase().replaceAll('_', ' '),
+        displayText: _getDisplayText(voiceId),
         team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
         glowColor: _glowColor(voiceId),
       );
@@ -314,10 +345,19 @@ class HypeVoiceController extends GetxController {
   }
 
   List<Map<String, String>> getHypeList() {
-    return _ttsFallback.keys.map((id) {
+    if (_bundledFiles.isEmpty) {
+      // Fallback if manifest not loaded yet
+      return _ttsFallback.keys.map((id) {
+        return {
+          'id': id,
+          'name': _getDisplayText(id),
+        };
+      }).toList();
+    }
+    return _bundledFiles.map((id) {
       return {
         'id': id,
-        'name': _displayTexts[id] ?? id.toUpperCase().replaceAll('_', ' '),
+        'name': _getDisplayText(id),
       };
     }).toList();
   }
@@ -330,7 +370,7 @@ class HypeVoiceController extends GetxController {
     if (koEffectEnabled.value) {
       displayEvent.value = HypeDisplayEvent(
         voiceId: voiceId,
-        displayText: _displayTexts[voiceId] ?? voiceId.toUpperCase().replaceAll('_', ' '),
+        displayText: _getDisplayText(voiceId),
         team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
         glowColor: _glowColor(voiceId),
       );
@@ -494,8 +534,7 @@ class HypeVoiceController extends GetxController {
       _lastEventTime = now;
       displayEvent.value = HypeDisplayEvent(
         voiceId: chosen,
-        displayText: _displayTexts[chosen] ??
-            chosen.toUpperCase().replaceAll('_', ' '),
+        displayText: _getDisplayText(chosen),
         team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
         glowColor: _glowColor(chosen),
       );
@@ -557,7 +596,7 @@ class HypeVoiceController extends GetxController {
 
   void _doTtsFallback(String id) {
     if (onTtsFallback != null) {
-      final text = _ttsFallback[id] ?? id.replaceAll('_', ' ');
+      final text = _getDisplayText(id);
       onTtsFallback!.call(text);
     } else {
       onPlaybackCompleted?.call();

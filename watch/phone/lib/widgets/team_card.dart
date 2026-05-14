@@ -7,7 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
-class TeamCard extends StatelessWidget {
+class TeamCard extends StatefulWidget {
   final String teamName;
   final int score;
   final Color primaryColor;
@@ -31,8 +31,30 @@ class TeamCard extends StatelessWidget {
     this.mascotAsset,
   });
 
+  @override
+  State<TeamCard> createState() => _TeamCardState();
+}
+
+class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin {
+  late AnimationController _servicePulseCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _servicePulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000), // Faster for strobe feel
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _servicePulseCtrl.dispose();
+    super.dispose();
+  }
+
   int _streak(HypeVoiceController hype) =>
-      hype.currentStreakTeam.value == teamId ? hype.streakCount.value : 0;
+      hype.currentStreakTeam.value == widget.teamId ? hype.streakCount.value : 0;
 
   double _intensity(int streak) {
     if (streak < 2) return 0.0;
@@ -55,6 +77,7 @@ class TeamCard extends StatelessWidget {
           final streak = _streak(hype);
           final intensity = _intensity(streak);
           final bool onStreak = streak >= 2;
+          final bool isServing = streak > 0;
 
           return AnimatedContainer(
             duration: const Duration(milliseconds: 500),
@@ -64,23 +87,17 @@ class TeamCard extends StatelessWidget {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  primaryColor.withOpacity(0.55 + intensity * 0.30),
-                  accentColor.withOpacity(0.45 + intensity * 0.25),
+                  widget.primaryColor.withOpacity(0.5),
+                  widget.accentColor.withOpacity(0.4),
                 ],
               ),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: primaryColor.withOpacity(0.30 + intensity * 0.45),
+                  color: widget.primaryColor.withOpacity(onStreak ? 0.4 + intensity * 0.4 : 0.2),
                   blurRadius: onStreak ? 40 + intensity * 30 : 20,
                   spreadRadius: onStreak ? 3 + intensity * 6 : -5,
                 ),
-                if (onStreak)
-                  BoxShadow(
-                    color: Colors.white.withOpacity(0.10 + intensity * 0.15),
-                    blurRadius: 20,
-                    spreadRadius: 2,
-                  ),
               ],
             ),
             child: ClipRRect(
@@ -89,19 +106,39 @@ class TeamCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: onStreak
-                        ? primaryColor.withOpacity(0.5 + intensity * 0.4)
+                    color: isServing
+                        ? Colors.white.withOpacity(0.3 + intensity * 0.5)
                         : Colors.white.withOpacity(0.15),
-                    width: onStreak ? 2.0 + intensity : 1.5,
+                    width: isServing ? 2.5 : 1.5,
                   ),
                 ),
                 child: Stack(
                   children: [
+                    // ── Active Corner Highlight (Strobing) ──
+                    if (isServing)
+                      Positioned.fill(
+                        child: AnimatedBuilder(
+                          animation: _servicePulseCtrl,
+                          builder: (context, child) {
+                            return CustomPaint(
+                              painter: _ServiceHighlightPainter(
+                                teamId: widget.teamId,
+                                streak: streak,
+                                score: widget.score,
+                                pulse: _servicePulseCtrl.value,
+                                color: widget.primaryColor,
+                                intensity: intensity,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+
                     // ── Original fire effect (streak >= 2) ────────────────
                     if (onStreak)
                       Positioned.fill(
                         child: _ModernFireEffect(
-                          color: primaryColor.withOpacity(0.35 + intensity * 0.25),
+                          color: widget.primaryColor.withOpacity(0.35 + intensity * 0.25),
                         ),
                       ),
 
@@ -109,12 +146,12 @@ class TeamCard extends StatelessWidget {
                     if (streak >= 3)
                       Positioned.fill(
                         child: _BalloonEffect(
-                          color: accentColor.withOpacity(0.20 + intensity * 0.20),
+                          color: widget.accentColor.withOpacity(0.20 + intensity * 0.20),
                         ),
                       ),
 
-                    if (mascotAsset != null)
-                      _buildWatermark(mascotAsset!, width, height, intensity),
+                    if (widget.mascotAsset != null)
+                      _buildWatermark(widget.mascotAsset!, width, height, intensity),
 
                     _buildScoreArea(width, height, isTablet, streak, intensity),
 
@@ -123,7 +160,7 @@ class TeamCard extends StatelessWidget {
                       left: 10,
                       child: _buildControl(
                           icon: Icons.remove,
-                          onTap: onDecrement,
+                          onTap: widget.onDecrement,
                           size: isTablet ? 52 : 38),
                     ),
                     Positioned(
@@ -131,7 +168,7 @@ class TeamCard extends StatelessWidget {
                       right: 10,
                       child: _buildControl(
                           icon: Icons.add,
-                          onTap: onIncrement,
+                          onTap: widget.onIncrement,
                           size: isTablet ? 52 : 38),
                     ),
                   ],
@@ -161,7 +198,7 @@ class TeamCard extends StatelessWidget {
     double fontSize = isTablet
         ? (h * 0.75).clamp(150, 500)
         : (h * 0.7).clamp(100, 250);
-    if (score > 9) fontSize *= 0.8;
+    if (widget.score > 9) fontSize *= 0.8;
     final double iconSize = isTablet ? 36.0 : 24.0;
 
     // Score pop grows dramatically with streak level
@@ -180,9 +217,9 @@ class TeamCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          if (isActive) {
+          if (widget.isActive) {
             HapticFeedback.heavyImpact();
-            onIncrement();
+            widget.onIncrement();
           }
         },
         splashColor: Colors.white.withOpacity(0.2),
@@ -201,13 +238,13 @@ class TeamCard extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  if (mascotAsset != null) ...[
-                    Image.asset(mascotAsset!,
+                  if (widget.mascotAsset != null) ...[
+                    Image.asset(widget.mascotAsset!,
                         width: iconSize, height: iconSize, fit: BoxFit.contain),
                     SizedBox(width: isTablet ? 12 : 8),
                   ],
                   Text(
-                    teamName.toUpperCase(),
+                    widget.teamName.toUpperCase(),
                     style: TextStyle(
                       fontSize: w < h ? 14 : (isTablet ? 26 : 16),
                       fontWeight: FontWeight.w900,
@@ -215,7 +252,7 @@ class TeamCard extends StatelessWidget {
                       letterSpacing: 4,
                     ),
                   ),
-                  // 🔥 streak badge — static glow, no blink
+                  // 🔥 streak badge
                   if (streak >= 2) ...[
                     SizedBox(width: isTablet ? 8 : 5),
                     _buildStreakBadge(streak, isTablet, intensity),
@@ -225,12 +262,12 @@ class TeamCard extends StatelessWidget {
 
               // ── Score (continuous pulse + pop on change) ──────────────
               _PulsingScore(
-                score: score,
+                score: widget.score,
                 streak: streak,
                 intensity: intensity,
                 fontSize: fontSize,
-                primaryColor: primaryColor,
-                accentColor: accentColor,
+                primaryColor: widget.primaryColor,
+                accentColor: widget.accentColor,
                 scaleBegin: scaleBegin,
                 scaleDurationMs: scaleDurationMs,
               ),
@@ -254,7 +291,7 @@ class TeamCard extends StatelessWidget {
     final double fs = (isTablet ? 14.0 : 11.0) + (streak - 2) * 1.5;
 
     return Text(
-      '🔥x$streak',
+      'x$streak',
       style: TextStyle(
         fontSize: fs,
         fontWeight: FontWeight.w900,
@@ -290,6 +327,118 @@ class TeamCard extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Service Highlight Painter ───────────────────────────────────────
+class _ServiceHighlightPainter extends CustomPainter {
+  final String teamId;
+  final int streak;
+  final int score;
+  final double pulse;
+  final Color color;
+  final double intensity;
+
+  _ServiceHighlightPainter({
+    required this.teamId,
+    required this.streak,
+    required this.score,
+    required this.pulse,
+    required this.color,
+    required this.intensity,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // 1. Subtle global dim to help the flash stand out slightly
+    final baseDim = Paint()..color = Colors.black.withOpacity(0.1);
+    canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), baseDim);
+
+    // 2. Parity Logic
+    // Team A (Left - Red): Lẻ (Odd) = Chéo Trên, Chẵn (Even) = Chéo Dưới
+    // Team B (Right - Blue): Chẵn (Even) = Chéo Trên, Lẻ (Odd) = Chéo Dưới
+    final bool isEven = score % 2 == 0;
+    final bool highlightTop;
+    if (teamId == 'A') {
+      highlightTop = !isEven; // Odd -> Top
+    } else {
+      highlightTop = isEven;  // Even -> Top
+    }
+
+    // 3. Calculation for 20-degree line split
+    // tan(20°) ≈ 0.36397
+    const double tan20 = 0.36397;
+    final double halfW = size.width / 2;
+    final double halfH = size.height / 2;
+    
+    // Points at edges for a line through center
+    final double yLeft = tan20 * halfW + halfH;
+    final double yRight = -tan20 * halfW + halfH;
+    
+    final Offset pLeft = Offset(0, yLeft);
+    final Offset pRight = Offset(size.width, yRight);
+
+    final pathTop = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(pRight.dx, pRight.dy)
+      ..lineTo(pLeft.dx, pLeft.dy)
+      ..close();
+
+    final pathBottom = Path()
+      ..moveTo(0, size.height)
+      ..lineTo(size.width, size.height)
+      ..lineTo(pRight.dx, pRight.dy)
+      ..lineTo(pLeft.dx, pLeft.dy)
+      ..close();
+
+    final Path activePath = highlightTop ? pathTop : pathBottom;
+    final Path inactivePath = highlightTop ? pathBottom : pathTop;
+
+    // 4. Draw Active Light (High-Intensity Solid Strobe)
+    // -------------------------------------------------------------------------
+    // HƯỚNG DẪN CHỈNH SỬA:
+    // - Muốn nháy nhanh/chậm: Chỉnh số '4' trong (pulse * 4 * math.pi). Số càng lớn nháy càng nhanh.
+    // - Muốn độ sáng nháy mạnh/nhẹ: Chỉnh số '0.1' (độ sáng nền) và '0.4' (biên độ nháy).
+    // -------------------------------------------------------------------------
+    final double strobe = (math.sin(pulse * 4 * math.pi) * 0.5 + 0.5); 
+    final double activeAlpha = (0.1 + strobe * 0.4); // Giảm nhẹ: 0.1 đến 0.5
+    
+    final lightPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = Colors.white.withOpacity(activeAlpha);
+    
+    canvas.drawPath(activePath, lightPaint);
+
+    // ── Dim for inactive side (Làm tối vùng đối diện) ──
+    // HƯỚNG DẪN: Chỉnh '0.2' lớn hơn nếu muốn vùng kia tối hơn.
+    final sideDimPaint = Paint()..color = Colors.black.withOpacity(0.2); 
+    canvas.drawPath(inactivePath, sideDimPaint);
+
+    // 5. NEON SEPARATOR LINE (20 degrees)
+    final double neonAlpha = (0.3 + strobe * 0.5); 
+    
+    // Outer Glow (Wide)
+    final outerGlow = Paint()
+      ..color = color.withOpacity(0.2 + intensity * 0.5)
+      ..strokeWidth = 15.0 + intensity * 25.0
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12)
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(pLeft, pRight, outerGlow);
+
+    // Inner Line (Solid White Strobe)
+    final innerLine = Paint()
+      ..color = Colors.white.withOpacity(neonAlpha)
+      ..strokeWidth = 3.0 + intensity * 2.0
+      ..style = PaintingStyle.stroke;
+    canvas.drawLine(pLeft, pRight, innerLine);
+  }
+
+  @override
+  bool shouldRepaint(covariant _ServiceHighlightPainter oldDelegate) =>
+      oldDelegate.pulse != pulse || 
+      oldDelegate.streak != streak || 
+      oldDelegate.score != score || 
+      oldDelegate.intensity != intensity;
 }
 
 // ── Pulsing score: continuous breathe loop + pop on score change ─────
@@ -364,8 +513,6 @@ class _PulsingScoreState extends State<_PulsingScore>
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _ctrl,
-      // child is rebuilt only when parent rebuilds (score/streak change)
-      // AnimatedBuilder reuses child each frame — no unnecessary rebuilds
       child: Text(
         '${widget.score}',
         key: ValueKey(widget.score),
@@ -405,7 +552,6 @@ class _PulsingScoreState extends State<_PulsingScore>
             color: Colors.white.withOpacity(0.20 + widget.intensity * 0.55),
           ),
       builder: (_, child) {
-        // Sine wave: smooth full oscillation each 600ms cycle
         final pulse = widget.streak >= 2
             ? 1.0 + math.sin(_ctrl.value * 2 * math.pi) * _amplitude
             : 1.0;
@@ -487,7 +633,6 @@ class _FirePainter extends CustomPainter {
       final double w = (1.0 - p) * 12;
       final double rectHeight = s.height * (1.0 - p);
 
-      // ui.Gradient.linear bypasses Material LinearGradient wrapper allocation.
       paint.shader = ui.Gradient.linear(
         Offset(0, y + rectHeight), // bottom
         Offset(0, y),               // top
