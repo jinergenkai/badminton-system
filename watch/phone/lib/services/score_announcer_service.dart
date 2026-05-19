@@ -23,6 +23,7 @@ class ScoreAnnouncerService extends GetxService {
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<void>? _completeSub;
   StreamSubscription<String>? _ttsLangSub;
+  StreamSubscription<double>? _ttsVolSub;
   Completer<void>? _playCompleter;
   int _currentJob = 0;
   bool _initialized = false;
@@ -61,13 +62,16 @@ class ScoreAnnouncerService extends GetxService {
 
     final prefs = await SharedPreferences.getInstance();
     currentLanguage.value = _normalize(prefs.getString('tts_language'));
+    final savedVolume = prefs.getDouble('tts_volume') ?? 1.0;
+    await _player.setVolume(savedVolume);
 
-    // Mirror live TTS language changes so the two stay aligned.
+    // Mirror live TTS language + volume changes so the two stay aligned.
     try {
       final tts = Get.find<TtsService>();
       _ttsLangSub = tts.currentLanguageRx.listen((code) {
         currentLanguage.value = _normalize(code);
       });
+      _ttsVolSub = tts.volume.listen((v) => _player.setVolume(v));
     } catch (_) {}
 
     print('🔊 [ScoreAnnouncer] Ready (lang=${currentLanguage.value})');
@@ -241,6 +245,7 @@ class ScoreAnnouncerService extends GetxService {
   void onClose() {
     _completeSub?.cancel();
     _ttsLangSub?.cancel();
+    _ttsVolSub?.cancel();
     _player.dispose();
     super.onClose();
   }

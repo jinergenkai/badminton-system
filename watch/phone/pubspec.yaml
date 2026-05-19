@@ -58,6 +58,7 @@ flutter:
     - assets/models/picovoice_android.ppn
     - assets/models/meow-meow_en_android_v4_0_0.ppn
     - assets/audio/hype/
+    - assets/audio/hype/female_pack/
     - assets/audio/music/
     - assets/audio/score/vi/
     - assets/audio/score/en/

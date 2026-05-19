@@ -15,7 +15,7 @@ class HypeVoiceController extends GetxController {
   final List<HypeStateSnapshot> _historyStack = [];
 
   final RxBool isEnabled = true.obs;
-  final RxDouble volume = 0.8.obs;
+  final RxDouble volume = 0.2.obs;
   final RxBool koEffectEnabled = true.obs;
 
   final RxString currentStreakTeam = ''.obs;
@@ -67,17 +67,69 @@ class HypeVoiceController extends GetxController {
     'game_on': 'GAME ON',
     'lets_dance': "LET'S DANCE",
     'here_we_go': 'HERE WE GO',
+    // Vietnamese female pack
+    'dinh_noc_kich_tran': 'ĐỈNH NÓC\nKÍCH TRẦN',
+    'cu_danh_dep': 'CÚ ĐÁNH ĐẸP',
+    'cu_danh_sam_set': 'CÚ ĐÁNH\nSẤM SÉT',
+    'man_nhan': 'MÃN NHÃN',
+    'dinh_cua_chop': 'ĐỈNH CỦA CHÓP',
+    'cu_nay_khet': 'CÚ NÀY KHÉT',
+    'khet_let': 'KHÉT LẸT',
+    'phong_do_dinh_cao': 'PHONG ĐỘ\nĐỈNH CAO',
+    'dinh_cao_phong_do': 'ĐỈNH CAO\nPHONG ĐỘ',
+    'ai_can_noi': 'AI CẢN NỔI',
+    'nhu_tron_khong_nguoi': 'NHƯ TRỐNG\nKHÔNG NGƯỜI',
+    'quay_xe_cuc_gat': 'QUAY XE\nCỰC GẮT',
+    'lat_keo': 'LẬT KÈO',
+    'dinh_the_nho': 'ĐỈNH THẾ NHỜ',
+    'cham_dut': 'CHẤM DỨT',
+    'khong_the_tin_duoc': 'KHÔNG THỂ\nTIN ĐƯỢC',
+    'sam_set_giua_troi_quang': 'SẤM SÉT\nGIỮA TRỜI QUANG',
+    'thuc_tinh_he_thong': 'THỨC TỈNH\nHỆ THỐNG',
+    'vo_dich_thien_ha': 'VÔ ĐỊCH\nTHIÊN HẠ',
+    'cao_thu_cao_thu': 'CAO THỦ\nCAO THỦ',
+    'mot_phat_chet_tuoi': 'MỘT PHÁT\nCHẾT TƯƠI',
+    'dep_nhu_mo': 'ĐẸP NHƯ MƠ',
+    'co_may_ghi_diem': 'CỖ MÁY\nGHI ĐIỂM',
+    'de_bep': 'DẸP BẸP',
+    'manh_ho_xuat_son': 'MÃNH HỔ\nXUẤT SƠN',
+    'khong_ngung_bo_cuoc': 'KHÔNG NGỪNG\nBỎ CUỘC',
+    'xuat_quy_nhap_than': 'XUẤT QUỶ\nNHẬP THẦN',
+    'sao_ma_hay_vay_troi': 'SAO MÀ HAY\nVẬY TRỜI',
+    'sao_bang_xe_troi': 'SAO BĂNG\nXẸT TRỜI',
+    'mua_rao_giua_ha': 'MƯA RÀO\nGIỮA HẠ',
+    'manh_ho_vo_moi': 'MÃNH HỔ\nVÔ MỒI',
+    'cu_dap_ca_map': 'CÚ ĐẬP\nCÁ MẬP',
+    'tro_lai_tu_dong_tro_tan': 'TRỞ LẠI TỪ\nĐỐNG TRO TÀN',
+    'can_loi_can_y': 'CẢN LỜI\nCẢN Ý',
+    'khoi_can_ban_cao_nhan_an_the': 'CAO NHÂN\nẨN THẾ',
+    'chan_buoc_di_dau_khong_quay_lai': 'CHÂN BƯỚC\nKHÔNG QUAY LẠI',
+    'chay_the_nho': 'CHẠY THẾ NHỚ',
+    'xinh_trai_co_gi_sai': 'XINH TRAI\nCÓ GÌ SAI',
+    'qua_tang_mien_phi': 'QUÀ TẶNG\nMIỄN PHÍ',
+    'an_sung_troi_ban': 'ĂN SÚNG\nTRỜI BAN',
+    'nhu_dieu_dut_day': 'NHƯ DIỀU\nĐỨT DÂY',
+    'duong_cau_lam_tho': 'ĐƯỜNG CẦU\nLÀM THƠ',
+    'con_mua_ban_thang': 'CƠN MƯA\nBÀN THẮNG',
+    'toi_cong_chuyen': 'TÔI CÔNG\nCHUYÊN',
   };
 
   String _getDisplayText(String id) {
-    // Strip numeric suffixes for display (e.g., godlike_1 -> GODLIKE)
-    final baseId = id.replaceAll(RegExp(r'_\d+$'), '');
-    return _displayTexts[baseId] ?? id.toUpperCase().replaceAll('_', ' ');
+    // Strip subfolder prefix (e.g. female_pack/cham_dut_f -> cham_dut_f)
+    final fileName = id.contains('/') ? id.split('/').last : id;
+    // Strip _f suffix (female pack) and numeric suffix (e.g. _1, _2)
+    final baseId = fileName
+        .replaceAll(RegExp(r'_f$'), '')
+        .replaceAll(RegExp(r'_\d+$'), '');
+    return _displayTexts[baseId] ?? baseId.toUpperCase().replaceAll('_', ' ');
   }
 
   static Color _glowColor(String id) {
-    // Strip numeric suffixes for color lookup
-    final baseId = id.replaceAll(RegExp(r'_\d+$'), '');
+    // Strip subfolder prefix and _f / numeric suffixes for color lookup
+    final fileName = id.contains('/') ? id.split('/').last : id;
+    final baseId = fileName
+        .replaceAll(RegExp(r'_f$'), '')
+        .replaceAll(RegExp(r'_\d+$'), '');
     const legendary = {
       'godlike', 'legendary', 'to_the_moon', 'the_chosen_one',
       'mom_are_you_watching', 'comeback_king', 'written_in_history',
@@ -151,7 +203,7 @@ class HypeVoiceController extends GetxController {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     isEnabled.value = prefs.getBool('${_prefPrefix}enabled') ?? true;
-    volume.value = prefs.getDouble('${_prefPrefix}volume') ?? 0.8;
+    volume.value = prefs.getDouble('${_prefPrefix}volume') ?? 0.2;
     koEffectEnabled.value = prefs.getBool('${_prefPrefix}ko_enabled') ?? true;
   }
 

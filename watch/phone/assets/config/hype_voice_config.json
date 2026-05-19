@@ -3,12 +3,15 @@
     {
       "id": "manual_trigger",
       "priority": 1000,
-      "pool": ["nice_pair", "did_you_see_that_1", "cu_danh_dep"]
+      "pool": ["cu_danh_dep", "did_you_see_that_1"]
     },
     {
       "id": "match_end",
       "priority": 95,
-      "pool": ["written_in_history_1"]
+      "pool": [
+        "female_pack/chan_buoc_di_dau_khong_quay_lai",
+        "female_pack/vo_dich_thien_ha_f"
+      ]
     },
     {
       "id": "crucial_moment",
@@ -16,14 +19,26 @@
       "pool": [
         "unbelievable_1",
         "unbelievable_2",
-        "written_in_history_1",
-        "did_you_see_that_1"
+        "did_you_see_that_1",
+        "female_pack/phong_do_dinh_cao_f",
+        "female_pack/dinh_cao_phong_do_f",
+        "female_pack/dinh_cua_chop_f",
+        "female_pack/sam_set_giua_troi_quang_f"
       ]
     },
     {
       "id": "shutdown",
       "priority": 70,
-      "pool": ["shutdown_1", "shutdown_3", "shutdown_4", "cham_dut"]
+      "pool": [
+        "shutdown_1",
+        "shutdown_3",
+        "shutdown_4",
+        "cham_dut",
+        "female_pack/de_bep_f",
+        "female_pack/can_loi_can_y_f",
+        "female_pack/cham_dut_f",
+        "female_pack/khong_ngung_bo_cuoc_f"
+      ]
     },
     {
       "id": "comeback",
@@ -32,8 +47,10 @@
         "comeback_king_1",
         "unbelievable_1",
         "unbelievable_2",
-        "written_in_history_1",
-        "mom_are_you_watching_1"
+        "mom_are_you_watching_1",
+        "female_pack/tro_lai_tu_dong_tro_tan_f",
+        "female_pack/quay_xe_cuc_gat_f",
+        "female_pack/lat_keo_f"
       ]
     },
     {
@@ -43,11 +60,18 @@
         "rampage_1",
         "unstoppable_1",
         "unstoppable_2",
-        "unstoppable_3",
         "badminton_slayer_1",
         "khong_the_can",
         "ap_dao_1",
-        "did_you_see_that_1"
+        "did_you_see_that_1",
+        "female_pack/dinh_noc_kich_tran_f",
+        "female_pack/ai_can_noi_f",
+        "female_pack/nhu_tron_khong_nguoi_f",
+        "female_pack/manh_ho_xuat_son_f",
+        "female_pack/xuat_quy_nhap_than_f",
+        "female_pack/co_may_ghi_diem_f",
+        "female_pack/khong_the_tin_duoc_f",
+        "female_pack/thuc_tinh_he_thong_f"
       ]
     },
     {
@@ -63,16 +87,28 @@
         "godlike_1",
         "legendary_1",
         "legendary_2",
-        "to_the_moon_1",
-        "to_the_moon_2",
         "the_chosen_one_1",
-        "mom_are_you_watching_1"
+        "mom_are_you_watching_1",
+        "female_pack/cao_thu_cao_thu_f",
+        "female_pack/manh_ho_vo_moi_f",
+        "female_pack/khoi_can_ban_cao_nhan_an_the_f"
       ]
     },
     {
       "id": "streak_low",
       "priority": 50,
-      "pool": ["sieu_pham", "cu_danh_dep"]
+      "pool": [
+        "sieu_pham",
+        "cu_danh_dep",
+        "female_pack/cu_danh_dep_f",
+        "female_pack/cu_nay_khet_f",
+        "female_pack/khet_let_f",
+        "female_pack/mot_phat_chet_tuoi_f",
+        "female_pack/cu_dap_ca_map_f",
+        "female_pack/mua_rao_giua_ha_f",
+        "female_pack/sao_bang_xe_troi_f",
+        "female_pack/dinh_the_nho_f"
+      ]
     },
     {
       "id": "streak_2",
@@ -80,26 +116,29 @@
       "pool": [
         "double_kill_1",
         "double_shot_1",
-        "hai_lien_tiep",
-        "hai_lien_tiep_2",
-        "nice_pair"
+        "female_pack/cu_danh_sam_set_f"
       ]
     },
     {
       "id": "streak_3",
       "priority": 50,
-      "pool": ["triple_kill_1", "triple_shot_1", "ba_lien_tiep"]
+      "pool": ["triple_kill_1", "triple_shot_1"]
     },
     {
       "id": "random_meme",
       "priority": 50,
       "pool": [
-        "unbelievable_1",
-        "unbelievable_2",
-        "written_in_history_1",
-        "did_you_see_that_1",
-        "mom_are_you_watching_1",
-        "nice_pair"
+        "female_pack/chay_the_nho_f",
+        "female_pack/xinh_trai_co_gi_sai_f",
+        "female_pack/qua_tang_mien_phi_f",
+        "female_pack/an_sung_troi_ban_f",
+        "female_pack/toi_cong_chuyen_f",
+        "female_pack/nhu_dieu_dut_day_f",
+        "female_pack/duong_cau_lam_tho_f",
+        "female_pack/con_mua_ban_thang_f",
+        "female_pack/man_nhan_f",
+        "female_pack/dep_nhu_mo_f",
+        "female_pack/sao_ma_hay_vay_troi_f"
       ]
     },
     {

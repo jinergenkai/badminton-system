@@ -223,6 +223,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildPreferencesCard() {
     final controller = Get.find<ScoreController>();
+    final tts = Get.find<TtsService>();
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
@@ -241,6 +242,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               activeColor: Colors.amber,
             ),
           )),
+          Obx(() => controller.scoreAnnouncementsEnabled.value
+              ? _buildVolumeRow('Score Volume', tts.volume, Colors.amber,
+                  () => tts.saveVolumePreference())
+              : const SizedBox.shrink()),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
           Obx(() => _buildSettingsTile(
             icon: Icons.vibration,

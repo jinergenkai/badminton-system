@@ -7,6 +7,7 @@ class TtsService extends GetxService {
   bool _isInitialized = false;
   final RxString _currentLanguage = 'en-US'.obs;
   final RxBool isSpeaking = false.obs;
+  final RxDouble volume = 1.0.obs;
 
   // Callback when speech finishes
   Function? onSpeechCompleted;
@@ -37,11 +38,12 @@ class TtsService extends GetxService {
       });
       final prefs = await SharedPreferences.getInstance();
       _currentLanguage.value = prefs.getString('tts_language') ?? 'en-US';
+      volume.value = prefs.getDouble('tts_volume') ?? 1.0;
 
       // Cấu hình TTS
       await _flutterTts.setLanguage(_currentLanguage.value);
       await _flutterTts.setSpeechRate(0.6); // Chậm để nghe rõ
-      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setVolume(volume.value);
       await _flutterTts.setPitch(1.0);
 
       _isInitialized = true;
@@ -49,6 +51,12 @@ class TtsService extends GetxService {
     } catch (e) {
       print('🔊 [TTS] ❌ Error initializing: $e');
     }
+  }
+
+  Future<void> saveVolumePreference() async {
+    await _flutterTts.setVolume(volume.value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('tts_volume', volume.value);
   }
 
   Future<void> setLanguage(String languageCode) async {
