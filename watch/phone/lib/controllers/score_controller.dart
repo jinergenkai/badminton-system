@@ -130,7 +130,8 @@ class ScoreController extends GetxController {
       if (isGameEnded.value) {
         _musicService.playWinMusic();
       } else if (_musicService.isTensionMode.value && !_musicService.isPlaying.value) {
-        // Tension was paused by hype's AudioFocus — resume it
+        // Defensive: tension should keep playing under hype (no focus stealing
+        // anymore), but resume it if it ended up paused for any other reason.
         _musicService.resume();
       } else {
         _checkTensionMusic();
@@ -194,7 +195,6 @@ class ScoreController extends GetxController {
         final int oldA = gameState.teamAScore;
         final int oldB = gameState.teamBScore;
         if (oldA == newScoreA && oldB == newScoreB) return; // duplicate guard
-        final String undoneTeam = oldA > newScoreA ? 'A' : 'B';
 
         final stack = List<GameState>.from(gameState.stateStack);
         if (stack.isNotEmpty) stack.removeLast(); // best-effort stack trim
@@ -205,11 +205,10 @@ class ScoreController extends GetxController {
           stateStack: stack,
         );
         _hypeController.handleUndo();
-        if (scoreAnnouncementsEnabled.value) {
-          _scoreAnnouncer.announceUndo(newScoreA, newScoreB, undoneTeam);
-        } else {
-          _hypeController.playHype();
-        }
+        // Undo is almost always an immediate misclick correction — announcing
+        // "undo, X Y" out loud right before the real point is noisy and gets
+        // talked over. Stay silent here; only the hype voice (if any) plays.
+        _hypeController.playHype();
         // Do NOT send sync back — watch already applied undo locally (silent=true).
         // Sending phone's own stack result was the root cause of score corruption.
       } else {
@@ -454,17 +453,14 @@ class ScoreController extends GetxController {
     if (!gameState.canUndo) return;
     final stack = List<GameState>.from(gameState.stateStack);
     final previousState = stack.removeLast();
-    final undoneTeam = gameState.teamAScore > previousState.teamAScore ? 'A' : 'B';
     _gameState.value = previousState.copyWith(stateStack: stack);
     if (!_isSyncingFromWatch) {
       _watchService.sendScoreUpdate(gameState, action: 'undo');
     }
     _hypeController.handleUndo();
-    if (scoreAnnouncementsEnabled.value) {
-      _scoreAnnouncer.announceUndo(previousState.teamAScore, previousState.teamBScore, undoneTeam);
-    } else {
-      _hypeController.playHype();
-    }
+    // Undo is almost always an immediate misclick correction — stay silent
+    // instead of announcing "undo, X Y" (see matching comment above).
+    _hypeController.playHype();
   }
 
   void _checkGameEnd() {

@@ -74,22 +74,23 @@ class WatchConnectivityService extends GetxService {
     }
   }
 
-  /// Send media list to connected watch
+  /// Send media list to connected watch.
+  /// Hype is intentionally sent as empty for now — UI on watch is music-only
+  /// until reactivity/payload issues are sorted out. Protocol shape preserved.
   Future<void> sendMediaList() async {
     if (!_isInitialized) return;
 
     final musicList = Get.find<MusicService>().getMusicList();
-    final hypeList = Get.find<HypeVoiceController>().getHypeList();
 
     try {
       await platform.invokeMethod('sendMessage', {
         'data': {
           'action': 'media_list',
           'music': musicList,
-          'hype': hypeList,
+          'hype': [],
         },
       });
-      print('⌚ [WatchService] Media list sent: ${musicList.length} music, ${hypeList.length} hype');
+      print('⌚ [WatchService] Media list sent: ${musicList.length} music (hype skipped)');
     } catch (e) {
       print('⌚ [WatchService] Error sending media list: $e');
     }

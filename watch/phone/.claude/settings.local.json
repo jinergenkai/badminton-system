@@ -9,7 +9,18 @@
       "WebSearch",
       "WebFetch(domain:raw.githubusercontent.com)",
       "Bash(findstr /v \"withOpacity\")",
-      "Bash(findstr /i \"error warning\")"
+      "Bash(findstr /i \"error warning\")",
+      "Bash(mkdir -p \"C:/Users/jiner/AppData/Local/Temp/claude/D--project-watch-bandcounter-flutter/1b88c73c-d2f4-4bb5-b7a6-8b66db0ddfd4/scratchpad/norm_test\")",
+      "Bash(/d/project/mini-tools/yt-downloader/ffmpeg-2026-04-30-git-cc3ca17127-essentials_build/bin/ffmpeg -y -i D:/project/watch/bandcounter-flutter/assets/audio/score/en/21.mp3 -af loudnorm=I=-14:TP=-1:LRA=11 -c:a libmp3lame -q:a 2 __TRACKED_VAR__/en21_loudnorm.mp3)",
+      "Bash(/d/project/mini-tools/yt-downloader/ffmpeg-2026-04-30-git-cc3ca17127-essentials_build/bin/ffmpeg -i D:/project/watch/bandcounter-flutter/assets/audio/score/en/21.mp3)",
+      "Bash(cp C:/Users/jiner/AppData/Local/Temp/claude/D--project-watch-bandcounter-flutter/1b88c73c-d2f4-4bb5-b7a6-8b66db0ddfd4/scratchpad/norm_out/en/*.mp3 D:/project/watch/bandcounter-flutter/assets/audio/score/en/)",
+      "Bash(cp C:/Users/jiner/AppData/Local/Temp/claude/D--project-watch-bandcounter-flutter/1b88c73c-d2f4-4bb5-b7a6-8b66db0ddfd4/scratchpad/norm_out/vi/*.mp3 D:/project/watch/bandcounter-flutter/assets/audio/score/vi/)",
+      "Bash(echo \"Copied. Verifying git diff stat:\")",
+      "Bash(cd \"D:/project/watch/bandcounter-flutter\")",
+      "Bash(git status *)",
+      "Read(//d//**)",
+      "Read(//c/Users/jiner/**)",
+      "Bash(find D:/project/watch/bandcounter-flutter/assets/audio/hype -maxdepth 1 -name *.mp3)"
     ]
   }
 }

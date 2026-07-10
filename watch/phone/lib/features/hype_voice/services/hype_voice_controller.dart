@@ -287,12 +287,11 @@ class HypeVoiceController extends GetxController {
   }
 
   void _setupAudio() {
-    // Use transient AudioFocus so hype sounds (short, foreground) yield focus back
-    // to tension music automatically after playback ends — prevents music staying
-    // silently paused because it received AUDIOFOCUS_LOSS (permanent) from hype.
+    // Request NO audio focus so hype voice lines mix on top of tension music
+    // instead of pausing/ducking it — both are meant to play together.
     _audioPlayer.setAudioContext(AudioContext(
       android: AudioContextAndroid(
-        audioFocus: AndroidAudioFocus.gainTransient,
+        audioFocus: AndroidAudioFocus.none,
         contentType: AndroidContentType.music,
         usageType: AndroidUsageType.media,
         stayAwake: false,

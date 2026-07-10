@@ -651,7 +651,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const SizedBox(height: 12),
                   count == 0
                       ? const Text(
-                          'Copy MP3 files to the folder above, then tap Rescan.',
+                          'No tracks bundled. Add MP3 files to assets/audio/music/ and rebuild.',
                           style: TextStyle(
                               color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic),
                         )
@@ -675,10 +675,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: () async {
-                        await music.scanMusicFolder();
+                        await music.resyncFromAssets();
                         Get.snackbar(
-                          'Rescan Complete',
-                          '${music.playlist.length} track(s) found',
+                          'Resync Complete',
+                          '${music.playlist.length} track(s) from assets/audio/music/',
                           snackPosition: SnackPosition.BOTTOM,
                           backgroundColor: Colors.white12,
                           colorText: Colors.white,
@@ -688,7 +688,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         );
                       },
                       icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Rescan Folder'),
+                      label: const Text('Resync Tracks'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.pinkAccent,
                         side: const BorderSide(color: Colors.pinkAccent, width: 1),

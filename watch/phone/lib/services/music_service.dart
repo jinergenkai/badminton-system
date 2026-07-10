@@ -57,13 +57,20 @@ class MusicService extends GetxController {
       return;
     }
     await _ensureMusicFolder();
-    await _seedDefaultTracks();
+    await _syncBundledTracks();
     await scanMusicFolder();
   }
 
-  /// Copy bundled default tracks from assets → device folder.
-  /// Runs every launch but only copies files not already present — safe to re-run.
-  Future<void> _seedDefaultTracks() async {
+  /// Mirrors assets/audio/music/ into the device folder on every launch: the
+  /// folder always ends up containing exactly the currently bundled tracks.
+  ///   - bundled tracks missing on disk (or whose bytes changed — size
+  ///     mismatch) are (re)copied
+  ///   - any file on disk that isn't a currently bundled track gets deleted,
+  ///     including tracks left over from a previous asset set
+  /// This folder is asset-managed only — manually dropped files are not
+  /// preserved. Edit assets/audio/music/, then `flutter run` (or tap
+  /// "Resync Tracks" in Settings), and the on-device list matches exactly.
+  Future<void> _syncBundledTracks() async {
     if (kIsWeb || _musicFolderPath == null) return;
     try {
       final manifestJson = await rootBundle.loadString('AssetManifest.json');
@@ -74,21 +81,35 @@ class MusicService extends GetxController {
           .map((k) => Uri.decodeFull(k))
           .toList();
 
-      if (bundled.isEmpty) {
-        print('🎵 [Music] No bundled tracks in assets/audio/music/');
-        return;
-      }
-
+      final bundledFilenames = <String>{};
       for (final assetPath in bundled) {
         final filename = assetPath.split('/').last;
+        bundledFilenames.add(filename);
         final target = File('$_musicFolderPath/$filename');
-        if (await target.exists()) continue; // never overwrite user files
         final data = await rootBundle.load(assetPath);
-        await target.writeAsBytes(data.buffer.asUint8List(), flush: true);
-        print('🎵 [Music] Seeded: $filename');
+        final assetBytes = data.buffer.asUint8List();
+        final needsWrite = !await target.exists() ||
+            await target.length() != assetBytes.length;
+        if (needsWrite) {
+          await target.writeAsBytes(assetBytes, flush: true);
+          print('🎵 [Music] Seeded: $filename');
+        }
+      }
+
+      final dir = Directory(_musicFolderPath!);
+      if (await dir.exists()) {
+        for (final entity in dir.listSync().whereType<File>()) {
+          final name = entity.path.split('/').last;
+          final ext = name.toLowerCase();
+          final isAudio = ext.endsWith('.mp3') || ext.endsWith('.m4a') || ext.endsWith('.aac');
+          if (isAudio && !bundledFilenames.contains(name)) {
+            await entity.delete();
+            print('🎵 [Music] Removed stale track: $name');
+          }
+        }
       }
     } catch (e) {
-      print('🎵 [Music] Seed error: $e');
+      print('🎵 [Music] Seed sync error: $e');
     }
   }
 
@@ -106,6 +127,17 @@ class MusicService extends GetxController {
     } catch (e) {
       print('🎵 [Music] Folder init error: $e');
     }
+  }
+
+  /// Re-runs the asset mirror sync (add/update/delete) then rescans, without
+  /// requiring an app restart. Used by the "Resync Tracks" button in Settings.
+  Future<void> resyncFromAssets() async {
+    if (kIsWeb) {
+      await scanMusicFolder();
+      return;
+    }
+    await _syncBundledTracks();
+    await scanMusicFolder();
   }
 
   Future<void> scanMusicFolder() async {
