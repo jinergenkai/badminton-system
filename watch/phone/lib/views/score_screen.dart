@@ -64,41 +64,48 @@ class _ScoreScreenState extends State<ScoreScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       child: Obx(() {
                         final state = controller.gameStateObservable.value;
+                        // Each team keeps its own colour, score and watch
+                        // button; swapping only reverses the order they are
+                        // laid out in, so the board matches the court.
+                        final swapped = controller.sidesSwapped.value;
+                        final cardA = Expanded(
+                          flex: 10,
+                          child: TeamCard(
+                            teamId: 'A',
+                            teamName: state.teamAName,
+                            score: state.teamAScore,
+                            primaryColor: Colors.redAccent,
+                            accentColor: Colors.orangeAccent,
+                            onIncrement: controller.incrementTeamA,
+                            onDecrement: controller.decrementTeamA,
+                            isActive: state.isGameActive,
+                            mascotAsset: 'assets/image/dog_smash.png',
+                          ),
+                        );
+                        final cardB = Expanded(
+                          flex: 10,
+                          child: TeamCard(
+                            teamId: 'B',
+                            teamName: state.teamBName,
+                            score: state.teamBScore,
+                            primaryColor: Colors.blueAccent,
+                            accentColor: Colors.cyanAccent,
+                            onIncrement: controller.incrementTeamB,
+                            onDecrement: controller.decrementTeamB,
+                            isActive: state.isGameActive,
+                            mascotAsset: 'assets/image/cat_dropshot.png',
+                          ),
+                        );
                         return LayoutBuilder(
                           builder: (context, constraints) {
                             final isPortrait = constraints.maxWidth < constraints.maxHeight;
                             return Flex(
                               direction: isPortrait ? Axis.vertical : Axis.horizontal,
                               children: [
-                                Expanded(
-                                  flex: 10,
-                                  child: TeamCard(
-                                    teamId: 'A',
-                                    teamName: state.teamAName,
-                                    score: state.teamAScore,
-                                    primaryColor: Colors.redAccent,
-                                    accentColor: Colors.orangeAccent,
-                                    onIncrement: controller.incrementTeamA,
-                                    onDecrement: controller.decrementTeamA,
-                                    isActive: state.isGameActive,
-                                    mascotAsset: 'assets/image/dog_smash.png',
-                                  ),
-                                ),
+                                swapped ? cardB : cardA,
                                 const SizedBox(width: 4, height: 4),
-                                Expanded(
-                                  flex: 10,
-                                  child: TeamCard(
-                                    teamId: 'B',
-                                    teamName: state.teamBName,
-                                    score: state.teamBScore,
-                                    primaryColor: Colors.blueAccent,
-                                    accentColor: Colors.cyanAccent,
-                                    onIncrement: controller.incrementTeamB,
-                                    onDecrement: controller.decrementTeamB,
-                                    isActive: state.isGameActive,
-                                    mascotAsset: 'assets/image/cat_dropshot.png',
-                                  ),
-                                ),                              ],
+                                swapped ? cardA : cardB,
+                              ],
                             );
                           },
                         );

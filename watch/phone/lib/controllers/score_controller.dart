@@ -46,6 +46,18 @@ class ScoreController extends GetxController {
   final RxBool hapticFeedbackEnabled = true.obs;
   final RxDouble cooldownDuration = 1.0.obs;
 
+  /// Display-only: which end of the screen each team is drawn on.
+  ///
+  /// Purely a layout concern — team A stays team A, keeps its score, its name,
+  /// its red colour and its watch button (`score_A`). All this does is put the
+  /// two team cards in the other order so the phone scoreboard matches where
+  /// the players actually stand on court. Nothing downstream (scoring,
+  /// announcements, history, hype, watch protocol) reads it.
+  ///
+  /// Toggled from the watch's settings page, which sends a bare
+  /// `{action: 'swap_sides'}` and keeps no state of its own.
+  final RxBool sidesSwapped = false.obs;
+
   TeamConfig? _teamConfig;
   StreamSubscription? _watchCommandSubscription;
   bool _isSyncingFromWatch = false;
@@ -83,7 +95,16 @@ class ScoreController extends GetxController {
     scoreAnnouncementsEnabled.value = prefs.getBool('score_announcements_enabled') ?? true;
     hapticFeedbackEnabled.value = prefs.getBool('haptic_feedback_enabled') ?? true;
     cooldownDuration.value = prefs.getDouble('cooldown_duration') ?? 1.0;
+    sidesSwapped.value = prefs.getBool('sides_swapped') ?? false;
   }
+
+  Future<void> setSidesSwapped(bool swapped) async {
+    sidesSwapped.value = swapped;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('sides_swapped', swapped);
+  }
+
+  Future<void> toggleSidesSwapped() => setSidesSwapped(!sidesSwapped.value);
 
   Future<void> setAutoResetDelay(int seconds) async {
     autoResetDelay.value = seconds;
@@ -171,6 +192,16 @@ class ScoreController extends GetxController {
     final bool silent = event['silent'] == true;
 
     print('⌚ [Controller] Command from watch: $action (Scores: $newScoreA-$newScoreB, silent=$silent)');
+
+    // Flip which end of the phone screen each team is drawn on. Scores are
+    // untouched, so there is nothing to sync back to the watch.
+    if (action == 'swap_sides') {
+      toggleSidesSwapped();
+      if (hapticFeedbackEnabled.value) {
+        HapticFeedback.mediumImpact();
+      }
+      return;
+    }
 
     // Handle sync requests
     if (action == 'request_sync' || action == 'sync') {

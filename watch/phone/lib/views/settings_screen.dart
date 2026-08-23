@@ -248,6 +248,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : const SizedBox.shrink()),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
           Obx(() => _buildSettingsTile(
+            icon: Icons.swap_horiz,
+            title: 'Swap Sides',
+            subtitle: controller.sidesSwapped.value
+                ? 'Blue on the left, red on the right'
+                : 'Red on the left, blue on the right',
+            trailing: Switch(
+              value: controller.sidesSwapped.value,
+              onChanged: (v) => controller.setSidesSwapped(v),
+              activeColor: Colors.amber,
+            ),
+          )),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+          Obx(() => _buildSettingsTile(
             icon: Icons.vibration,
             title: 'Haptic Feedback',
             subtitle: 'Vibrate on score updates',
