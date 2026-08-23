@@ -44,6 +44,11 @@
       </div>
     </div>
 
+    <!-- Own toast instead of prompt.showToast: the system one is drawn centred
+         over the score and its position is not configurable (the runtime uses a
+         fixed g_toastStyle; the JS API takes message and duration only). -->
+    <text class="toast" if="{{ toastText }}">{{ toastText }}</text>
+
     <!-- WIN OVERLAY -->
     <div class="win-overlay" if="{{ isWinnerA || isWinnerB }}">
       <stack class="win-container">
@@ -95,6 +100,19 @@
       clockText: '--:--',
       clockTimer: null,
       linkTimer: null,
+      linkFast: true,
+      toastText: '',
+      toastTimer: null,
+    },
+
+    // Bottom of the screen, over the undo strip, so the score stays readable.
+    toast(msg) {
+      this.toastText = msg
+      if (this.toastTimer) clearTimeout(this.toastTimer)
+      this.toastTimer = setTimeout(() => {
+        this.toastText = ''
+        this.toastTimer = null
+      }, 1600)
     },
 
     // ── Step-0 diagnostics ───────────────────────────────────────────────
@@ -189,7 +207,7 @@
 
             this.checkWinner()
             if (msg.action === 'sync' || msg.action === 'manual_sync') {
-                prompt.showToast({ message: 'Synced' })
+                this.toast('Synced')
             }
           }
         } catch (e) {
@@ -228,11 +246,24 @@
      * with no JS wrapper, and calling it throws "miwear object expected".
      * pages/diag still probes for the right shape.)
      */
+    /**
+     * Adaptive, to keep this off the battery.
+     *
+     * Fast (3s) only while the link is down — that is the only time we are
+     * waiting for a transition nobody will tell us about. Once it is up,
+     * onclose reports a clean drop, so polling drops to 20s and exists purely
+     * as a backstop for a silent death. In a normal match the link comes up
+     * once and this ticks three times a minute.
+     *
+     * It also only runs while the page is visible: onHide stops it, so a
+     * screen-off or a switch to another app costs nothing at all.
+     */
     startLinkPoll() {
       this.stopLinkPoll()
+      this.linkFast = !this.connected
       this.linkTimer = setInterval(() => {
         this.checkLink()
-      }, 3000)
+      }, this.linkFast ? 3000 : 20000)
     },
 
     stopLinkPoll() {
@@ -256,6 +287,8 @@
               this.requestSync()
               this.flushQueue()
             }
+            // Swap cadence to match the new state.
+            if (this.linkFast === ready) this.startLinkPoll()
           }
         }
       })
@@ -357,7 +390,7 @@
       this.sendRaw({ action: 'request_sync' })
       // Also request media list on connection
       this.sendRaw({ action: 'request_media_list' })
-      prompt.showToast({ message: 'Sync Requested' })
+      this.toast('Sync requested')
     },
 
     // Single place where anything leaves this page, so every send gets its
@@ -394,7 +427,7 @@
       this.isWinnerA = false
       this.isWinnerB = false
       this.sendUpdate('reset', true)
-      prompt.showToast({ message: 'New Match Started' })
+      this.toast('New match')
     },
 
     openSettings() {
@@ -471,7 +504,7 @@
       this.scoreA++
       this.bumpStreak('A')
       this.sendUpdate('score_A', false, 'manual_trigger')
-      prompt.showToast({ message: 'Point + Nice Pair!' })
+      this.toast('Point + hype')
     },
 
     onQuickHypeB() {
@@ -481,7 +514,7 @@
       this.scoreB++
       this.bumpStreak('B')
       this.sendUpdate('score_B', false, 'manual_trigger')
-      prompt.showToast({ message: 'Point + Nice Pair!' })
+      this.toast('Point + hype')
     },
 
     onUndo() {
@@ -561,6 +594,21 @@
   .progress-inner {
     height: 100%;
     background-color: #448AFF;
+  }
+
+  /* Pinned to the bottom strip so it never covers the score. */
+  .toast {
+    position: absolute;
+    bottom: 34px;
+    align-self: center;
+    padding: 6px 16px;
+    background-color: rgba(15, 23, 42, 0.92);
+    border-radius: 14px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    font-size: 15px;
+    font-weight: bold;
+    color: #FFFFFF;
+    lines: 1;
   }
 
   .clock-text {

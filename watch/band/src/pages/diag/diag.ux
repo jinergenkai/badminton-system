@@ -3,7 +3,7 @@
     <div class="header">
       <!-- Bumped on every build that changes this page, so a flash that did
            not take is obvious at a glance instead of costing a debug round. -->
-      <text class="title">DIAG b9</text>
+      <text class="title">DIAG b10</text>
       <div class="clear-btn" onclick="clearLog">
         <text class="clear-text">CLR</text>
       </div>

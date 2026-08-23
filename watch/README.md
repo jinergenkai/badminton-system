@@ -16,6 +16,12 @@ Flutter trên Android làm bảng điểm + loa.
 | `counter_demo/`, `interconnect_dev_test_demo/` | Demo tối giản hồi đầu. |
 | `docs/` | Ghi chú research cũ + code Kotlin cũ dán vào file `.md`. |
 
+> 📌 **[docs/watch-ui-gotchas.md](docs/watch-ui-gotchas.md) — đọc trước khi làm UI
+> cho band.** Những bẫy đã tốn hàng giờ debug: `<list-item>` không có `height`
+> thì không vẽ gì (đây là lý do list nhạc chưa bao giờ hiện được), 4 góc bo tròn
+> không đặt nút được, `right:` bị bỏ qua trong `<stack>`, toast hệ thống không
+> đổi được vị trí.
+
 > `bandcounter-flutter/` có `.git` riêng bên trong → nó là repo lồng. Đừng
 > `git add` nó vào repo cha, sẽ tạo gitlink rỗng chứ không commit code. Commit
 > riêng trong thư mục đó.
