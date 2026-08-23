@@ -12,19 +12,18 @@
       <text class="summary-line {{ sendFailCount > 0 ? 'bad' : '' }}">sendFail={{ sendFailCount }} lines={{ lines.length }}</text>
     </div>
 
+    <!-- Fixed, outside the list: as list items these scrolled away with the
+         log and were simply never seen. -->
+    <div class="actions">
+      <div class="api-btn" onclick="probeApi">
+        <text class="probe-text">1 · LIST API</text>
+      </div>
+      <div class="probe-btn" onclick="probe">
+        <text class="probe-text">2 · TEST SEND</text>
+      </div>
+    </div>
+
     <list class="log-list">
-      <list-item type="api" class="row">
-        <div class="api-btn" onclick="probeApi">
-          <text class="probe-text">1 · LIST API</text>
-        </div>
-      </list-item>
-
-      <list-item type="probe" class="row">
-        <div class="probe-btn" onclick="probe">
-          <text class="probe-text">2 · TEST SEND</text>
-        </div>
-      </list-item>
-
       <list-item type="line" for="{{ lines }}" class="row">
         <text class="line-text">{{ $item }}</text>
       </list-item>
@@ -248,9 +247,16 @@
     padding: 30px 10px;
   }
 
+  .actions {
+    flex-direction: column;
+    width: 100%;
+    padding: 8px 12px;
+  }
+
   .probe-btn {
     width: 100%;
-    height: 44px;
+    height: 42px;
+    margin-top: 8px;
     background-color: #8B5CF6;
     border-radius: 12px;
     justify-content: center;
@@ -259,7 +265,7 @@
 
   .api-btn {
     width: 100%;
-    height: 44px;
+    height: 42px;
     background-color: #0EA5E9;
     border-radius: 12px;
     justify-content: center;
