@@ -207,13 +207,72 @@ dù kênh hoàn toàn khoẻ.
 chết.** Nó có thể chỉ là một cạnh bị bỏ lỡ. Đây là lý do bước 0 (log) phải làm
 trước — hiện tại ta không phân biệt được hai khả năng.
 
-### Giả thuyết chính
+### ✅ KẾT QUẢ ĐO THẬT (2026-08-23) — giả thuyết chính đã SAI
 
-> `addListener` phía Android thất bại **im lặng**, nên chiều watch → phone chết,
-> trong khi `sendMessage` không cần kênh ngược nên phone → watch vẫn chạy.
+Chạy bản Bước 0 trên thiết bị thật. Kết quả lật ngược mọi phán đoán trước đó.
 
-Vẫn là giả thuyết mạnh nhất, nhưng **không được dùng chấm đỏ làm bằng chứng cho
-nó** — xem mục ngay trên.
+**Phía Android — mọi bước đều THÀNH CÔNG:**
+
+```
+BandDiag: ======== initialize() ========
+BandDiag: getConnectedNodes -> 1 node(s)
+BandDiag:     node[0] id=2127934474 name=Xiaomi Smart Band 10
+BandDiag: requestPermission -> granted=[data_manager]  hasDeviceManager=true
+BandDiag: isWearAppInstalled -> true
+BandDiag: removeListener settled: IllegalStateException: you have not registered
+BandDiag: >>> addListener OK — watch -> phone SHOULD work now
+BandDiag: >>> SEND ok: score_A (42 bytes)
+BandDiag: >>> SEND FAILED: score_B (42 bytes) Exception: sendMessage failed
+```
+
+**Phía watch — trang DIAG:** `ready=2  open=0  close=1  sendFail=5`
+
+Đọc ra:
+
+| Bằng chứng | Kết luận |
+|---|---|
+| `addListener OK` | **Giả thuyết chính SAI.** Listener đăng ký thành công. Đây chưa bao giờ là lỗi phía Android. |
+| `granted=[data_manager] hasDeviceManager=true` | Loại giả thuyết (b) — quyền đầy đủ. |
+| `isWearAppInstalled -> true` | Đóng đinh việc loại giả thuyết (c). |
+| **`open=0`** | `onopen` **chưa từng nổ một lần nào**. |
+| **`sendFail=5`** | 5 lần bấm điểm trên band → **callback `fail` của chính watch nổ**. Message chưa bao giờ rời khỏi đồng hồ. |
+| Log Android **không có một dòng `<<< RECV`** nào | Khớp: phone không nhận vì watch không hề gửi được. |
+| `ready=2`, `close=1` | Kênh ở trạng thái 2, không phải 1. |
+
+> ### 🎯 Kết luận đã kiểm chứng
+>
+> Đây **không** phải lỗi nhận ở Android. **Kênh gửi ra của watch không bao giờ
+> mở**, nên `send()` fail ngay tại chỗ, trước khi chạm tới đường truyền.
+>
+> Chiều phone → watch vẫn chạy vì message đến được xử lý bởi nền tảng, không
+> phụ thuộc kênh gửi ra của chính app watch.
+
+### Giả thuyết mới
+
+`getReadyState` trả **2**. API này mô phỏng WebSocket (`instance` / `onopen` /
+`onmessage` / `onclose` / `send` / `getReadyState`), mà WebSocket readyState là
+`0=CONNECTING 1=OPEN 2=CLOSING 3=CLOSED`. Ghép với `open=0`: kênh **chưa bao giờ
+đạt OPEN** — hoặc đang kẹt ở một trạng thái trung gian, hoặc đã đóng.
+
+Và điểm mấu chốt: **không có dòng code nào trong cả hai app yêu cầu mở kênh này.**
+Watch chỉ gọi `instance()` rồi `send()` luôn.
+
+- **(f) Kênh thuộc về một phiên do *phone* khởi tạo**, chứ không phải do người
+  dùng bấm mở app trên đồng hồ. `nodeApi.launchWearApp(nodeId, pkg)` là API cho
+  việc đó, và ta **chưa bao giờ gọi**. Giải thích được cả việc chiều vào vẫn chạy,
+  lẫn việc "khởi động lại Bluetooth thì ăn" (phiên được tạo lại).
+- **(g) Có một `connect()` / `open()` trên instance mà ta chưa gọi.** Chưa xác
+  minh được từ tài liệu — simulator không implement interconnect, binary không
+  chứa API này.
+
+### Đang đo tiếp
+
+- Nút **PROBE API** trên trang DIAG: liệt kê thẳng những gì module và instance
+  thực sự phơi ra (`typeof` + `getOwnPropertyNames` + prototype). Nếu tồn tại
+  `connect()`, nó sẽ hiện ra ở đây → chốt (g).
+- Android gọi `launchWearApp()` sau khi `addListener` thành công, và có thêm nút
+  **Launch App on Watch** để bấm tay → chốt (f). Cần xem sau khi bấm thì watch có
+  nổ `onopen` và `ready` có chuyển sang 1 không.
 
 Hai cơ chế khả dĩ khiến `addListener` chết, cả hai đều đang hiện diện trong code:
 
