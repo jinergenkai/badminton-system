@@ -39,6 +39,7 @@ class MusicService extends GetxController {
   @override
   void onInit() {
     super.onInit();
+    _watchMaster();
     _loadPreferences();
     _player.onPlayerStateChanged.listen((state) {
       isPlaying.value = state == PlayerState.playing;
@@ -301,6 +302,27 @@ class MusicService extends GetxController {
     return m == null ? v : m.scale(v);
   }
 
+  /// The track's own level, before the master. Kept so a master change can be
+  /// re-applied to whatever is playing right now.
+  double _ownTarget = 1.0;
+
+  /// Without this the master only took effect on the *next* track: every other
+  /// source re-applied on change, music only scaled when a track started. So
+  /// the master appeared to work in commentary mode and do nothing in music
+  /// mode, where a track can play for minutes.
+  void _watchMaster() {
+    final m = AudioSettings.maybe;
+    if (m == null) return;
+    m.masterVolume.listen((_) {
+      if (!isPlaying.value) return;
+      // Cancel any in-flight fade, otherwise it keeps ramping to the old
+      // ceiling and overwrites this.
+      _fadeTimer?.cancel();
+      _currentVolume = _scaled(_ownTarget);
+      _player.setVolume(_currentVolume);
+    });
+  }
+
   Future<void> _playTrack(String track, {required double volume, int fadeDurationMs = 2000}) async {
     try {
       _currentVolume = 0.0;
@@ -316,7 +338,8 @@ class MusicService extends GetxController {
       currentTrackName.value = track.split('/').last;
       // Scaled by the master here, at the one place a target level is chosen,
       // so the fade ramps to the right ceiling instead of overshooting it.
-      final target = _scaled(volume > 0 ? volume : 0.5);
+      _ownTarget = volume > 0 ? volume : 0.5;
+      final target = _scaled(_ownTarget);
       print('🎵 [Music] Playing track: ${currentTrackName.value} (target vol: $target)');
       _fadeIn(target, durationMs: fadeDurationMs);
     } catch (e) {
