@@ -9,6 +9,10 @@
         <text class="item-text">Media Control</text>
       </list-item>
 
+      <list-item type="setting" class="item" onclick="onAlarm">
+        <text class="item-text">Remind Me</text>
+      </list-item>
+
       <list-item type="setting" class="item" onclick="onDiag">
         <text class="item-text">Diagnostics</text>
       </list-item>
@@ -84,6 +88,12 @@
         }
       })
       if (toast) prompt.showToast({ message: toast })
+    },
+
+    onAlarm() {
+      router.push({
+        uri: 'pages/alarm'
+      })
     },
 
     onDiag() {

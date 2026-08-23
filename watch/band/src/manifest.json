@@ -11,6 +11,8 @@
     { "name": "system.app" },
     { "name": "system.router" },
     { "name": "system.prompt" },
+    { "name": "system.alarm" },
+    { "name": "system.storage" },
     { "name": "system.configuration" }
   ],
   "permissions": [{ "origin": "*" }],
@@ -32,6 +34,9 @@
       },
       "pages/diag": {
         "component": "diag"
+      },
+      "pages/alarm": {
+        "component": "alarm"
       }
     }
   },

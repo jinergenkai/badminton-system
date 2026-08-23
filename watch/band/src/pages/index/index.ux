@@ -10,6 +10,7 @@
           <div class="progress-inner" style="width: {{ cooldownProgress }}%"></div>
         </div>
         <text class="clock-text">{{ clockText }}</text>
+        <text class="alarm-text" if="{{ alarmAt }}">{{ alarmAt }}</text>
       </div>
 
       <!-- ZONE 2 & 3: SCORES (MIDDLE - 60%) -->
@@ -78,6 +79,7 @@
   import prompt from '@system.prompt'
   import router from '@system.router'
   import app from '@system.app'
+  import storage from '@system.storage'
 
   export default {
     private: {
@@ -103,6 +105,29 @@
       linkFast: true,
       toastText: '',
       toastTimer: null,
+      // Display only — the alarm itself lives in the watch's Clock app.
+      alarmAt: '',
+    },
+
+    loadAlarm() {
+      const def = this.$app && this.$app.$def
+      if (def && def.alarmAt) {
+        this.alarmAt = def.alarmAt
+        return
+      }
+      try {
+        storage.get({
+          key: 'alarmAt',
+          success: (data) => {
+            if (data) {
+              this.alarmAt = data
+              if (def) def.alarmAt = data
+            }
+          }
+        })
+      } catch (e) {
+        this.diag('storage.get threw: ' + e.message)
+      }
     },
 
     // Bottom of the screen, over the undo strip, so the score stays readable.
@@ -142,6 +167,7 @@
       this.setupConnect()
       this.startClock()
       this.startLinkPoll()
+      this.loadAlarm()
     },
 
     setupConnect() {
@@ -609,6 +635,13 @@
     font-weight: bold;
     color: #FFFFFF;
     lines: 1;
+  }
+
+  .alarm-text {
+    font-size: 14px;
+    font-weight: bold;
+    color: #FBBF24;
+    margin-top: 2px;
   }
 
   .clock-text {

@@ -1,0 +1,195 @@
+<template>
+  <div class="container">
+    <div class="header">
+      <text class="title">REMIND</text>
+      <text class="now-text">{{ nowText }}</text>
+    </div>
+
+    <list class="opt-list">
+      <list-item type="opt" for="{{ options }}" class="opt" onclick="pick($idx)">
+        <text class="opt-label">{{ $item.label }}</text>
+        <text class="opt-time">{{ $item.at }}</text>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import alarm from '@system.alarm'
+  import storage from '@system.storage'
+  import router from '@system.router'
+  import prompt from '@system.prompt'
+
+  export default {
+    private: {
+      nowText: '--:--',
+      // Built in onShow so the times are never stale.
+      options: []
+    },
+
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('alarm', msg)
+    },
+
+    onInit() { this.diag('onInit') },
+
+    onShow() {
+      this.diag('onShow')
+      this.build()
+      // Empty provider means the platform has no alarm service, in which case
+      // setAlarm below will fail and there is no fallback that survives the app
+      // being closed. Worth knowing in the log before blaming anything else.
+      try {
+        this.diag('alarm provider=' + alarm.getProvider())
+      } catch (e) {
+        this.diag('getProvider threw: ' + e.message)
+      }
+    },
+
+    pad(n) {
+      return n < 10 ? '0' + n : '' + n
+    },
+
+    /**
+     * Next half-hour boundary at or after `d`.
+     *
+     * Rounds UP rather than to nearest: rounding to nearest can land the
+     * reminder sooner than the interval asked for — 18:15 plus 30 minutes is
+     * 18:45, which rounds down to 18:30, i.e. 15 minutes away. Up is never less
+     * than requested, and court bookings run on the half hour anyway.
+     */
+    roundUp(d) {
+      const r = new Date(d.getTime())
+      r.setSeconds(0, 0)
+      const m = r.getMinutes()
+      if (m === 0 || m === 30) return r
+      if (m < 30) {
+        r.setMinutes(30)
+      } else {
+        r.setMinutes(0)
+        r.setHours(r.getHours() + 1) // rolls the day over on its own
+      }
+      return r
+    },
+
+    build() {
+      const now = new Date()
+      this.nowText = this.pad(now.getHours()) + ':' + this.pad(now.getMinutes())
+
+      const mins = [30, 60, 90, 120, 150, 180]
+      const labels = ['30p', '1h', '1h30', '2h', '2h30', '3h']
+      const out = []
+      for (let i = 0; i < mins.length; i++) {
+        const t = this.roundUp(new Date(now.getTime() + mins[i] * 60000))
+        out.push({
+          label: labels[i],
+          at: this.pad(t.getHours()) + ':' + this.pad(t.getMinutes()),
+          hour: t.getHours(),
+          minute: t.getMinutes()
+        })
+      }
+      this.options = out
+    },
+
+    pick(idx) {
+      const o = this.options[idx]
+      if (!o) return
+      this.diag('setAlarm ' + o.at + ' (' + o.label + ')')
+
+      const self = this
+      try {
+        alarm.setAlarm({
+          hour: o.hour,
+          minute: o.minute,
+          message: 'Lay do - het gio danh',
+          success: function () {
+            self.diag('setAlarm ok ' + o.at)
+            self.remember(o.at)
+            prompt.showToast({ message: 'Remind at ' + o.at })
+            router.back()
+          },
+          fail: function (data, code) {
+            self.diag('setAlarm FAIL code=' + code + ' d=' + JSON.stringify(data))
+            prompt.showToast({ message: 'Alarm failed: ' + code })
+          }
+        })
+      } catch (e) {
+        this.diag('setAlarm threw: ' + e.message)
+        prompt.showToast({ message: 'Alarm error' })
+      }
+    },
+
+    // Only for showing the time on the main screen. The alarm itself lives in
+    // the watch's own Clock app and does not depend on this.
+    remember(at) {
+      const def = this.$app && this.$app.$def
+      if (def) def.alarmAt = at
+      try {
+        storage.set({ key: 'alarmAt', value: at })
+      } catch (e) {
+        this.diag('storage.set threw: ' + e.message)
+      }
+    }
+  }
+</script>
+
+<style>
+  /* No height: 100% on a page root, and every list-item gets an explicit
+     height — see docs/watch-ui-gotchas.md. */
+  .container {
+    flex-direction: column;
+    width: 100%;
+    background-color: #0F172A;
+  }
+
+  /* 30px of top inset: the screen is a rounded rectangle and anything above
+     this sits inside the bezel curve. */
+  .header {
+    width: 100%;
+    height: 84px;
+    padding: 30px 16px 0 16px;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .now-text {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .opt-list {
+    width: 100%;
+    height: 420px;
+  }
+
+  .opt {
+    width: 100%;
+    height: 64px;
+    padding: 0 20px;
+    margin-top: 6px;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+  }
+
+  .opt-label {
+    font-size: 22px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .opt-time {
+    font-size: 22px;
+    font-weight: bold;
+    color: #FBBF24;
+  }
+</style>
