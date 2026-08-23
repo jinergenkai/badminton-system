@@ -251,8 +251,11 @@
     height: 395px;
   }
 
+  /* Every list-item needs an explicit height or it does not render at all —
+     see pages/diag. This is why the track list never appeared. */
   .item-control {
     width: 100%;
+    height: 80px;
     padding: 15px 15px 5px 15px;
   }
 
@@ -272,6 +275,7 @@
   }
 
   .media-item {
+    height: 56px;
     padding: 15px 20px;
     border-bottom-width: 1px;
     border-bottom-color: rgba(255, 255, 255, 0.05);
@@ -298,6 +302,7 @@
   }
 
   .empty-item {
+    height: 90px;
     padding: 40px 20px;
     justify-content: center;
   }
@@ -309,6 +314,7 @@
   }
 
   .list-footer {
+    height: 100px;
     padding: 50px 20px;
     justify-content: center;
   }

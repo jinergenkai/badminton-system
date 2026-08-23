@@ -1,7 +1,9 @@
 <template>
   <div class="container">
     <div class="header">
-      <text class="title">DIAG</text>
+      <!-- Bumped on every build that changes this page, so a flash that did
+           not take is obvious at a glance instead of costing a debug round. -->
+      <text class="title">DIAG b7</text>
       <div class="clear-btn" onclick="clearLog">
         <text class="clear-text">CLR</text>
       </div>
@@ -23,17 +25,12 @@
       </div>
     </div>
 
+    <!-- One list-item type, fixed height, nothing conditional: the closest
+         thing to Xiaomi's own <list> sample and to pages/settings, the only
+         list in this app that has ever rendered. -->
     <list class="log-list">
       <list-item type="line" for="{{ lines }}" class="row">
         <text class="line-text">{{ $item }}</text>
-      </list-item>
-
-      <list-item type="empty" if="{{ lines.length === 0 }}" class="row">
-        <text class="line-text">no events yet</text>
-      </list-item>
-
-      <list-item type="footer" class="row-footer">
-        <text class="line-text">— swipe to go back —</text>
       </list-item>
     </list>
   </div>
@@ -76,7 +73,9 @@
       // there is no way to get this text off the watch except by reading it.
       // Entries go newest-first but the chunks within one entry stay in order.
       const src = def.diagLog || []
-      const CHUNK = 44
+      // 12px text across ~192px of usable width is about 30 characters, and a
+      // row is one line tall, so chunk to what actually fits.
+      const CHUNK = 30
       const out = []
       for (let i = src.length - 1; i >= 0; i--) {
         const line = src[i]
@@ -256,14 +255,14 @@
     height: 280px;
   }
 
+  /* Explicit height is what makes a list-item show up at all. pages/settings
+     has height: 100px here and renders; the two lists that set no height on
+     their items rendered nothing whatsoever. One entry is one 20px row, and
+     refresh() chunks text so that it always fits on a single line. */
   .row {
     width: 100%;
-    padding: 4px 10px;
-  }
-
-  .row-footer {
-    width: 100%;
-    padding: 30px 10px;
+    height: 20px;
+    padding: 0 10px;
   }
 
   .actions {
@@ -300,6 +299,6 @@
   .line-text {
     font-size: 12px;
     color: rgba(255, 255, 255, 0.75);
-    lines: 2;
+    lines: 1;
   }
 </style>
