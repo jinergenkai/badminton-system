@@ -21,8 +21,8 @@
             <text class="score-text">{{ scoreA }}</text>
           </div>
           <!-- Streak badge: yellow square rotated 45deg, centred on the card's
-               top-left corner. The card's overflow:hidden clips 3/4 of it away,
-               leaving a triangle. Label is a separate un-rotated layer. -->
+               top edge. The card's overflow:hidden clips everything above it,
+               leaving a downward wedge. Label is a separate un-rotated layer. -->
           <div class="streak-tri" if="{{ streakTeam === 'A' && streakCount > 0 }}"></div>
           <text class="streak-text" if="{{ streakTeam === 'A' && streakCount > 0 }}">x{{ streakCount }}</text>
         </stack>
@@ -481,37 +481,40 @@
   }
 
   /* STREAK BADGE
-     68px square rotated 45deg, centre pinned to the card's top-left corner
-     (offset = -68/2). Three quarters fall outside the card and are removed by
-     .score-btn's overflow:hidden, so what shows is a right triangle with ~48px
-     legs, right angle in the corner.
+     68px square rotated 45deg = a diamond with a 48px half-diagonal. Only the
+     part below the card's top edge survives .score-btn's overflow:hidden, so
+     what shows is a wedge with its point aimed down.
 
-     Both cards use the top-LEFT corner on purpose: `right` is ignored for
-     absolutely positioned children of a <stack> (they fall back to left: 0),
-     which is what made the red card's badge hang off the top edge as a wedge
-     instead of sitting in a corner. Only left/top/bottom are reliable here. */
+     top: -54px puts the diamond's centre 20px above the card, one line of
+     .clock-text, so the wedge reads as tucked under the top edge: 56px across
+     where it meets the edge, tapering to its point 28px down.
+
+     align-self centres it horizontally. `left`/`right` are not usable for this:
+     `right` is ignored outright for absolutely positioned children of a
+     <stack>, and a fixed `left` would only be centred for one card width.
+     Both cards share this one class, so they cannot drift apart. */
   .streak-tri {
     position: absolute;
-    top: -34px;
-    left: -34px;
+    top: -54px;
+    align-self: center;
     width: 68px;
     height: 68px;
     background-color: #FBBF24;
     transform: rotate(45deg);
   }
 
-  /* Centred on the triangle's centroid, which for a right triangle with 48px
-     legs sits at (16, 16) from the corner. Fixed width + centre alignment so
-     x1 and x12 both stay put. */
+  /* Sits across the wide part of the wedge; the descender ends up over the card
+     itself, which is why it is white rather than dark. Fixed width + centre
+     alignment so x1 and x12 stay put instead of drifting with the digit count. */
   .streak-text {
     position: absolute;
-    top: 6px;
-    left: 2px;
-    width: 30px;
+    top: 2px;
+    align-self: center;
+    width: 44px;
     text-align: center;
-    font-size: 17px;
+    font-size: 20px;
     font-weight: bold;
-    color: #0F172A;
+    color: #FFFFFF;
   }
 
   /* ZONE 4: UNDO Area (20%) */
