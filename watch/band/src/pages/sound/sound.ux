@@ -195,10 +195,11 @@
     height: 424px;
   }
 
-  /* Fixed height, and tall enough for name + volume row. */
+  /* The list scrolls, so there is no reason to cram: every target here is
+     sized to be hit without looking, mid-session, with a sweaty finger. */
   .row {
     width: 100%;
-    height: 96px;
+    height: 132px;
     padding: 0 10px;
     margin-top: 8px;
   }
@@ -214,13 +215,13 @@
 
   .row-head {
     width: 100%;
-    height: 36px;
+    height: 52px;
     justify-content: space-between;
     align-items: center;
   }
 
   .row-name {
-    font-size: 17px;
+    font-size: 19px;
     font-weight: bold;
     color: #FFFFFF;
   }
@@ -229,9 +230,9 @@
 
   /* Full-height tap targets: the band is small and fingers are not. */
   .pill {
-    width: 58px;
-    height: 32px;
-    border-radius: 16px;
+    width: 84px;
+    height: 48px;
+    border-radius: 24px;
     justify-content: center;
     align-items: center;
   }
@@ -240,49 +241,49 @@
   .pill-off { background-color: rgba(255, 255, 255, 0.12); }
 
   .pill-text {
-    font-size: 14px;
+    font-size: 17px;
     font-weight: bold;
     color: #FFFFFF;
   }
 
   .vol-row {
     width: 100%;
-    height: 40px;
+    height: 56px;
     align-items: center;
   }
 
   .step {
-    width: 38px;
-    height: 34px;
-    background-color: rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
+    width: 56px;
+    height: 50px;
+    background-color: rgba(255, 255, 255, 0.18);
+    border-radius: 12px;
     justify-content: center;
     align-items: center;
   }
 
   .step-text {
-    font-size: 20px;
+    font-size: 26px;
     font-weight: bold;
     color: #FFFFFF;
   }
 
   .bar {
     flex: 1;
-    height: 8px;
+    height: 10px;
     margin: 0 8px;
     background-color: rgba(255, 255, 255, 0.12);
     border-radius: 4px;
   }
 
   .bar-fill {
-    height: 8px;
+    height: 10px;
     background-color: #FBBF24;
     border-radius: 4px;
   }
 
   .vol-num {
-    width: 34px;
-    font-size: 14px;
+    width: 40px;
+    font-size: 16px;
     font-weight: bold;
     color: #FBBF24;
     text-align: right;
