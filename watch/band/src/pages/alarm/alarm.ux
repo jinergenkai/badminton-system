@@ -110,11 +110,17 @@
 
       const self = this
 
+      // Saved first, always, before anything that can fail. The band vibrates
+      // off this value on its own; the phone is a bonus, not a prerequisite.
+      // Previously this only got stored inside the phone-send success
+      // callback, so with no phone in range nothing was remembered and no
+      // reminder ever fired — which made a watch-only feature need a phone.
+      this.remember(o.at)
+      prompt.showToast({ message: 'Remind at ' + o.at })
+
       if (!this.hasAlarm) {
-        // No alarm service on this platform. Hand it to the phone instead,
-        // which can at least make a noise while its app is open — and say so,
-        // rather than pretending an alarm was set.
-        this.askPhone(o.at)
+        this.tellPhone(o.at)
+        router.back()
         return
       }
 
@@ -140,35 +146,31 @@
       }
     },
 
-    askPhone(at) {
+    // Best effort, and nothing depends on it: a second reminder from the phone
+    // if it happens to be connected and running.
+    tellPhone(at) {
       const conn = interconnect.instance()
+      if (!conn) return
       const self = this
-      if (!conn) {
-        prompt.showToast({ message: 'No alarm on band, no phone either' })
-        return
-      }
       conn.send({
         data: { action: 'set_reminder', at: at },
-        success: function () {
-          self.diag('reminder handed to phone: ' + at)
-          self.remember(at)
-          prompt.showToast({ message: 'Phone will remind at ' + at })
-          router.back()
-        },
-        fail: function (data, code) {
-          self.diag('set_reminder FAIL code=' + code)
-          prompt.showToast({ message: 'Phone not connected' })
-        }
+        success: function () { self.diag('phone reminder also set: ' + at) },
+        fail: function (data, code) { self.diag('phone reminder skipped, code=' + code) }
       })
     },
 
-    // Only for showing the time on the main screen. The alarm itself lives in
-    // the watch's own Clock app and does not depend on this.
+    /// Persisted, so the reminder survives leaving the app: index reads it back
+    /// on show and vibrates off it. Clearing alarmFiredFor re-arms it, since
+    /// this is a new time that has not fired yet.
     remember(at) {
       const def = this.$app && this.$app.$def
-      if (def) def.alarmAt = at
+      if (def) {
+        def.alarmAt = at
+        def.alarmFiredFor = ''
+      }
       try {
         storage.set({ key: 'alarmAt', value: at })
+        storage.set({ key: 'alarmFiredFor', value: '' })
       } catch (e) {
         this.diag('storage.set threw: ' + e.message)
       }

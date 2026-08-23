@@ -112,19 +112,26 @@
     loadAlarm() {
       const def = this.$app && this.$app.$def
       if (def && def.alarmAt) {
-        if (this.alarmAt !== def.alarmAt) this.alarmFired = false
         this.alarmAt = def.alarmAt
+        this.alarmFired = (def.alarmFiredFor === def.alarmAt)
         return
       }
       try {
         storage.get({
           key: 'alarmAt',
           success: (data) => {
-            if (data) {
-              this.alarmAt = data
-              this.alarmFired = false
-              if (def) def.alarmAt = data
-            }
+            if (!data) return
+            this.alarmAt = data
+            if (def) def.alarmAt = data
+            // Whether this particular time has already gone off, so reopening
+            // the app inside the window does not buzz again.
+            storage.get({
+              key: 'alarmFiredFor',
+              success: (fired) => {
+                this.alarmFired = (fired === data)
+                if (def) def.alarmFiredFor = fired || ''
+              }
+            })
           }
         })
       } catch (e) {
@@ -410,6 +417,14 @@
       if (late < 0 || late > 10) return
 
       this.alarmFired = true
+      // Persisted, so leaving and reopening the app inside the window does not
+      // set it off a second time.
+      const def = this.$app && this.$app.$def
+      if (def) def.alarmFiredFor = this.alarmAt
+      try {
+        storage.set({ key: 'alarmFiredFor', value: this.alarmAt })
+      } catch (e) {}
+
       this.status('TIME UP - take your stuff')
       this.diag('reminder fired at ' + this.clockText)
       this.buzz(0)
@@ -738,18 +753,16 @@
 
      Centre sits 40px above the card, so the wedge is 56px deep — twice what it
      was. Width always works out to twice the depth, which is wider than the
-     The element box must stay narrower than the ~90px card. At 136px it
-     vanished completely — an absolutely positioned child wider than its
-     parent does not survive align-self plus overflow:hidden here. 84px is
-     the largest that still renders, giving a wedge about 88px across and
-     44px deep: roughly 1.6x the original rather than the 2x asked for, but
-     visible, which the 2x version was not.
+     Box kept at 90px, the card's own width, with the lift tuned instead: the
+     wedge comes out 56px deep, twice the original, and wider than the card so
+     its top corners clip against the edges. Sizing the box past the card was
+     never necessary for that, and the depth is what reads at a glance. */
   .streak-tri {
     position: absolute;
-    top: -57px;
+    top: -53px;
     align-self: center;
-    width: 84px;
-    height: 84px;
+    width: 90px;
+    height: 90px;
     background-color: #FBBF24;
     transform: rotate(45deg);
   }
