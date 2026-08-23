@@ -6,6 +6,7 @@ import 'package:flex_color_picker/flex_color_picker.dart';
 import '../models/team_config.dart';
 import '../services/database_service.dart';
 import '../services/music_service.dart';
+import '../services/audio_settings.dart';
 import '../services/tts_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
@@ -246,6 +247,51 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? _buildVolumeRow('Score Volume', tts.volume, Colors.amber,
                   () => tts.saveVolumePreference())
               : const SizedBox.shrink()),
+          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+          // Mode first: it decides whether anything below it is audible at all.
+          Obx(() {
+            final audio = Get.find<AudioSettings>();
+            final isMusic = audio.isMusicMode;
+            return Column(
+              children: [
+                _buildSettingsTile(
+                  icon: isMusic ? Icons.music_note : Icons.record_voice_over,
+                  title: isMusic ? 'Music Mode' : 'Commentary Mode',
+                  subtitle: isMusic
+                      ? 'Music runs non-stop, nothing talks over it'
+                      : 'Score + hype; music only on tension and win',
+                  trailing: Switch(
+                    value: isMusic,
+                    onChanged: (v) => audio
+                        .setMode(v ? PlayMode.music : PlayMode.commentary),
+                    activeColor: Colors.amber,
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                  child: Row(
+                    children: [
+                      const Text('Master Volume',
+                          style: TextStyle(color: Colors.white70, fontSize: 13)),
+                      Expanded(
+                        child: Slider(
+                          value: audio.masterVolume.value,
+                          activeColor: Colors.amber,
+                          onChanged: (v) => audio.masterVolume.value = v,
+                          onChangeEnd: (v) => audio.setMaster(v),
+                        ),
+                      ),
+                      Text('${(audio.masterVolume.value * 100).round()}%',
+                          style: const TextStyle(
+                              color: Colors.amber,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
           Obx(() => _buildSettingsTile(
             icon: Icons.swap_horiz,
