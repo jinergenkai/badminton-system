@@ -9,6 +9,10 @@
         <text class="item-text">Media Control</text>
       </list-item>
 
+      <list-item type="setting" class="item" onclick="onDiag">
+        <text class="item-text">Diagnostics</text>
+      </list-item>
+
       <list-item type="setting" class="item" onclick="onSwapSides">
         <text class="item-text">Swap Sides (Phone)</text>
       </list-item>
@@ -44,6 +48,50 @@
       scoreB: 0
     },
 
+    // ── Step-0 diagnostics ───────────────────────────────────────────────
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('settings', msg)
+    },
+
+    onInit() { this.diag('onInit') },
+    onReady() { this.diag('onReady') },
+    onShow() { this.diag('onShow') },
+    // Worth noticing in the log: this page never attaches an onmessage
+    // handler, so while it is up the app's single receive slot is whatever
+    // the previous page left behind — possibly null.
+    onHide() { this.diag('onHide') },
+    onDestroy() { this.diag('onDestroy') },
+
+    // Every send from this page goes through here so failures are visible.
+    sendRaw(payload, toast) {
+      const connect = interconnect.instance()
+      if (!connect) {
+        this.diag('send SKIPPED (no instance): ' + payload.action)
+        return
+      }
+      const self = this
+      connect.send({
+        data: payload,
+        success: function () {
+          self.diag('send ok: ' + payload.action)
+        },
+        fail: function (data, code) {
+          const def = self.$app && self.$app.$def
+          if (def) def.sendFailCount++
+          self.diag('send FAIL: ' + payload.action + ' code=' + code +
+            ' d=' + JSON.stringify(data))
+        }
+      })
+      if (toast) prompt.showToast({ message: toast })
+    },
+
+    onDiag() {
+      router.push({
+        uri: 'pages/diag'
+      })
+    },
+
     onMediaControl() {
       router.push({
         uri: 'pages/media_list'
@@ -56,49 +104,27 @@
     // watches and it has to line up with the actual court. With no phone
     // paired this does nothing, which is expected.
     onSwapSides() {
-      const connect = interconnect.instance()
-      if (connect) {
-        connect.send({
-          data: { action: 'swap_sides' },
-          success: () => { console.info('⌚ [Settings] swap_sides sent') },
-          fail: (data, code) => { console.error('⌚ [Settings] swap_sides failed, code=' + code) }
-        })
-        prompt.showToast({ message: 'Swapped sides on phone' })
-      }
+      this.sendRaw({ action: 'swap_sides' }, 'Swapped sides on phone')
       router.back()
     },
 
     onReconnect() {
-      const connect = interconnect.instance()
-      if (connect) {
-        prompt.showToast({ message: 'Reconnecting...' })
-        connect.send({ data: { action: 'request_sync' } })
-      }
+      this.sendRaw({ action: 'request_sync' }, 'Reconnecting...')
       router.back()
     },
 
     onSync() {
-      const connect = interconnect.instance()
-      if (connect) {
-        prompt.showToast({ message: 'Force Syncing...' })
-        connect.send({ data: { action: 'request_sync' } })
-      }
+      this.sendRaw({ action: 'request_sync' }, 'Force Syncing...')
       router.back()
     },
 
     onReset() {
-      const connect = interconnect.instance()
-      if (connect) {
-        prompt.showToast({ message: 'Resetting Match...' })
-        connect.send({
-          data: {
-            action: 'reset',
-            scoreA: 0,
-            scoreB: 0,
-            reset: true
-          }
-        })
-      }
+      this.sendRaw({
+        action: 'reset',
+        scoreA: 0,
+        scoreB: 0,
+        reset: true
+      }, 'Resetting Match...')
       router.back()
     },
 

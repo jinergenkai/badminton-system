@@ -49,16 +49,32 @@
       musicList: []
     },
 
-    onInit() {
-      this.connect = interconnect.instance()
+    // ── Step-0 diagnostics ───────────────────────────────────────────────
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('media', msg)
     },
 
+    onInit() {
+      this.diag('onInit')
+      this.connect = interconnect.instance()
+      this.diag('instance=' + (this.connect ? 'ok' : 'NULL'))
+    },
+
+    onReady() { this.diag('onReady') },
+    onDestroy() { this.diag('onDestroy') },
+
     onShow() {
+      this.diag('onShow')
       this.setupConnect()
       this.syncFromGlobal()
     },
 
+    // If index.ux's onHide runs AFTER this page's onShow, it nulls the handler
+    // attached below and the media_list reply lands nowhere. The interleaving
+    // of these two log lines is the whole point of this instrumentation.
     onHide() {
+      this.diag('onHide: clearing handlers')
       if (this.connect) {
         this.connect.onmessage = null
         this.connect.onopen = null
@@ -75,24 +91,34 @@
 
     setupConnect() {
       if (!this.connect) return
+      this.diag('setupConnect: attaching handlers')
 
       this.connect.onopen = () => {
+        const def = this.$app && this.$app.$def
+        if (def) def.openCount++
+        this.diag('onopen')
         this.connected = true
-        console.info('⌚ [Media] Connection opened')
         this.requestMediaList()
       }
 
       this.connect.onclose = () => {
+        const def = this.$app && this.$app.$def
+        if (def) def.closeCount++
+        this.diag('onclose')
         this.connected = false
-        console.info('⌚ [Media] Connection closed')
       }
 
       this.connect.onmessage = (data) => {
         try {
-          console.info('⌚ [Media] RECV: ' + data.data)
-          const msg = JSON.parse(data.data)
+          const raw = data.data
+          // Byte count matters here: the music list is ~2KB and we do not yet
+          // know the per-message limit of the transport.
+          this.diag('recv ' + (raw ? raw.length : 0) + 'B')
+          const msg = JSON.parse(raw)
+          this.diag('recv action=' + msg.action)
           if (msg.action === 'media_list') {
             const newList = msg.music || []
+            this.diag('media_list: ' + newList.length + ' tracks')
             // Force reactivity: clear then set in next tick
             this.musicList = []
             setTimeout(() => {
@@ -102,49 +128,55 @@
             }, 0)
           }
         } catch (e) {
-          console.error('⌚ [Media] Parse error: ' + e.message)
+          this.diag('recv PARSE ERROR: ' + e.message)
         }
       }
 
       // Check ready state and request if connected
       this.connect.getReadyState({
         success: (data) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.lastReadyStatus = data.status
+          this.diag('getReadyState status=' + data.status)
           this.connected = (data.status === 1)
-          if (this.connected) {
-            this.requestMediaList()
-          } else {
-            console.info('⌚ [Media] Not ready, waiting for onopen...')
-          }
+          if (this.connected) this.requestMediaList()
+        },
+        fail: (data, code) => {
+          this.diag('getReadyState FAIL code=' + code)
         }
       })
+    },
+
+    sendRaw(payload, toast) {
+      if (!this.connect) {
+        this.diag('send SKIPPED (no instance): ' + payload.action)
+        return
+      }
+      this.connect.send({
+        data: payload,
+        success: () => {
+          this.diag('send ok: ' + payload.action)
+        },
+        fail: (data, code) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.sendFailCount++
+          this.diag('send FAIL: ' + payload.action + ' code=' + code +
+            ' d=' + JSON.stringify(data))
+        }
+      })
+      if (toast) prompt.showToast({ message: toast })
     },
 
     requestMediaList() {
-      if (!this.connect) return
-      console.info('⌚ [Media] Requesting media list...')
-      this.connect.send({
-        data: { action: 'request_media_list' }
-      })
-      prompt.showToast({ message: 'Requesting...' })
+      this.sendRaw({ action: 'request_media_list' }, 'Requesting...')
     },
 
     playMusic(path) {
-      if (!this.connect) return
-      this.connect.send({
-        data: {
-          action: 'play_music',
-          id: path
-        }
-      })
-      prompt.showToast({ message: 'Playing' })
+      this.sendRaw({ action: 'play_music', id: path }, 'Playing')
     },
 
     stopAll() {
-      if (!this.connect) return
-      this.connect.send({
-        data: { action: 'stop_all_media' }
-      })
-      prompt.showToast({ message: 'Stopped' })
+      this.sendRaw({ action: 'stop_all_media' }, 'Stopped')
     }
   }
 </script>

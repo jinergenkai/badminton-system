@@ -10,6 +10,7 @@
     { "name": "system.interconnect" },
     { "name": "system.app" },
     { "name": "system.router" },
+    { "name": "system.prompt" },
     { "name": "system.configuration" }
   ],
   "permissions": [{ "origin": "*" }],
@@ -28,6 +29,9 @@
       },
       "pages/media_list": {
         "component": "media_list"
+      },
+      "pages/diag": {
+        "component": "diag"
       }
     }
   },

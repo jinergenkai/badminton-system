@@ -96,33 +96,60 @@
       clockTimer: null,
     },
 
+    // ── Step-0 diagnostics ───────────────────────────────────────────────
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('index', msg)
+    },
+
     onInit() {
+      this.diag('onInit')
       // Keep instance but don't set listeners yet
       this.connect = interconnect.instance()
+      this.diag('instance=' + (this.connect ? 'ok' : 'NULL'))
       this.updateClock()
     },
 
+    onReady() {
+      this.diag('onReady')
+    },
+
+    onDestroy() {
+      this.diag('onDestroy')
+    },
+
     onShow() {
+      this.diag('onShow')
       this.setupConnect()
       this.startClock()
     },
 
     setupConnect() {
       if (!this.connect) return
-      
+      this.diag('setupConnect: attaching handlers')
+
       this.connect.onopen = (data) => {
+        const def = this.$app && this.$app.$def
+        if (def) def.openCount++
+        this.diag('onopen')
         this.connected = true
         this.isConnecting = false
         this.requestSync()
       }
       this.connect.onclose = () => {
+        const def = this.$app && this.$app.$def
+        if (def) def.closeCount++
+        this.diag('onclose')
         this.connected = false
         this.isConnecting = false
       }
       this.connect.onmessage = (data) => {
         try {
-          const msg = JSON.parse(data.data)
-          
+          const raw = data.data
+          this.diag('recv ' + (raw ? raw.length : 0) + 'B')
+          const msg = JSON.parse(raw)
+          this.diag('recv action=' + msg.action)
+
           // Handle media list sync (music only for now, hype postponed)
           if (msg.action === 'media_list') {
             this.$app.$def.musicList = msg.music || []
@@ -163,18 +190,29 @@
                 prompt.showToast({ message: 'Synced' })
             }
           }
-        } catch (e) {}
+        } catch (e) {
+          this.diag('recv PARSE ERROR: ' + e.message)
+        }
       }
-      
+
       this.connect.getReadyState({
         success: (data) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.lastReadyStatus = data.status
+          // Logged as the raw number: everything that is not 1 currently
+          // collapses to "red", which hides why it is not ready.
+          this.diag('getReadyState status=' + data.status)
           this.connected = (data.status === 1)
           if (this.connected) this.requestSync()
+        },
+        fail: (data, code) => {
+          this.diag('getReadyState FAIL code=' + code)
         }
       })
     },
 
     onHide() {
+      this.diag('onHide: clearing handlers')
       // Clear listeners to avoid memory leaks or conflicting messages
       if (this.connect) {
         this.connect.onmessage = null
@@ -238,14 +276,32 @@
 
     requestSync() {
       if (!this.connect) return
-      this.connect.send({
-        data: { action: 'request_sync' }
-      })
+      this.sendRaw({ action: 'request_sync' })
       // Also request media list on connection
-      this.connect.send({
-        data: { action: 'request_media_list' }
-      })
+      this.sendRaw({ action: 'request_media_list' })
       prompt.showToast({ message: 'Sync Requested' })
+    },
+
+    // Single place where anything leaves this page, so every send gets its
+    // callbacks. Without the fail callback there is no way to tell "the watch
+    // failed to send" apart from "the phone failed to receive".
+    sendRaw(payload) {
+      if (!this.connect) {
+        this.diag('send SKIPPED (no instance): ' + payload.action)
+        return
+      }
+      this.connect.send({
+        data: payload,
+        success: () => {
+          this.diag('send ok: ' + payload.action)
+        },
+        fail: (data, code) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.sendFailCount++
+          this.diag('send FAIL: ' + payload.action + ' code=' + code +
+            ' d=' + JSON.stringify(data))
+        }
+      })
     },
 
     resetGame() {
@@ -361,19 +417,16 @@
     sendUpdate(action, isReset = false, manualHype = null) {
       this.checkWinner()
       this.startCooldown()
-      if (!this.connect) return
-      this.connect.send({
-        data: {
-          action: action,
-          scoreA: this.scoreA,
-          scoreB: this.scoreB,
-          reset: isReset,
-          manualHype: manualHype,
-          // index.ux always mutates local state before sending; phone must NOT echo back
-          // (otherwise we'd double-push history). Settings page omits this so phone echoes.
-          silent: true,
-          timestamp: Date.now(),
-        }
+      this.sendRaw({
+        action: action,
+        scoreA: this.scoreA,
+        scoreB: this.scoreB,
+        reset: isReset,
+        manualHype: manualHype,
+        // index.ux always mutates local state before sending; phone must NOT echo back
+        // (otherwise we'd double-push history). Settings page omits this so phone echoes.
+        silent: true,
+        timestamp: Date.now(),
       })
     }
   }

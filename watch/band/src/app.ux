@@ -2,11 +2,34 @@
 export default {
   musicList: [],
   hypeList: [],
+
+  // ── Step-0 diagnostics ────────────────────────────────────────────────
+  // console.info on the band is not readable in the field, so every event
+  // also lands in this ring buffer. pages/diag renders it on the watch
+  // itself, which is the only way to actually read it during a session.
+  // Lives on the app object so it survives page navigation — the very
+  // thing we are trying to observe.
+  diagLog: [],
+  openCount: 0,
+  closeCount: 0,
+  lastReadyStatus: -1,
+  sendFailCount: 0,
+
+  logDiag(tag, msg) {
+    const d = new Date()
+    const p = function (n) { return n < 10 ? '0' + n : '' + n }
+    const line = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) +
+      ' [' + tag + '] ' + msg
+    this.diagLog.push(line)
+    if (this.diagLog.length > 80) this.diagLog.shift()
+    console.info('⌚ ' + line)
+  },
+
   onCreate() {
-    console.info('Application onCreate');
+    console.info('Application onCreate')
   },
   onDestroy() {
-    console.info('Application onDestroy');
+    console.info('Application onDestroy')
   }
 }
 </script>
