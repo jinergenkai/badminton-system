@@ -17,11 +17,6 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 
-        <!-- WearOS metadata for phone-watch communication -->
-        <meta-data
-            android:name="com.google.android.wearable.standalone"
-            android:value="false"
-            tools:replace="android:value" />
         <activity
             android:name="com.hung.bandcounter.MainActivity"
             android:exported="true"
