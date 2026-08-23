@@ -312,14 +312,22 @@ class MusicService extends GetxController {
   /// mode, where a track can play for minutes.
   void _watchMaster() {
     final m = AudioSettings.maybe;
-    if (m == null) return;
-    m.masterVolume.listen((_) {
-      if (!isPlaying.value) return;
-      // Cancel any in-flight fade, otherwise it keeps ramping to the old
-      // ceiling and overwrites this.
+    if (m == null) {
+      print('🎵 [Music] master listener NOT attached — AudioSettings missing');
+      return;
+    }
+    m.masterVolume.listen((v) {
+      // No isPlaying guard: the flag is driven by an async player-state stream
+      // and lags a change, so gating on it silently dropped the update. Setting
+      // volume on an idle player is harmless.
+      //
+      // The fade has to be cancelled first — otherwise its next tick writes the
+      // old ceiling straight back over this.
       _fadeTimer?.cancel();
       _currentVolume = _scaled(_ownTarget);
       _player.setVolume(_currentVolume);
+      print('🎵 [Music] master=$v -> volume ${_currentVolume.toStringAsFixed(2)}'
+          ' (own ${_ownTarget.toStringAsFixed(2)})');
     });
   }
 
