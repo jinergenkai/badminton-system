@@ -623,11 +623,15 @@
   }
 
   /* Pinned to the bottom strip so it never covers the score. */
+  /* Fixed width plus centred text: align-self alone leaves a content-sized
+     <text> off-centre once padding is involved. */
   .toast {
     position: absolute;
     bottom: 34px;
     align-self: center;
-    padding: 6px 16px;
+    width: 188px;
+    text-align: center;
+    padding: 6px 0;
     background-color: rgba(15, 23, 42, 0.92);
     border-radius: 14px;
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -695,24 +699,21 @@
   }
 
   /* STREAK BADGE
-     68px square rotated 45deg = a diamond with a 48px half-diagonal. Only the
-     part below the card's top edge survives .score-btn's overflow:hidden, so
-     what shows is a wedge with its point aimed down.
+     136px square rotated 45deg = a diamond with a 96px half-diagonal. Only the
+     part below the card top edge survives .score-btn overflow:hidden, leaving a
+     wedge pointing down.
 
-     top: -54px puts the diamond's centre 20px above the card, one line of
-     .clock-text, so the wedge reads as tucked under the top edge: 56px across
-     where it meets the edge, tapering to its point 28px down.
-
-     align-self centres it horizontally. `left`/`right` are not usable for this:
-     `right` is ignored outright for absolutely positioned children of a
-     <stack>, and a fixed `left` would only be centred for one card width.
-     Both cards share this one class, so they cannot drift apart. */
+     Centre sits 40px above the card, so the wedge is 56px deep — twice what it
+     was. Width always works out to twice the depth, which is wider than the
+     ~90px card, so the top corners clip against the card edges. That is
+     intended: it reads as a banner tapering to a point rather than a small
+     corner mark, which is what makes it visible at a glance mid-rally.
   .streak-tri {
     position: absolute;
-    top: -54px;
+    top: -108px;
     align-self: center;
-    width: 68px;
-    height: 68px;
+    width: 136px;
+    height: 136px;
     background-color: #FBBF24;
     transform: rotate(45deg);
   }
@@ -722,11 +723,11 @@
      alignment so x1 and x12 stay put instead of drifting with the digit count. */
   .streak-text {
     position: absolute;
-    top: 2px;
+    top: 6px;
     align-self: center;
-    width: 44px;
+    width: 70px;
     text-align: center;
-    font-size: 20px;
+    font-size: 30px;
     font-weight: bold;
     color: #FFFFFF;
   }

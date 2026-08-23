@@ -5,6 +5,10 @@
       <text class="now-text">{{ nowText }}</text>
     </div>
 
+    <div class="note">
+      <text class="note-text">{{ hasAlarm ? "Rings on the band" : "No alarm on band - phone will remind" }}</text>
+    </div>
+
     <list class="opt-list">
       <list-item type="opt" for="{{ options }}" class="opt" onclick="pick($idx)">
         <text class="opt-label">{{ $item.label }}</text>
@@ -19,12 +23,18 @@
   import storage from '@system.storage'
   import router from '@system.router'
   import prompt from '@system.prompt'
+  import interconnect from '@system.interconnect'
 
   export default {
     private: {
       nowText: '--:--',
       // Built in onShow so the times are never stale.
-      options: []
+      options: [],
+      // Mi Band 10 resolves @system.alarm to null even with system.alarm
+      // declared in the manifest — the platform simply has no alarm service.
+      // Declared features are a request, not a guarantee, so every system
+      // module has to be treated as possibly absent.
+      hasAlarm: false
     },
 
     diag(msg) {
@@ -37,13 +47,14 @@
     onShow() {
       this.diag('onShow')
       this.build()
-      // Empty provider means the platform has no alarm service, in which case
-      // setAlarm below will fail and there is no fallback that survives the app
-      // being closed. Worth knowing in the log before blaming anything else.
-      try {
-        this.diag('alarm provider=' + alarm.getProvider())
-      } catch (e) {
-        this.diag('getProvider threw: ' + e.message)
+      this.hasAlarm = !!(alarm && typeof alarm.setAlarm === 'function')
+      this.diag('alarm module=' + (this.hasAlarm ? 'present' : 'NULL'))
+      if (this.hasAlarm) {
+        try {
+          this.diag('alarm provider=' + alarm.getProvider())
+        } catch (e) {
+          this.diag('getProvider threw: ' + e.message)
+        }
       }
     },
 
@@ -98,6 +109,15 @@
       this.diag('setAlarm ' + o.at + ' (' + o.label + ')')
 
       const self = this
+
+      if (!this.hasAlarm) {
+        // No alarm service on this platform. Hand it to the phone instead,
+        // which can at least make a noise while its app is open — and say so,
+        // rather than pretending an alarm was set.
+        this.askPhone(o.at)
+        return
+      }
+
       try {
         alarm.setAlarm({
           hour: o.hour,
@@ -111,13 +131,35 @@
           },
           fail: function (data, code) {
             self.diag('setAlarm FAIL code=' + code + ' d=' + JSON.stringify(data))
-            prompt.showToast({ message: 'Alarm failed: ' + code })
+            self.askPhone(o.at)
           }
         })
       } catch (e) {
         this.diag('setAlarm threw: ' + e.message)
-        prompt.showToast({ message: 'Alarm error' })
+        this.askPhone(o.at)
       }
+    },
+
+    askPhone(at) {
+      const conn = interconnect.instance()
+      const self = this
+      if (!conn) {
+        prompt.showToast({ message: 'No alarm on band, no phone either' })
+        return
+      }
+      conn.send({
+        data: { action: 'set_reminder', at: at },
+        success: function () {
+          self.diag('reminder handed to phone: ' + at)
+          self.remember(at)
+          prompt.showToast({ message: 'Phone will remind at ' + at })
+          router.back()
+        },
+        fail: function (data, code) {
+          self.diag('set_reminder FAIL code=' + code)
+          prompt.showToast({ message: 'Phone not connected' })
+        }
+      })
     },
 
     // Only for showing the time on the main screen. The alarm itself lives in
@@ -165,9 +207,21 @@
     color: rgba(255, 255, 255, 0.5);
   }
 
+  .note {
+    width: 100%;
+    padding: 6px 16px;
+    background-color: rgba(255, 255, 255, 0.03);
+  }
+
+  .note-text {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    lines: 2;
+  }
+
   .opt-list {
     width: 100%;
-    height: 420px;
+    height: 380px;
   }
 
   .opt {

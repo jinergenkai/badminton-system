@@ -13,6 +13,8 @@
     { "name": "system.prompt" },
     { "name": "system.alarm" },
     { "name": "system.storage" },
+    { "name": "system.vibrator" },
+    { "name": "system.notification" },
     { "name": "system.configuration" }
   ],
   "permissions": [{ "origin": "*" }],

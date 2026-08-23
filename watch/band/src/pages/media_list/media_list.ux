@@ -7,31 +7,41 @@
       </div>
     </div>
 
-    <div class="status-bar">
-      <div class="status-dot {{ connected ? 'online' : 'offline' }}"></div>
-      <text class="status-text">{{ connected ? 'Connected' : 'Disconnected' }} · {{ musicList.length }} tracks</text>
+    <!-- Mode is the first thing on the page because it changes what every
+         other control below means. -->
+    <div class="mode-row">
+      <div class="mode-btn {{ mode === 'commentary' ? 'mode-on' : '' }}" onclick="setMode('commentary')">
+        <text class="mode-text">TALK</text>
+      </div>
+      <div class="mode-btn {{ mode === 'music' ? 'mode-on' : '' }}" onclick="setMode('music')">
+        <text class="mode-text">MUSIC</text>
+      </div>
     </div>
 
+    <div class="now-row">
+      <text class="now-name">{{ nowPlaying || 'nothing playing' }}</text>
+    </div>
+
+    <div class="transport">
+      <div class="t-btn" onclick="playPause">
+        <text class="t-text">{{ isPlaying ? '❚❚' : '▶' }}</text>
+      </div>
+      <div class="t-btn" onclick="next">
+        <text class="t-text">▶▶</text>
+      </div>
+      <div class="t-btn {{ playMode === 'random' ? 't-on' : '' }}" onclick="togglePlayMode">
+        <text class="t-text-sm">{{ playMode === 'random' ? 'RND' : 'SEQ' }}</text>
+      </div>
+      <div class="t-btn t-stop" onclick="stopAll">
+        <text class="t-text">■</text>
+      </div>
+    </div>
+
+    <text class="count">{{ musicList.length }} tracks · tap to play</text>
+
     <list class="media-list">
-      <list-item type="control" class="item-control">
-        <div class="stop-btn" onclick="stopAll">
-          <text class="stop-text">STOP ALL AUDIO</text>
-        </div>
-      </list-item>
-
       <list-item type="music" for="{{ musicList }}" class="media-item" onclick="playMusic($item.id)">
-        <div class="item-content">
-          <text class="item-name">{{ $item.name }}</text>
-          <div class="play-icon"></div>
-        </div>
-      </list-item>
-
-      <list-item type="empty" if="{{ musicList.length === 0 }}" class="empty-item">
-        <text class="empty-text">Empty. Tap SYNC to load music.</text>
-      </list-item>
-
-      <list-item type="footer" class="list-footer">
-        <text class="footer-text">Swipe to go back</text>
+        <text class="item-name">{{ $item.name }}</text>
       </list-item>
     </list>
   </div>
@@ -40,16 +50,20 @@
 <script>
   import interconnect from '@system.interconnect'
   import prompt from '@system.prompt'
-  import router from '@system.router'
 
   export default {
     private: {
       connect: null,
       connected: false,
-      musicList: []
+      musicList: [],
+      // Mirrors of phone state. Never authoritative — every one of these is
+      // overwritten by the next settings_state / player_state echo.
+      mode: 'commentary',
+      playMode: 'random',
+      isPlaying: false,
+      nowPlaying: ''
     },
 
-    // ── Step-0 diagnostics ───────────────────────────────────────────────
     diag(msg) {
       const def = this.$app && this.$app.$def
       if (def && def.logDiag) def.logDiag('media', msg)
@@ -70,9 +84,6 @@
       this.syncFromGlobal()
     },
 
-    // If index.ux's onHide runs AFTER this page's onShow, it nulls the handler
-    // attached below and the media_list reply lands nowhere. The interleaving
-    // of these two log lines is the whole point of this instrumentation.
     onHide() {
       this.diag('onHide: clearing handlers')
       if (this.connect) {
@@ -83,10 +94,25 @@
     },
 
     syncFromGlobal() {
-      if (this.$app.$def.musicList && this.$app.$def.musicList.length > 0) {
-        this.musicList = this.$app.$def.musicList
-        console.info('⌚ [Media] Loaded from global: ' + this.musicList.length + ' tracks')
+      const def = this.$app && this.$app.$def
+      if (!def) return
+      if (def.musicList && def.musicList.length > 0) {
+        this.musicList = def.musicList
       }
+      if (def.settings) this.applySettings(def.settings)
+      if (def.player) this.applyPlayer(def.player)
+    },
+
+    applySettings(s) {
+      if (!s) return
+      if (s.mode) this.mode = s.mode
+      if (s.playMode) this.playMode = s.playMode
+    },
+
+    applyPlayer(p) {
+      if (!p) return
+      this.isPlaying = p.playing === true
+      this.nowPlaying = p.track || ''
     },
 
     setupConnect() {
@@ -111,28 +137,29 @@
       this.connect.onmessage = (data) => {
         try {
           const raw = data.data
-          // Byte count matters here: the music list is ~2KB and we do not yet
-          // know the per-message limit of the transport.
           this.diag('recv ' + (raw ? raw.length : 0) + 'B')
           const msg = JSON.parse(raw)
           this.diag('recv action=' + msg.action)
+          const def = this.$app && this.$app.$def
+
           if (msg.action === 'media_list') {
             const newList = msg.music || []
             this.diag('media_list: ' + newList.length + ' tracks')
-            // Force reactivity: clear then set in next tick
-            this.musicList = []
-            setTimeout(() => {
-              this.musicList = newList
-              this.$app.$def.musicList = newList
-              prompt.showToast({ message: 'Loaded ' + newList.length + ' tracks' })
-            }, 0)
+            this.musicList = newList
+            if (def) def.musicList = newList
+            prompt.showToast({ message: 'Loaded ' + newList.length + ' tracks' })
+          } else if (msg.action === 'settings_state') {
+            if (def) def.settings = msg.s
+            this.applySettings(msg.s)
+          } else if (msg.action === 'player_state') {
+            if (def) def.player = msg.p
+            this.applyPlayer(msg.p)
           }
         } catch (e) {
           this.diag('recv PARSE ERROR: ' + e.message)
         }
       }
 
-      // Check ready state and request if connected
       this.connect.getReadyState({
         success: (data) => {
           const def = this.$app && this.$app.$def
@@ -141,38 +168,13 @@
           this.connected = (data.status === 1)
           if (this.connected) {
             this.requestMediaList()
-          } else {
-            this.openChannel()
+            this.sendRaw({ action: 'request_settings' })
           }
         },
         fail: (data, code) => {
           this.diag('getReadyState FAIL code=' + code)
-          this.openChannel()
         }
       })
-    },
-
-    // See index.ux: instance() returns a channel, it does not connect it.
-    openChannel() {
-      if (!this.connect || typeof this.connect.connect !== 'function') {
-        this.diag('connect() unavailable')
-        return
-      }
-      this.diag('connect() ...')
-      try {
-        this.connect.connect({
-          success: () => {
-            this.diag('connect() ok')
-            this.connected = true
-            this.requestMediaList()
-          },
-          fail: (data, code) => {
-            this.diag('connect() FAIL code=' + code + ' d=' + JSON.stringify(data))
-          }
-        })
-      } catch (e) {
-        this.diag('connect() threw: ' + e.message)
-      }
     },
 
     sendRaw(payload, toast) {
@@ -182,21 +184,43 @@
       }
       this.connect.send({
         data: payload,
-        success: () => {
-          this.diag('send ok: ' + payload.action)
-        },
+        success: () => { this.diag('send ok: ' + payload.action) },
         fail: (data, code) => {
           const def = this.$app && this.$app.$def
           if (def) def.sendFailCount++
-          this.diag('send FAIL: ' + payload.action + ' code=' + code +
-            ' d=' + JSON.stringify(data))
+          this.diag('send FAIL: ' + payload.action + ' code=' + code)
+          prompt.showToast({ message: 'Phone not connected' })
         }
       })
       if (toast) prompt.showToast({ message: toast })
     },
 
     requestMediaList() {
-      this.sendRaw({ action: 'request_media_list' }, 'Requesting...')
+      this.sendRaw({ action: 'request_media_list' })
+      this.sendRaw({ action: 'request_player' })
+    },
+
+    // Optimistic locally, corrected by the echo — same rule as pages/sound.
+    setMode(m) {
+      if (this.mode === m) return
+      this.mode = m
+      this.sendRaw({ action: 'set_setting', key: 'mode', value: m },
+        m === 'music' ? 'Music mode' : 'Talk mode')
+    },
+
+    togglePlayMode() {
+      const next = this.playMode === 'random' ? 'sequential' : 'random'
+      this.playMode = next
+      this.sendRaw({ action: 'set_setting', key: 'playMode', value: next })
+    },
+
+    playPause() {
+      this.isPlaying = !this.isPlaying
+      this.sendRaw({ action: this.isPlaying ? 'music_resume' : 'music_pause' })
+    },
+
+    next() {
+      this.sendRaw({ action: 'music_next' }, 'Next')
     },
 
     playMusic(path) {
@@ -204,32 +228,28 @@
     },
 
     stopAll() {
+      this.isPlaying = false
       this.sendRaw({ action: 'stop_all_media' }, 'Stopped')
     }
   }
 </script>
 
 <style>
-  /* Same fix as pages/diag: height: 100% on a page root does not resolve, so
-     the flex: 1 list below computed to zero height and drew nothing — which
-     means the track list could never have shown up even when it did arrive. */
+  /* No height on the page root, explicit heights on the list and its items —
+     see docs/watch-ui-gotchas.md. */
   .container {
     flex-direction: column;
     width: 100%;
     background-color: #0F172A;
   }
 
-  /* Same rounded-screen clipping as pages/diag: the SYNC button was sitting
-     up inside the bezel curve. */
   .header {
     width: 100%;
-    height: 90px;
+    height: 80px;
     padding: 30px 15px 0 15px;
     justify-content: space-between;
     align-items: center;
     background-color: rgba(255, 255, 255, 0.05);
-    border-bottom-width: 1px;
-    border-bottom-color: rgba(255, 255, 255, 0.1);
   }
 
   .title {
@@ -239,117 +259,117 @@
   }
 
   .sync-btn {
-    padding: 6px 15px;
+    width: 62px;
+    height: 30px;
     background-color: #8B5CF6;
     border-radius: 12px;
-  }
-
-  .sync-text {
-    font-size: 16px;
-    font-weight: bold;
-    color: #FFFFFF;
-  }
-
-  .status-bar {
-    width: 100%;
-    padding: 8px 15px;
-    flex-direction: row;
-    align-items: center;
-    background-color: rgba(255, 255, 255, 0.03);
-  }
-
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 4px;
-    margin-right: 8px;
-  }
-
-  .online { background-color: #4ADE80; }
-  .offline { background-color: #FF5252; }
-
-  .status-text {
-    font-size: 12px;
-    color: rgba(255, 255, 255, 0.6);
-  }
-
-  /* 520 tall screen, less the header (90) and the status bar (~32). */
-  .media-list {
-    width: 100%;
-    height: 395px;
-  }
-
-  /* Every list-item needs an explicit height or it does not render at all —
-     see pages/diag. This is why the track list never appeared. */
-  .item-control {
-    width: 100%;
-    height: 80px;
-    padding: 15px 15px 5px 15px;
-  }
-
-  .stop-btn {
-    width: 100%;
-    height: 60px;
-    background-color: #FF5252;
-    border-radius: 15px;
     justify-content: center;
     align-items: center;
   }
 
-  .stop-text {
-    font-size: 18px;
+  .sync-text {
+    font-size: 14px;
     font-weight: bold;
     color: #FFFFFF;
   }
 
-  .media-item {
-    height: 56px;
-    padding: 15px 20px;
-    border-bottom-width: 1px;
-    border-bottom-color: rgba(255, 255, 255, 0.05);
+  .mode-row {
+    width: 100%;
+    height: 46px;
+    padding: 4px 10px;
   }
 
-  .item-content {
+  .mode-btn {
+    flex: 1;
+    height: 38px;
+    margin: 0 3px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .mode-on { background-color: #22C55E; }
+
+  .mode-text {
+    font-size: 15px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .now-row {
     width: 100%;
+    height: 30px;
+    padding: 0 12px;
+    align-items: center;
+  }
+
+  .now-name {
+    font-size: 13px;
+    color: #FBBF24;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+
+  .transport {
+    width: 100%;
+    height: 52px;
+    padding: 2px 8px;
     justify-content: space-between;
     align-items: center;
   }
 
-  .item-name {
-    font-size: 18px;
-    color: #E2E8F0;
+  .t-btn {
     flex: 1;
+    height: 44px;
+    margin: 0 3px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
   }
 
-  .play-icon {
-    width: 20px;
-    height: 20px;
-    background-color: #8B5CF6;
+  .t-on { background-color: #8B5CF6; }
+  .t-stop { background-color: rgba(255, 82, 82, 0.35); }
+
+  .t-text {
+    font-size: 17px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .t-text-sm {
+    font-size: 13px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .count {
+    width: 100%;
+    padding: 4px 12px;
+    font-size: 11px;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .media-list {
+    width: 100%;
+    height: 274px;
+  }
+
+  .media-item {
+    width: 100%;
+    height: 46px;
+    padding: 0 16px;
+    margin-top: 4px;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
     border-radius: 10px;
-    margin-left: 10px;
   }
 
-  .empty-item {
-    height: 90px;
-    padding: 40px 20px;
-    justify-content: center;
-  }
-
-  .empty-text {
-    font-size: 16px;
-    color: rgba(255, 255, 255, 0.3);
-    text-align: center;
-  }
-
-  .list-footer {
-    height: 100px;
-    padding: 50px 20px;
-    justify-content: center;
-  }
-
-  .footer-text {
-    font-size: 14px;
-    color: rgba(255, 255, 255, 0.2);
-    text-align: center;
+  .item-name {
+    font-size: 15px;
+    color: #E2E8F0;
+    lines: 1;
+    text-overflow: ellipsis;
   }
 </style>

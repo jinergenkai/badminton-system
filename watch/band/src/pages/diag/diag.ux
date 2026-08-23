@@ -3,7 +3,7 @@
     <div class="header">
       <!-- Bumped on every build that changes this page, so a flash that did
            not take is obvious at a glance instead of costing a debug round. -->
-      <text class="title">DIAG b12</text>
+      <text class="title">DIAG b13</text>
       <div class="clear-btn" onclick="clearLog">
         <text class="clear-text">CLR</text>
       </div>
@@ -42,6 +42,10 @@
 <script>
   import interconnect from '@system.interconnect'
   import prompt from '@system.prompt'
+  import alarmMod from '@system.alarm'
+  import storageMod from '@system.storage'
+  import vibratorMod from '@system.vibrator'
+  import notificationMod from '@system.notification'
 
   export default {
     private: {
@@ -179,6 +183,22 @@
 
       describe(interconnect, 'module')
       describe(conn, 'instance')
+
+      // Which system modules this platform actually provides. Declaring a
+      // feature in the manifest is a request, not a guarantee — @system.alarm
+      // is declared and still resolves to null on this band, which cost a
+      // debug round to discover at runtime.
+      const mods = [
+        ['alarm', alarmMod],
+        ['storage', storageMod],
+        ['vibrator', vibratorMod],
+        ['notification', notificationMod]
+      ]
+      for (let i = 0; i < mods.length; i++) {
+        const m = mods[i][1]
+        this.diag('mod ' + mods[i][0] + '=' + (m ? 'ok' : 'NULL'))
+      }
+
       this.refresh()
       prompt.showToast({ message: 'API probed' })
     },
