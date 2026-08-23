@@ -9,6 +9,10 @@ export default {
   // itself, which is the only way to actually read it during a session.
   // Lives on the app object so it survives page navigation — the very
   // thing we are trying to observe.
+  // Messages that failed to send because the channel was not open yet.
+  // Lives on the app so a page switch does not drop them.
+  pendingSends: [],
+
   diagLog: [],
   openCount: 0,
   closeCount: 0,

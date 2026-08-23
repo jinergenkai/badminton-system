@@ -3,7 +3,7 @@
     <div class="header">
       <!-- Bumped on every build that changes this page, so a flash that did
            not take is obvious at a glance instead of costing a debug round. -->
-      <text class="title">DIAG b8</text>
+      <text class="title">DIAG b9</text>
       <div class="clear-btn" onclick="clearLog">
         <text class="clear-text">CLR</text>
       </div>
@@ -11,7 +11,7 @@
 
     <div class="summary">
       <text class="summary-line">ready={{ readyStatus }} open={{ openCount }} close={{ closeCount }}</text>
-      <text class="summary-line {{ sendFailCount > 0 ? 'bad' : '' }}">sendFail={{ sendFailCount }} lines={{ lines.length }}</text>
+      <text class="summary-line {{ sendFailCount > 0 ? 'bad' : '' }}">sendFail={{ sendFailCount }} q={{ queued }} lines={{ lines.length }}</text>
     </div>
 
     <!-- Fixed, outside the list: as list items these scrolled away with the
@@ -21,7 +21,7 @@
         <text class="probe-text">1 · LIST API</text>
       </div>
       <div class="connect-btn" onclick="doConnect">
-        <text class="probe-text">2 · CONNECT</text>
+        <text class="probe-text">2 · CONNECT TRY</text>
       </div>
       <div class="probe-btn" onclick="probe">
         <text class="probe-text">3 · TEST SEND</text>
@@ -49,7 +49,8 @@
       readyStatus: -1,
       openCount: 0,
       closeCount: 0,
-      sendFailCount: 0
+      sendFailCount: 0,
+      queued: 0
     },
 
     diag(msg) {
@@ -95,6 +96,7 @@
       this.openCount = def.openCount
       this.closeCount = def.closeCount
       this.sendFailCount = def.sendFailCount
+      this.queued = (def.pendingSends || []).length
     },
 
     // Fires a round trip on demand so the link can be tested without having
@@ -207,12 +209,37 @@
         }
       }
 
+      // conn.connect({...}) throws "miwear object expected": connect sits only
+      // on the prototype with no JS wrapper, unlike send/getApkStatus which
+      // appear in both own and proto. So the receiver or the argument is not
+      // what it wants. Each flash costs a full reinstall, so try the plausible
+      // shapes in one pass and log what each one says.
+      const variants = [
+        ['connect()', function () { return conn.connect() }],
+        ['connect(pkg)', function () { return conn.connect(conn.package) }],
+        ['connect(true)', function () { return conn.connect(true) }],
+        ['init()', function () { return conn.init() }],
+        ['create()', function () { return conn.create() }],
+        ['listen()', function () { return conn.listen() }],
+        ['module.connect()', function () { return interconnect.connect() }],
+        ['module.instance(pkg)', function () { return interconnect.instance(conn.package) }]
+      ]
+      for (let i = 0; i < variants.length; i++) {
+        try {
+          const r = variants[i][1]()
+          this.diag(variants[i][0] + ' -> ' + (typeof r) + ' ' + JSON.stringify(r))
+        } catch (e) {
+          this.diag(variants[i][0] + ' threw: ' + e.message)
+        }
+      }
+      this.diag('package=' + JSON.stringify(conn.package))
+
       if (!conn || typeof conn.connect !== 'function') {
         this.diag('connect() unavailable')
         this.refresh()
         return
       }
-      this.diag('connect() ...')
+      this.diag('connect(cb) ...')
       try {
         conn.connect({
           success: function () {
