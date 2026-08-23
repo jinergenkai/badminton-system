@@ -20,9 +20,11 @@ export default {
     const p = function (n) { return n < 10 ? '0' + n : '' + n }
     const line = p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) +
       ' [' + tag + '] ' + msg
+    console.info('⌚ ' + line)
+    // Stored whole. pages/diag wraps it for display — chunking here would come
+    // out reversed, since the page lists newest entries first.
     this.diagLog.push(line)
     if (this.diagLog.length > 80) this.diagLog.shift()
-    console.info('⌚ ' + line)
   },
 
   onCreate() {
