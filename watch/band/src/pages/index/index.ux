@@ -9,6 +9,7 @@
         <div class="progress-bar">
           <div class="progress-inner" style="width: {{ cooldownProgress }}%"></div>
         </div>
+        <text class="clock-text">{{ clockText }}</text>
       </div>
 
       <!-- ZONE 2 & 3: SCORES (MIDDLE - 60%) -->
@@ -19,6 +20,11 @@
           <div class="score-content {{ isWinnerA ? 'winner-glow' : '' }}">
             <text class="score-text">{{ scoreA }}</text>
           </div>
+          <!-- Streak badge: yellow square rotated 45deg, centred on the card's
+               inner top corner. The card's overflow:hidden clips 3/4 of it away,
+               leaving a triangle. Label is a separate un-rotated layer. -->
+          <div class="streak-tri tri-a" if="{{ streakTeam === 'A' && streakCount > 0 }}"></div>
+          <text class="streak-text text-a" if="{{ streakTeam === 'A' && streakCount > 0 }}">x{{ streakCount }}</text>
         </stack>
 
         <!-- TEAM B (RIGHT) -->
@@ -27,6 +33,8 @@
           <div class="score-content {{ isWinnerB ? 'winner-glow' : '' }}">
             <text class="score-text">{{ scoreB }}</text>
           </div>
+          <div class="streak-tri tri-b" if="{{ streakTeam === 'B' && streakCount > 0 }}"></div>
+          <text class="streak-text text-b" if="{{ streakTeam === 'B' && streakCount > 0 }}">x{{ streakCount }}</text>
         </stack>
       </div>
 
@@ -80,15 +88,23 @@
       isWinnerA: false,
       isWinnerB: false,
       lastLongPressTime: 0, // Flag to prevent double trigger
+      // Consecutive-points streak, owned by the watch so it works with no phone.
+      // '' = nobody has scored yet in this match.
+      streakTeam: '',
+      streakCount: 0,
+      clockText: '--:--',
+      clockTimer: null,
     },
 
     onInit() {
       // Keep instance but don't set listeners yet
       this.connect = interconnect.instance()
+      this.updateClock()
     },
 
     onShow() {
       this.setupConnect()
+      this.startClock()
     },
 
     setupConnect() {
@@ -117,13 +133,31 @@
           if (msg.scoreA !== undefined && msg.scoreB !== undefined) {
             // Mirror phone-originated state changes into local history so undo stays aligned
             if (msg.action === 'score_A' || msg.action === 'score_B' || msg.action === 'reset') {
-              this.history.push({ a: this.scoreA, b: this.scoreB })
-              if (this.history.length > 20) this.history.shift()
+              this.pushHistory()
             } else if (msg.action === 'undo') {
-              if (this.history.length > 0) this.history.pop()
+              // Restore the streak that belonged to the state we're rewinding to.
+              const prev = this.history.length > 0 ? this.history.pop() : null
+              if (prev) {
+                this.streakTeam = prev.st
+                this.streakCount = prev.sc
+              }
             }
             this.scoreA = msg.scoreA
             this.scoreB = msg.scoreB
+
+            if (msg.action === 'score_A') {
+              this.bumpStreak('A')
+            } else if (msg.action === 'score_B') {
+              this.bumpStreak('B')
+            } else if (msg.action === 'reset') {
+              this.clearStreak()
+            } else if (this.scoreA === 0 && this.scoreB === 0) {
+              // A plain sync landing on 0-0 means the phone started a new match.
+              // For any other sync we can't tell who scored, so leave the streak
+              // alone rather than inventing one.
+              this.clearStreak()
+            }
+
             this.checkWinner()
             if (msg.action === 'sync' || msg.action === 'manual_sync') {
                 prompt.showToast({ message: 'Synced' })
@@ -147,6 +181,59 @@
         this.connect.onopen = null
         this.connect.onclose = null
       }
+      this.stopClock()
+    },
+
+    // ── Clock ────────────────────────────────────────────────────────────
+    // 30s tick: the minute shown can lag by up to 30s, which is fine here and
+    // costs far less battery than a 1s timer. Only runs while the page is up.
+    startClock() {
+      this.updateClock()
+      if (this.clockTimer) clearInterval(this.clockTimer)
+      this.clockTimer = setInterval(() => {
+        this.updateClock()
+      }, 30000)
+    },
+
+    stopClock() {
+      if (this.clockTimer) {
+        clearInterval(this.clockTimer)
+        this.clockTimer = null
+      }
+    },
+
+    updateClock() {
+      const d = new Date()
+      const h = d.getHours()
+      const m = d.getMinutes()
+      this.clockText = (h < 10 ? '0' + h : '' + h) + ':' + (m < 10 ? '0' + m : '' + m)
+    },
+
+    // ── History & streak ─────────────────────────────────────────────────
+    // Every state mutation snapshots the streak alongside the scores, so undo
+    // rewinds "x3" back to "x2" instead of leaving it stuck.
+    pushHistory() {
+      this.history.push({
+        a: this.scoreA,
+        b: this.scoreB,
+        st: this.streakTeam,
+        sc: this.streakCount
+      })
+      if (this.history.length > 20) this.history.shift()
+    },
+
+    bumpStreak(team) {
+      if (this.streakTeam === team) {
+        this.streakCount++
+      } else {
+        this.streakTeam = team
+        this.streakCount = 1
+      }
+    },
+
+    clearStreak() {
+      this.streakTeam = ''
+      this.streakCount = 0
     },
 
     requestSync() {
@@ -163,11 +250,11 @@
 
     resetGame() {
       // Save current state to history so we can UNDO the reset
-      this.history.push({ a: this.scoreA, b: this.scoreB })
-      if (this.history.length > 20) this.history.shift()
+      this.pushHistory()
 
       this.scoreA = 0
       this.scoreB = 0
+      this.clearStreak()
       this.isWinnerA = false
       this.isWinnerB = false
       this.sendUpdate('reset', true)
@@ -225,9 +312,9 @@
       if (Date.now() - this.lastLongPressTime < 500) return
       
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
-      this.history.push({ a: this.scoreA, b: this.scoreB })
-      if (this.history.length > 20) this.history.shift()
+      this.pushHistory()
       this.scoreA++
+      this.bumpStreak('A')
       this.sendUpdate('score_A')
     },
 
@@ -235,18 +322,18 @@
       if (Date.now() - this.lastLongPressTime < 500) return
 
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
-      this.history.push({ a: this.scoreA, b: this.scoreB })
-      if (this.history.length > 20) this.history.shift()
+      this.pushHistory()
       this.scoreB++
+      this.bumpStreak('B')
       this.sendUpdate('score_B')
     },
 
     onQuickHypeA() {
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
       this.lastLongPressTime = Date.now()
-      this.history.push({ a: this.scoreA, b: this.scoreB })
-      if (this.history.length > 20) this.history.shift()
+      this.pushHistory()
       this.scoreA++
+      this.bumpStreak('A')
       this.sendUpdate('score_A', false, 'manual_trigger')
       prompt.showToast({ message: 'Point + Nice Pair!' })
     },
@@ -254,9 +341,9 @@
     onQuickHypeB() {
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
       this.lastLongPressTime = Date.now()
-      this.history.push({ a: this.scoreA, b: this.scoreB })
-      if (this.history.length > 20) this.history.shift()
+      this.pushHistory()
       this.scoreB++
+      this.bumpStreak('B')
       this.sendUpdate('score_B', false, 'manual_trigger')
       prompt.showToast({ message: 'Point + Nice Pair!' })
     },
@@ -266,6 +353,8 @@
       const lastState = this.history.pop()
       this.scoreA = lastState.a
       this.scoreB = lastState.b
+      this.streakTeam = lastState.st
+      this.streakCount = lastState.sc
       this.sendUpdate('undo')
     },
 
@@ -341,6 +430,13 @@
     background-color: #448AFF;
   }
 
+  .clock-text {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+    margin-top: 6px;
+  }
+
   /* ZONE 2 & 3: SCORES Area (60%) */
   .score-area {
     flex: 1;
@@ -383,6 +479,32 @@
     color: #FFFFFF;
     text-shadow: 0px 4px 10px rgba(0,0,0,0.3);
   }
+
+  /* STREAK BADGE
+     68px square rotated 45deg, centre pinned to the card's inner top corner
+     (offset = -68/2). Three quarters fall outside the card and are removed by
+     .score-btn's overflow:hidden, so what shows is a right triangle with ~48px
+     legs tucked into the corner. */
+  .streak-tri {
+    position: absolute;
+    width: 68px;
+    height: 68px;
+    background-color: #FBBF24;
+    transform: rotate(45deg);
+  }
+
+  .tri-a { top: -34px; right: -34px; }
+  .tri-b { top: -34px; left: -34px; }
+
+  .streak-text {
+    position: absolute;
+    font-size: 17px;
+    font-weight: bold;
+    color: #0F172A;
+  }
+
+  .text-a { top: 4px; right: 6px; }
+  .text-b { top: 4px; left: 6px; }
 
   /* ZONE 4: UNDO Area (20%) */
   .undo-area {

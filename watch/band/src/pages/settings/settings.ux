@@ -9,6 +9,10 @@
         <text class="item-text">Media Control</text>
       </list-item>
 
+      <list-item type="setting" class="item" onclick="onSwapSides">
+        <text class="item-text">Swap Sides (Phone)</text>
+      </list-item>
+
       <list-item type="setting" class="item" onclick="onReconnect">
         <text class="item-text">Reconnect Watch</text>
       </list-item>
@@ -44,6 +48,24 @@
       router.push({
         uri: 'pages/media_list'
       })
+    },
+
+    // Stateless trigger. The watch never tracks whether sides are swapped —
+    // its red button is always score_A and its blue button always score_B.
+    // Only the phone flips, because the phone is the scoreboard everyone
+    // watches and it has to line up with the actual court. With no phone
+    // paired this does nothing, which is expected.
+    onSwapSides() {
+      const connect = interconnect.instance()
+      if (connect) {
+        connect.send({
+          data: { action: 'swap_sides' },
+          success: () => { console.info('⌚ [Settings] swap_sides sent') },
+          fail: (data, code) => { console.error('⌚ [Settings] swap_sides failed, code=' + code) }
+        })
+        prompt.showToast({ message: 'Swapped sides on phone' })
+      }
+      router.back()
     },
 
     onReconnect() {
