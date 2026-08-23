@@ -80,6 +80,9 @@ class WatchConnectivityService extends GetxService {
       if (ok) {
         _isInitialized = true;
 
+        // From here on, player state pushes itself whenever it changes.
+        _watchPlayerState();
+
         // Listen for commands from watch
         _eventSubscription?.cancel();
         _eventSubscription = eventChannel.receiveBroadcastStream().listen(
@@ -227,10 +230,31 @@ class WatchConnectivityService extends GetxService {
     }
   }
 
-  /// Transport calls settle asynchronously — a fade has to finish before
-  /// isPlaying is meaningful — so let it land before reporting.
-  void _echoPlayerSoon() {
-    Future.delayed(const Duration(milliseconds: 400), sendPlayerState);
+  Timer? _playerEcho;
+
+  /// Pushes player state whenever it actually changes, instead of echoing
+  /// after each command.
+  ///
+  /// Echoing per command only covers changes the watch asked for. It misses
+  /// the ones it did not: a track ending and non-stop moving to the next, or
+  /// the phone starting win music. Watching the state itself covers every
+  /// case, including picking a track, which is what was stale.
+  ///
+  /// Debounced because a transport call moves both flags in quick succession
+  /// and a fade settles a moment later; without it one action would send
+  /// several near-identical messages over BLE.
+  void _watchPlayerState() {
+    try {
+      final music = Get.find<MusicService>();
+      void schedule(_) {
+        _playerEcho?.cancel();
+        _playerEcho = Timer(const Duration(milliseconds: 350), sendPlayerState);
+      }
+      music.isPlaying.listen(schedule);
+      music.currentTrackName.listen(schedule);
+    } catch (e) {
+      print('⌚ [WatchService] Could not watch player state: $e');
+    }
   }
 
   Timer? _reminderTimer;
@@ -292,13 +316,10 @@ class WatchConnectivityService extends GetxService {
       sendPlayerState();
     } else if (action == 'music_resume') {
       Get.find<MusicService>().resume();
-      _echoPlayerSoon();
     } else if (action == 'music_pause') {
       Get.find<MusicService>().pause();
-      _echoPlayerSoon();
     } else if (action == 'music_next') {
       Get.find<MusicService>().next();
-      _echoPlayerSoon();
     } else if (action == 'set_reminder') {
       final at = command['at'];
       if (at is String) _scheduleReminder(at);
