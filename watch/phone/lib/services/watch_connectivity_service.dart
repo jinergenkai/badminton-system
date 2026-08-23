@@ -204,6 +204,78 @@ class WatchConnectivityService extends GetxService {
     print('⌚ [WatchService] Setting applied: $key = $value');
   }
 
+  /// Transport state for the watch's music page. Kept apart from
+  /// settings_state: this changes on its own as tracks end, whereas settings
+  /// only change when someone asks.
+  Future<void> sendPlayerState() async {
+    if (!_isInitialized) return;
+    try {
+      final music = Get.find<MusicService>();
+      await platform.invokeMethod('sendMessage', {
+        'data': {
+          'action': 'player_state',
+          'p': {
+            'playing': music.isPlaying.value,
+            // Extension stripped: the watch has ~28 characters to show it in.
+            'track': music.currentTrackName.value
+                .replaceAll(RegExp(r'\.(mp3|m4a|aac)$'), ''),
+          },
+        },
+      });
+    } catch (e) {
+      print('⌚ [WatchService] Error sending player state: $e');
+    }
+  }
+
+  /// Transport calls settle asynchronously — a fade has to finish before
+  /// isPlaying is meaningful — so let it land before reporting.
+  void _echoPlayerSoon() {
+    Future.delayed(const Duration(milliseconds: 400), sendPlayerState);
+  }
+
+  Timer? _reminderTimer;
+
+  /// Reminder for "pack up, court time is over", handed over by the watch.
+  ///
+  /// The band was the right place for this — it is on a wrist and rarely flat —
+  /// but Mi Band 10 has no alarm service at all: @system.alarm resolves to null
+  /// even with the feature declared. So the phone takes it, with the honest
+  /// limitation that this only fires while the app is running. It usually is:
+  /// the score screen holds a wakelock for the whole session.
+  void _scheduleReminder(String at) {
+    final parts = at.split(':');
+    if (parts.length != 2) return;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return;
+
+    final now = DateTime.now();
+    var target = DateTime(now.year, now.month, now.day, h, m);
+    if (!target.isAfter(now)) target = target.add(const Duration(days: 1));
+
+    _reminderTimer?.cancel();
+    final delay = target.difference(now);
+    _reminderTimer = Timer(delay, _fireReminder);
+    print('⌚ [WatchService] Reminder set for $at (in ${delay.inMinutes} min)');
+  }
+
+  void _fireReminder() {
+    print('⌚ [WatchService] REMINDER: time to pack up');
+    try {
+      // Spoken at full volume regardless of the master, and repeated: this is
+      // the one sound that matters more than the mix.
+      final tts = Get.find<ScoreController>().ttsService;
+      tts.speak('Het gio danh. Nho lay do.');
+      Future.delayed(const Duration(seconds: 4),
+          () => tts.speak('Het gio danh. Nho lay do.'));
+    } catch (e) {
+      print('⌚ [WatchService] Reminder speak failed: $e');
+    }
+    try {
+      Get.find<MusicService>().playWinMusic();
+    } catch (_) {}
+  }
+
   void _handleWatchCommand(Map<String, dynamic> command) {
     final action = command['action'];
     if (action == 'request_settings') {
@@ -216,6 +288,20 @@ class WatchConnectivityService extends GetxService {
         // not the state it assumed it would get.
         sendSettingsState();
       }
+    } else if (action == 'request_player') {
+      sendPlayerState();
+    } else if (action == 'music_resume') {
+      Get.find<MusicService>().resume();
+      _echoPlayerSoon();
+    } else if (action == 'music_pause') {
+      Get.find<MusicService>().pause();
+      _echoPlayerSoon();
+    } else if (action == 'music_next') {
+      Get.find<MusicService>().next();
+      _echoPlayerSoon();
+    } else if (action == 'set_reminder') {
+      final at = command['at'];
+      if (at is String) _scheduleReminder(at);
     } else if (action == 'request_media_list') {
       sendMediaList();
     } else if (action == 'play_music') {
