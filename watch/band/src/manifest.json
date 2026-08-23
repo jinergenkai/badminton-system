@@ -37,6 +37,9 @@
       },
       "pages/alarm": {
         "component": "alarm"
+      },
+      "pages/sound": {
+        "component": "sound"
       }
     }
   },

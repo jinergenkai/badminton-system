@@ -1,0 +1,289 @@
+<template>
+  <div class="container">
+    <div class="header">
+      <text class="title">SOUND</text>
+      <text class="conn {{ synced ? 'ok' : 'no' }}">{{ synced ? '●' : '○' }}</text>
+    </div>
+
+    <list class="rows">
+      <!-- One row type only, fixed height. See docs/watch-ui-gotchas.md:
+           a list-item with no height renders nothing at all. -->
+      <list-item type="row" for="{{ rows }}" class="row">
+        <div class="row-inner">
+          <div class="row-head">
+            <text class="row-name {{ $item.on ? '' : 'dim' }}">{{ $item.name }}</text>
+            <div class="pill {{ $item.on ? 'pill-on' : 'pill-off' }}" onclick="toggle($idx)">
+              <text class="pill-text">{{ $item.on ? 'ON' : 'OFF' }}</text>
+            </div>
+          </div>
+
+          <div class="vol-row" if="{{ $item.hasVol }}">
+            <div class="step" onclick="bump($idx, -10)">
+              <text class="step-text">–</text>
+            </div>
+            <div class="bar">
+              <div class="bar-fill" style="width: {{ $item.vol }}%"></div>
+            </div>
+            <div class="step" onclick="bump($idx, 10)">
+              <text class="step-text">+</text>
+            </div>
+            <text class="vol-num">{{ $item.vol }}</text>
+          </div>
+        </div>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+
+  export default {
+    private: {
+      connect: null,
+      synced: false,
+      // Rebuilt from every settings_state. The watch deliberately keeps no
+      // authoritative copy — the phone owns the values, this only renders them.
+      rows: []
+    },
+
+    // Row order is the running order of a point: what you hear first is on top.
+    // MASTER sits at the top because it is the one control reached in a hurry.
+    ROWS: [
+      { key: 'master', name: 'MASTER', hasVol: true, onKey: null },
+      { key: 'announce', name: 'SCORE', hasVol: true, onKey: 'announceOn', volKey: 'announceVol' },
+      { key: 'hype', name: 'HYPE', hasVol: true, onKey: 'hypeOn', volKey: 'hypeVol' },
+      { key: 'tension', name: 'TENSION', hasVol: true, onKey: 'tensionOn', volKey: 'tensionVol' },
+      { key: 'win', name: 'WIN MUSIC', hasVol: true, onKey: 'winOn', volKey: 'winVol' }
+    ],
+
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('sound', msg)
+    },
+
+    onInit() {
+      this.connect = interconnect.instance()
+      this.render(this.cached())
+    },
+
+    onShow() {
+      this.diag('onShow')
+      this.setupConnect()
+      this.render(this.cached())
+      this.request()
+    },
+
+    onHide() {
+      if (this.connect) this.connect.onmessage = null
+    },
+
+    cached() {
+      const def = this.$app && this.$app.$def
+      return (def && def.settings) || null
+    },
+
+    setupConnect() {
+      if (!this.connect) return
+      this.connect.onmessage = (data) => {
+        try {
+          const msg = JSON.parse(data.data)
+          if (msg.action !== 'settings_state') return
+          this.diag('settings_state received')
+          const def = this.$app && this.$app.$def
+          if (def) def.settings = msg.s
+          this.synced = true
+          this.render(msg.s)
+        } catch (e) {
+          this.diag('parse error: ' + e.message)
+        }
+      }
+    },
+
+    request() {
+      this.send({ action: 'request_settings' })
+    },
+
+    send(payload) {
+      if (!this.connect) return
+      this.connect.send({
+        data: payload,
+        success: () => { this.diag('send ok: ' + payload.action) },
+        fail: (d, code) => {
+          this.synced = false
+          this.diag('send FAIL ' + payload.action + ' code=' + code)
+          prompt.showToast({ message: 'Phone not connected' })
+        }
+      })
+    },
+
+    render(s) {
+      const src = this.ROWS
+      const out = []
+      for (let i = 0; i < src.length; i++) {
+        const r = src[i]
+        // MASTER has no on/off of its own — muting it is what 0 volume is for.
+        const on = s ? (r.onKey ? s[r.onKey] === true : true) : true
+        const vol = s ? (r.key === 'master' ? s.master : s[r.volKey]) : 0
+        out.push({
+          name: r.name,
+          on: on,
+          hasVol: r.hasVol && on,
+          vol: typeof vol === 'number' ? vol : 0
+        })
+      }
+      this.rows = out
+    },
+
+    toggle(idx) {
+      const r = this.ROWS[idx]
+      if (!r || !r.onKey) return
+      const next = !this.rows[idx].on
+      // Optimistic redraw so the tap feels instant; the echo corrects it if the
+      // phone disagrees or never got the message.
+      this.rows[idx].on = next
+      this.rows[idx].hasVol = next
+      this.send({ action: 'set_setting', key: r.onKey, value: next })
+    },
+
+    bump(idx, delta) {
+      const r = this.ROWS[idx]
+      if (!r) return
+      let v = this.rows[idx].vol + delta
+      if (v < 0) v = 0
+      if (v > 100) v = 100
+      this.rows[idx].vol = v
+      this.send({
+        action: 'set_setting',
+        key: r.key === 'master' ? 'master' : r.volKey,
+        value: v
+      })
+    }
+  }
+</script>
+
+<style>
+  .container {
+    flex-direction: column;
+    width: 100%;
+    background-color: #0F172A;
+  }
+
+  .header {
+    width: 100%;
+    height: 80px;
+    padding: 30px 16px 0 16px;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .conn { font-size: 18px; }
+  .ok { color: #4ADE80; }
+  .no { color: #FF5252; }
+
+  .rows {
+    width: 100%;
+    height: 424px;
+  }
+
+  /* Fixed height, and tall enough for name + volume row. */
+  .row {
+    width: 100%;
+    height: 96px;
+    padding: 0 10px;
+    margin-top: 8px;
+  }
+
+  .row-inner {
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    padding: 8px 12px;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+  }
+
+  .row-head {
+    width: 100%;
+    height: 36px;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .row-name {
+    font-size: 17px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .dim { color: rgba(255, 255, 255, 0.35); }
+
+  /* Full-height tap targets: the band is small and fingers are not. */
+  .pill {
+    width: 58px;
+    height: 32px;
+    border-radius: 16px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .pill-on { background-color: #22C55E; }
+  .pill-off { background-color: rgba(255, 255, 255, 0.12); }
+
+  .pill-text {
+    font-size: 14px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .vol-row {
+    width: 100%;
+    height: 40px;
+    align-items: center;
+  }
+
+  .step {
+    width: 38px;
+    height: 34px;
+    background-color: rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .step-text {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .bar {
+    flex: 1;
+    height: 8px;
+    margin: 0 8px;
+    background-color: rgba(255, 255, 255, 0.12);
+    border-radius: 4px;
+  }
+
+  .bar-fill {
+    height: 8px;
+    background-color: #FBBF24;
+    border-radius: 4px;
+  }
+
+  .vol-num {
+    width: 34px;
+    font-size: 14px;
+    font-weight: bold;
+    color: #FBBF24;
+    text-align: right;
+  }
+</style>

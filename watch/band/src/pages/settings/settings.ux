@@ -9,6 +9,10 @@
         <text class="item-text">Media Control</text>
       </list-item>
 
+      <list-item type="setting" class="item" onclick="onSound">
+        <text class="item-text">Sound</text>
+      </list-item>
+
       <list-item type="setting" class="item" onclick="onAlarm">
         <text class="item-text">Remind Me</text>
       </list-item>
@@ -88,6 +92,10 @@
         }
       })
       if (toast) prompt.showToast({ message: toast })
+    },
+
+    onSound() {
+      router.push({ uri: "pages/sound" })
     },
 
     onAlarm() {
