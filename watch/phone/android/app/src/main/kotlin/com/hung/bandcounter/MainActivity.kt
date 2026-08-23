@@ -116,6 +116,16 @@ class MainActivity : FlutterActivity() {
                         result.error("NO_WATCH", "Watch not linked", null)
                     }
                 }
+                "launchWearApp" -> {
+                    val nodeId = watchNodeId
+                    if (nodeId == null) {
+                        result.error("NO_WATCH", "Watch not linked", null)
+                    } else {
+                        launchWearApp(nodeId) { ok, detail ->
+                            result.success(mapOf("ok" to ok, "detail" to detail))
+                        }
+                    }
+                }
                 "getDiagnostics" -> result.success(lastReport)
                 "isWatchConnected" -> result.success(watchNodeId != null)
                 else -> result.notImplemented()
@@ -187,12 +197,25 @@ class MainActivity : FlutterActivity() {
                         .addOnSuccessListener { installed ->
                             Log.i(DIAG, "isWearAppInstalled -> $installed")
                             report["wearAppInstalled"] = installed
-                            registerListener(node.id, report, ::reply)
+                            registerListener(node.id, report) {
+                                // Fired after the listener is up: if the watch's
+                                // channel only opens on a phone-started session,
+                                // this is what starts it.
+                                launchWearApp(node.id) { ok, detail ->
+                                    report["launchWearApp"] = if (ok) "ok" else detail
+                                    reply()
+                                }
+                            }
                         }
                         .addOnFailureListener { e ->
                             Log.w(DIAG, "isWearAppInstalled FAILED: ${describe(e)}")
                             report["wearAppInstalledError"] = describe(e)
-                            registerListener(node.id, report, ::reply)
+                            registerListener(node.id, report) {
+                                launchWearApp(node.id) { ok, detail ->
+                                    report["launchWearApp"] = if (ok) "ok" else detail
+                                    reply()
+                                }
+                            }
                         }
                 }
                 .addOnFailureListener { e ->
@@ -205,6 +228,34 @@ class MainActivity : FlutterActivity() {
             report["error"] = "SEARCH: ${describe(e)}"
             reply()
         }
+    }
+
+    /**
+     * Asks the phone side to start the wear app over the SDK.
+     *
+     * Why this matters: the 2026-08-23 run showed addListener succeeding while
+     * the watch still could not send — its getReadyState was 2, onopen never
+     * fired once, and its own send() failed locally. So the watch's outbound
+     * channel is never opening, and nothing in either app ever asks it to. The
+     * leading theory is that the channel belongs to a session the *phone*
+     * starts through launchWearApp, not to the user tapping the app icon on
+     * the watch — which would also explain why inbound still works, since the
+     * platform can push to the app without that session.
+     *
+     * Unverified. This call exists to test it.
+     */
+    private fun launchWearApp(nodeId: String, done: (Boolean, String) -> Unit) {
+        val pkg = packageName
+        Log.i(DIAG, "launchWearApp(node=$nodeId, pkg=$pkg) ...")
+        nodeApi.launchWearApp(nodeId, pkg)
+            .addOnSuccessListener {
+                Log.i(DIAG, "launchWearApp OK — watch should report onopen if this is the missing step")
+                done(true, "ok")
+            }
+            .addOnFailureListener { e ->
+                Log.e(DIAG, "launchWearApp FAILED: ${describe(e)}")
+                done(false, describe(e))
+            }
     }
 
     /**

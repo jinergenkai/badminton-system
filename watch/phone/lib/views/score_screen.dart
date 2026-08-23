@@ -481,6 +481,8 @@ class _ScoreScreenState extends State<ScoreScreen> {
             const SizedBox(height: 16),
             _settingsListTile(icon: Icons.bluetooth_searching, title: 'Reconnect Watch', color: Colors.blueAccent, onTap: () { Navigator.pop(context); controller.watchService.initialize(force: true); }),
             const SizedBox(height: 16),
+            _settingsListTile(icon: Icons.rocket_launch, title: 'Launch App on Watch', color: Colors.purpleAccent, onTap: () { Navigator.pop(context); controller.watchService.launchWearApp(); }),
+            const SizedBox(height: 16),
             _settingsListTile(icon: Icons.sync, title: 'Force Sync to Watch', color: Colors.greenAccent, onTap: () { Navigator.pop(context); controller.watchService.sendScoreUpdate(controller.gameState, action: 'manual_sync'); }),
             const SizedBox(height: 24),
           ],

@@ -125,6 +125,25 @@ class WatchConnectivityService extends GetxService {
     }
   }
 
+  /// Asks the phone to start the wear app over the SDK.
+  ///
+  /// Testing whether the watch's outbound channel only opens on a session the
+  /// phone starts — the 2026-08-23 run had the watch unable to send at all
+  /// (readyState 2, onopen never fired) while inbound worked fine.
+  Future<String> launchWearApp() async {
+    try {
+      final raw = await platform.invokeMethod('launchWearApp');
+      final map = raw is Map ? Map<String, dynamic>.from(raw) : {'ok': false};
+      final detail = 'launchWearApp: ${map['ok'] == true ? 'ok' : map['detail']}';
+      print('⌚ [WatchService] $detail');
+      diagnostics.value = '${diagnostics.value}\n$detail';
+      return detail;
+    } catch (e) {
+      print('⌚ [WatchService] launchWearApp error: $e');
+      return 'launchWearApp error: $e';
+    }
+  }
+
   /// Send media list to connected watch.
   /// Hype is intentionally sent as empty for now — UI on watch is music-only
   /// until reactivity/payload issues are sorted out. Protocol shape preserved.
