@@ -1,10 +1,15 @@
 <template>
   <div class="container">
     <div class="header">
-      <text class="title">MEDIA</text>
+      <text class="title">MUSIC</text>
       <div class="sync-btn" onclick="requestMediaList">
         <text class="sync-text">SYNC</text>
       </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-dot {{ connected ? 'online' : 'offline' }}"></div>
+      <text class="status-text">{{ connected ? 'Connected' : 'Disconnected' }} · {{ musicList.length }} tracks</text>
     </div>
 
     <list class="media-list">
@@ -14,36 +19,15 @@
         </div>
       </list-item>
 
-      <!-- HYPE SECTION -->
-      <list-item type="header" class="section-header">
-        <text class="section-title">HYPE & SFX</text>
-      </list-item>
-      
-      <list-item type="hype" for="{{ hypeList }}" class="media-item" onclick="playHype($item.id)">
+      <list-item type="music" for="{{ musicList }}" class="media-item" onclick="playMusic($item.id)">
         <div class="item-content">
           <text class="item-name">{{ $item.name }}</text>
           <div class="play-icon"></div>
         </div>
       </list-item>
 
-      <list-item type="empty" if="{{ hypeList.length === 0 }}" class="empty-item">
-        <text class="empty-text">Empty. Please tap SYNC.</text>
-      </list-item>
-
-      <!-- MUSIC SECTION -->
-      <list-item type="header" class="section-header">
-        <text class="section-title">MUSIC PLAYLIST</text>
-      </list-item>
-
-      <list-item type="music" for="{{ musicList }}" class="media-item" onclick="playMusic($item.id)">
-        <div class="item-content">
-          <text class="item-name">{{ $item.name }}</text>
-          <div class="play-icon music-icon"></div>
-        </div>
-      </list-item>
-
       <list-item type="empty" if="{{ musicList.length === 0 }}" class="empty-item">
-        <text class="empty-text">Empty. Please tap SYNC.</text>
+        <text class="empty-text">Empty. Tap SYNC to load music.</text>
       </list-item>
 
       <list-item type="footer" class="list-footer">
@@ -61,58 +45,78 @@
   export default {
     private: {
       connect: null,
-      musicList: [],
-      hypeList: []
+      connected: false,
+      musicList: []
     },
 
     onInit() {
       this.connect = interconnect.instance()
-      this.syncFromGlobal()
     },
 
     onShow() {
       this.setupConnect()
       this.syncFromGlobal()
-      // Always request list when entering this screen to ensure fresh data
-      this.requestMediaList()
-    },
-
-    syncFromGlobal() {
-      if (this.$app.$def.musicList) {
-        this.musicList = this.$app.$def.musicList
-        console.info('⌚ [Media] Synced from global: ' + this.musicList.length + ' music')
-      }
-      if (this.$app.$def.hypeList) {
-        this.hypeList = this.$app.$def.hypeList
-        console.info('⌚ [Media] Synced from global: ' + this.hypeList.length + ' hype')
-      }
-    },
-
-    setupConnect() {
-      if (!this.connect) return
-      
-      this.connect.onmessage = (data) => {
-        try {
-          console.info('⌚ [Media] DATA: ' + data.data)
-          const msg = JSON.parse(data.data)
-          if (msg.action === 'media_list') {
-            this.musicList = msg.music || []
-            this.hypeList = msg.hype || []
-            // Update global
-            this.$app.$def.musicList = this.musicList
-            this.$app.$def.hypeList = this.hypeList
-            prompt.showToast({ message: 'List Updated: ' + (this.musicList.length + this.hypeList.length) })
-          }
-        } catch (e) {
-          console.error('⌚ [Media] Parse error: ' + e.message)
-        }
-      }
     },
 
     onHide() {
       if (this.connect) {
         this.connect.onmessage = null
+        this.connect.onopen = null
+        this.connect.onclose = null
       }
+    },
+
+    syncFromGlobal() {
+      if (this.$app.$def.musicList && this.$app.$def.musicList.length > 0) {
+        this.musicList = this.$app.$def.musicList
+        console.info('⌚ [Media] Loaded from global: ' + this.musicList.length + ' tracks')
+      }
+    },
+
+    setupConnect() {
+      if (!this.connect) return
+
+      this.connect.onopen = () => {
+        this.connected = true
+        console.info('⌚ [Media] Connection opened')
+        this.requestMediaList()
+      }
+
+      this.connect.onclose = () => {
+        this.connected = false
+        console.info('⌚ [Media] Connection closed')
+      }
+
+      this.connect.onmessage = (data) => {
+        try {
+          console.info('⌚ [Media] RECV: ' + data.data)
+          const msg = JSON.parse(data.data)
+          if (msg.action === 'media_list') {
+            const newList = msg.music || []
+            // Force reactivity: clear then set in next tick
+            this.musicList = []
+            setTimeout(() => {
+              this.musicList = newList
+              this.$app.$def.musicList = newList
+              prompt.showToast({ message: 'Loaded ' + newList.length + ' tracks' })
+            }, 0)
+          }
+        } catch (e) {
+          console.error('⌚ [Media] Parse error: ' + e.message)
+        }
+      }
+
+      // Check ready state and request if connected
+      this.connect.getReadyState({
+        success: (data) => {
+          this.connected = (data.status === 1)
+          if (this.connected) {
+            this.requestMediaList()
+          } else {
+            console.info('⌚ [Media] Not ready, waiting for onopen...')
+          }
+        }
+      })
     },
 
     requestMediaList() {
@@ -127,23 +131,12 @@
     playMusic(path) {
       if (!this.connect) return
       this.connect.send({
-        data: { 
+        data: {
           action: 'play_music',
           id: path
         }
       })
-      prompt.showToast({ message: 'Playing Music' })
-    },
-
-    playHype(id) {
-      if (!this.connect) return
-      this.connect.send({
-        data: { 
-          action: 'play_hype',
-          id: id
-        }
-      })
-      prompt.showToast({ message: 'Triggered Hype' })
+      prompt.showToast({ message: 'Playing' })
     },
 
     stopAll() {
@@ -151,7 +144,7 @@
       this.connect.send({
         data: { action: 'stop_all_media' }
       })
-      prompt.showToast({ message: 'All Stopped' })
+      prompt.showToast({ message: 'Stopped' })
     }
   }
 </script>
@@ -183,7 +176,7 @@
 
   .sync-btn {
     padding: 6px 15px;
-    background-color: #448AFF;
+    background-color: #8B5CF6;
     border-radius: 12px;
   }
 
@@ -191,6 +184,29 @@
     font-size: 16px;
     font-weight: bold;
     color: #FFFFFF;
+  }
+
+  .status-bar {
+    width: 100%;
+    padding: 8px 15px;
+    flex-direction: row;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.03);
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-right: 8px;
+  }
+
+  .online { background-color: #4ADE80; }
+  .offline { background-color: #FF5252; }
+
+  .status-text {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.6);
   }
 
   .media-list {
@@ -218,16 +234,6 @@
     color: #FFFFFF;
   }
 
-  .section-header {
-    padding: 20px 20px 5px 20px;
-  }
-
-  .section-title {
-    font-size: 16px;
-    font-weight: bold;
-    color: #448AFF;
-  }
-
   .media-item {
     padding: 15px 20px;
     border-bottom-width: 1px;
@@ -241,7 +247,7 @@
   }
 
   .item-name {
-    font-size: 20px;
+    font-size: 18px;
     color: #E2E8F0;
     flex: 1;
   }
@@ -249,17 +255,13 @@
   .play-icon {
     width: 20px;
     height: 20px;
-    background-color: #448AFF;
+    background-color: #8B5CF6;
     border-radius: 10px;
     margin-left: 10px;
   }
 
-  .music-icon {
-    background-color: #8B5CF6;
-  }
-
   .empty-item {
-    padding: 20px;
+    padding: 40px 20px;
     justify-content: center;
   }
 
@@ -275,7 +277,7 @@
   }
 
   .footer-text {
-    font-size: 16px;
+    font-size: 14px;
     color: rgba(255, 255, 255, 0.2);
     text-align: center;
   }

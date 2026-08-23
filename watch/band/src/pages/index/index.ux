@@ -107,11 +107,10 @@
         try {
           const msg = JSON.parse(data.data)
           
-          // Handle media list sync
+          // Handle media list sync (music only for now, hype postponed)
           if (msg.action === 'media_list') {
             this.$app.$def.musicList = msg.music || []
-            this.$app.$def.hypeList = msg.hype || []
-            console.info('⌚ [Index] Media list updated globally')
+            console.info('⌚ [Index] Music list updated globally: ' + (msg.music || []).length + ' tracks')
             return
           }
 
