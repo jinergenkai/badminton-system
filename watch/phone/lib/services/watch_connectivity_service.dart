@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:voice_counter/controllers/score_controller.dart';
@@ -20,17 +21,66 @@ class WatchConnectivityService extends GetxService {
   bool _isInitialized = false;
   StreamSubscription? _eventSubscription;
 
-  /// Initialize watch connectivity service
-  Future<void> initialize() async {
-    if (_isInitialized) return;
+  /// Whether the phone -> watch direction is usable (we have a node id).
+  final RxBool sendPathUp = false.obs;
+
+  /// Whether `addListener` actually succeeded, i.e. whether watch -> phone
+  /// can work. Tracked apart from [sendPathUp] because the bug being chased
+  /// is precisely the case where the first is up and this one is not.
+  final RxBool listenerRegistered = false.obs;
+
+  /// Human-readable dump of the last handshake, surfaced in the UI so the
+  /// handshake can be inspected on the court without adb.
+  final RxString diagnostics = 'not initialized'.obs;
+
+  /// Initialize watch connectivity service.
+  ///
+  /// [force] re-runs the handshake even when already initialized — without it
+  /// the guard below makes every retry a no-op, so a listener lost to an
+  /// Activity restart could never be re-registered.
+  Future<void> initialize({bool force = false}) async {
+    if (_isInitialized && !force) return;
 
     try {
-      final success = await platform.invokeMethod('initialize');
-      if (success == true) {
+      final raw = await platform.invokeMethod('initialize');
+
+      // Native now answers with a report map. Tolerate the old bare `true`
+      // in case a stale APK is installed against a newer Dart side.
+      final Map<String, dynamic> report = raw is Map
+          ? Map<String, dynamic>.from(raw)
+          : {'ok': raw == true, 'listenerRegistered': raw == true};
+
+      final bool ok = report['ok'] == true;
+      final bool listenerOk = report['listenerRegistered'] == true;
+
+      sendPathUp.value = ok;
+      listenerRegistered.value = listenerOk;
+
+      print('⌚ [WatchService] ===== handshake report =====');
+      report.forEach((k, v) => print('⌚ [WatchService]   $k = $v'));
+
+      if (ok && !listenerOk) {
+        print('⌚ [WatchService] !! ONE-WAY: phone -> watch will work, '
+            'watch -> phone will NOT. listenerError=${report['listenerError']}');
+      }
+
+      diagnostics.value = [
+        'node: ${report['nodeName'] ?? '-'} (${report['nodeId'] ?? 'none'})',
+        'permissions: ${report['granted'] ?? '-'}',
+        'DEVICE_MANAGER: ${report['hasDeviceManager'] ?? '-'}',
+        'wear app installed: ${report['wearAppInstalled'] ?? '-'}',
+        'listener registered: $listenerOk',
+        if (report['listenerError'] != null) 'listener error: ${report['listenerError']}',
+        if (report['error'] != null) 'error: ${report['error']}',
+      ].join('\n');
+
+      // Deliberately keyed on `ok`, not on the listener: losing the receive
+      // path must not also disable the send path we still have.
+      if (ok) {
         _isInitialized = true;
-        print('⌚ [WatchService] Initialized successfully');
 
         // Listen for commands from watch
+        _eventSubscription?.cancel();
         _eventSubscription = eventChannel.receiveBroadcastStream().listen(
           (event) {
             if (event is Map) {
@@ -45,9 +95,10 @@ class WatchConnectivityService extends GetxService {
           },
         );
       } else {
-        print('⌚ [WatchService] Initialization failed (no watch found or auth denied)');
+        print('⌚ [WatchService] Initialization failed: ${report['error']}');
       }
     } catch (e) {
+      diagnostics.value = 'initialize threw: $e';
       print('⌚ [WatchService] Initialization error: $e');
     }
   }
@@ -82,17 +133,22 @@ class WatchConnectivityService extends GetxService {
 
     final musicList = Get.find<MusicService>().getMusicList();
 
+    final payload = {
+      'action': 'media_list',
+      'music': musicList,
+      'hype': [],
+    };
+
+    // Sized before sending: ids are full device paths, so this is around 2KB
+    // for 15 tracks and is the prime suspect for the list never arriving.
+    final approxBytes = jsonEncode(payload).length;
+    print('⌚ [WatchService] media_list: ${musicList.length} tracks, ~$approxBytes bytes');
+
     try {
-      await platform.invokeMethod('sendMessage', {
-        'data': {
-          'action': 'media_list',
-          'music': musicList,
-          'hype': [],
-        },
-      });
-      print('⌚ [WatchService] Media list sent: ${musicList.length} music (hype skipped)');
+      await platform.invokeMethod('sendMessage', {'data': payload});
+      print('⌚ [WatchService] Media list sent OK (~$approxBytes bytes)');
     } catch (e) {
-      print('⌚ [WatchService] Error sending media list: $e');
+      print('⌚ [WatchService] Error sending media list (~$approxBytes bytes): $e');
     }
   }
 

@@ -28,12 +28,36 @@ class MainActivity : FlutterActivity() {
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
+    /** Last initialize() report, so Dart can re-read it without re-running init. */
+    private var lastReport: Map<String, Any?> = mapOf("ok" to false, "error" to "not initialized")
+
     companion object {
         private const val TAG = "MainActivity"
+
+        /**
+         * Step-0 diagnostics tag. Everything interesting goes here so the whole
+         * handshake can be read with a single filter:
+         *   adb logcat -s BandDiag
+         */
+        private const val DIAG = "BandDiag"
+    }
+
+    /**
+     * The SDK reports failures as typed exceptions built from a Status —
+     * PermissionDenied, SignatureVerifyFailed, AppNotInstalled,
+     * DeviceDisconnected. The class name is the useful part and it is exactly
+     * what we have been discarding, so keep it.
+     */
+    private fun describe(e: Exception?): String {
+        if (e == null) return "unknown"
+        return "${e.javaClass.simpleName}: ${e.message}"
     }
 
     private val messageListener = OnMessageReceivedListener { nodeId, message ->
         val raw = String(message)
+        // If this line never appears, the receive path is down — that is the
+        // whole one-way-traffic symptom in a single log line.
+        Log.i(DIAG, "<<< RECV from watch (${message.size} bytes): $raw")
         Log.d(TAG, "RAW From Watch: $raw")
         try {
             val json = JSONObject(raw)
@@ -68,13 +92,31 @@ class MainActivity : FlutterActivity() {
                 "initialize" -> initWearableConnect(result)
                 "sendMessage" -> {
                     val data = call.argument<Map<String, Any>>("data")
-                    if (data != null && watchNodeId != null) {
-                        val payload = JSONObject(data).toString().toByteArray()
-                        messageApi.sendMessage(watchNodeId!!, payload)
-                            .addOnSuccessListener { result.success(true) }
-                            .addOnFailureListener { e -> result.error("SEND_FAIL", e.message, null) }
-                    } else { result.error("NO_WATCH", "Watch not linked", null) }
+                    val nodeId = watchNodeId
+                    if (data != null && nodeId != null) {
+                        val json = JSONObject(data).toString()
+                        val payload = json.toByteArray()
+                        val action = data["action"]
+                        // Byte count is logged on every send: the media list is
+                        // ~2KB and the per-message limit of this transport is
+                        // still unknown, so this is how we find out whether big
+                        // payloads are being rejected.
+                        Log.i(DIAG, ">>> SEND $action (${payload.size} bytes)")
+                        messageApi.sendMessage(nodeId, payload)
+                            .addOnSuccessListener {
+                                Log.i(DIAG, ">>> SEND ok: $action (${payload.size} bytes)")
+                                result.success(true)
+                            }
+                            .addOnFailureListener { e ->
+                                Log.e(DIAG, ">>> SEND FAILED: $action (${payload.size} bytes) ${describe(e)}")
+                                result.error("SEND_FAIL", describe(e), null)
+                            }
+                    } else {
+                        Log.w(DIAG, ">>> SEND skipped: data=${data != null} node=${nodeId != null}")
+                        result.error("NO_WATCH", "Watch not linked", null)
+                    }
                 }
+                "getDiagnostics" -> result.success(lastReport)
                 "isWatchConnected" -> result.success(watchNodeId != null)
                 else -> result.notImplemented()
             }
@@ -88,30 +130,123 @@ class MainActivity : FlutterActivity() {
         )
     }
 
+    /**
+     * Walks the handshake one step at a time and reports what each step
+     * actually returned, instead of collapsing everything into a single
+     * boolean the way this used to.
+     *
+     * Returns a report map rather than `true`. `ok` means the send path is
+     * usable (we have a node); `listenerRegistered` separately says whether
+     * the receive path came up. They are reported apart on purpose — the bug
+     * being chased is exactly the case where one works and the other does not.
+     */
     private fun initWearableConnect(result: MethodChannel.Result) {
+        val report = mutableMapOf<String, Any?>(
+            "ok" to false,
+            "listenerRegistered" to false
+        )
+        val replied = java.util.concurrent.atomic.AtomicBoolean(false)
+        fun reply() {
+            lastReport = report.toMap()
+            // MethodChannel.Result throws if answered twice, and the chain
+            // below has several possible exits.
+            if (replied.compareAndSet(false, true)) result.success(report)
+        }
+
+        Log.i(DIAG, "======== initialize() ========")
+
         nodeApi.getConnectedNodes().addOnSuccessListener { nodes ->
+            Log.i(DIAG, "getConnectedNodes -> ${nodes?.size ?: 0} node(s)")
+            nodes?.forEachIndexed { i, n -> Log.i(DIAG, "    node[$i] id=${n.id} name=${n.name}") }
+
             if (nodes.isNullOrEmpty()) {
-                Log.w(TAG, "No nodes found")
-                result.error("NODE_NOT_FOUND", "Ensure watch is connected in Mi Fitness", null)
+                Log.w(DIAG, "NO NODE — is the watch paired and Mi Fitness synced?")
+                report["error"] = "NO_NODE"
+                reply()
                 return@addOnSuccessListener
             }
             val node = nodes[0]
             watchNodeId = node.id
-            Log.d(TAG, "Node found: ${node.id}, requesting permission...")
+            report["nodeId"] = node.id
+            report["nodeName"] = node.name
+            report["ok"] = true
 
-            authApi.requestPermission(node.id, Permission.DEVICE_MANAGER).addOnSuccessListener {
-                Log.d(TAG, "Auth Success")
-                messageApi.removeListener(node.id)
-                messageApi.addListener(node.id, messageListener)
-                result.success(true)
-            }.addOnFailureListener { e ->
-                Log.e(TAG, "Auth Fail: ${e.message}")
-                result.error("AUTH_DENIED", e.message, null)
-            }
+            authApi.requestPermission(node.id, Permission.DEVICE_MANAGER)
+                .addOnSuccessListener { granted ->
+                    // The granted array is the actual answer. A success
+                    // callback on its own does NOT mean DEVICE_MANAGER was
+                    // given, and addListener needs DEVICE_MANAGER.
+                    val names = granted?.map { it.name } ?: emptyList()
+                    val hasDm = names.contains(Permission.DEVICE_MANAGER.name)
+                    Log.i(DIAG, "requestPermission -> granted=$names  hasDeviceManager=$hasDm")
+                    if (!hasDm) Log.w(DIAG, "DEVICE_MANAGER NOT granted — addListener is expected to fail")
+                    report["granted"] = names
+                    report["hasDeviceManager"] = hasDm
+
+                    nodeApi.isWearAppInstalled(node.id)
+                        .addOnSuccessListener { installed ->
+                            Log.i(DIAG, "isWearAppInstalled -> $installed")
+                            report["wearAppInstalled"] = installed
+                            registerListener(node.id, report, ::reply)
+                        }
+                        .addOnFailureListener { e ->
+                            Log.w(DIAG, "isWearAppInstalled FAILED: ${describe(e)}")
+                            report["wearAppInstalledError"] = describe(e)
+                            registerListener(node.id, report, ::reply)
+                        }
+                }
+                .addOnFailureListener { e ->
+                    Log.e(DIAG, "requestPermission FAILED: ${describe(e)}")
+                    report["error"] = "AUTH: ${describe(e)}"
+                    reply()
+                }
         }.addOnFailureListener { e ->
-            Log.e(TAG, "Search Fail: ${e.message}")
-            result.error("SEARCH_ERROR", e.message, null)
+            Log.e(DIAG, "getConnectedNodes FAILED: ${describe(e)}")
+            report["error"] = "SEARCH: ${describe(e)}"
+            reply()
         }
+    }
+
+    /**
+     * removeListener and addListener are independent async Tasks. Fired back
+     * to back, the remove can land *after* the add and take out the listener
+     * just registered — a silent, intermittent kill of the watch -> phone
+     * direction. So the add only starts once the remove has settled, either
+     * way: remove legitimately fails when nothing is registered yet.
+     */
+    private fun registerListener(
+        nodeId: String,
+        report: MutableMap<String, Any?>,
+        reply: () -> Unit
+    ) {
+        val added = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        fun add() {
+            if (!added.compareAndSet(false, true)) return
+            messageApi.addListener(nodeId, messageListener)
+                .addOnSuccessListener {
+                    Log.i(DIAG, ">>> addListener OK — watch -> phone SHOULD work now")
+                    report["listenerRegistered"] = true
+                    reply()
+                }
+                .addOnFailureListener { e ->
+                    Log.e(DIAG, ">>> addListener FAILED: ${describe(e)}")
+                    Log.e(DIAG, ">>> watch -> phone WILL NOT WORK (phone -> watch still will)")
+                    report["listenerRegistered"] = false
+                    report["listenerError"] = describe(e)
+                    reply()
+                }
+        }
+
+        messageApi.removeListener(nodeId)
+            .addOnSuccessListener {
+                Log.i(DIAG, "removeListener settled: ok")
+                add()
+            }
+            .addOnFailureListener { e ->
+                Log.i(DIAG, "removeListener settled: ${describe(e)} (normal on first run)")
+                add()
+            }
     }
 
     override fun onDestroy() {

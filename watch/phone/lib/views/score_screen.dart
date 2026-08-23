@@ -439,8 +439,47 @@ class _ScoreScreenState extends State<ScoreScreen> {
             Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
             const SizedBox(height: 32),
             const Text('Watch Connectivity', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 32),
-            _settingsListTile(icon: Icons.bluetooth_searching, title: 'Reconnect Watch', color: Colors.blueAccent, onTap: () { Navigator.pop(context); controller.watchService.initialize(); }),
+            const SizedBox(height: 20),
+            // Step-0 diagnostics. The handshake has to be readable on the
+            // court, where there is no adb.
+            Obx(() {
+              final oneWay = controller.watchService.sendPathUp.value &&
+                  !controller.watchService.listenerRegistered.value;
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: oneWay ? Colors.orangeAccent : Colors.white12,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (oneWay)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'ONE-WAY: watch → phone is DOWN',
+                          style: TextStyle(
+                              color: Colors.orangeAccent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    Text(
+                      controller.watchService.diagnostics.value,
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 11, height: 1.5),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+            _settingsListTile(icon: Icons.bluetooth_searching, title: 'Reconnect Watch', color: Colors.blueAccent, onTap: () { Navigator.pop(context); controller.watchService.initialize(force: true); }),
             const SizedBox(height: 16),
             _settingsListTile(icon: Icons.sync, title: 'Force Sync to Watch', color: Colors.greenAccent, onTap: () { Navigator.pop(context); controller.watchService.sendScoreUpdate(controller.gameState, action: 'manual_sync'); }),
             const SizedBox(height: 24),
