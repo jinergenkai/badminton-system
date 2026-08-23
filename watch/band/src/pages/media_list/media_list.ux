@@ -230,6 +230,9 @@
     },
 
     playMusic(path) {
+      // Optimistic, like the other controls: the phone's player_state lands a
+      // moment later and replaces this with the truth.
+      this.isPlaying = true
       this.sendRaw({ action: 'play_music', id: path }, 'Playing')
     },
 
