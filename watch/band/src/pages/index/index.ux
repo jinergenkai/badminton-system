@@ -21,10 +21,10 @@
             <text class="score-text">{{ scoreA }}</text>
           </div>
           <!-- Streak badge: yellow square rotated 45deg, centred on the card's
-               inner top corner. The card's overflow:hidden clips 3/4 of it away,
+               top-left corner. The card's overflow:hidden clips 3/4 of it away,
                leaving a triangle. Label is a separate un-rotated layer. -->
-          <div class="streak-tri tri-a" if="{{ streakTeam === 'A' && streakCount > 0 }}"></div>
-          <text class="streak-text text-a" if="{{ streakTeam === 'A' && streakCount > 0 }}">x{{ streakCount }}</text>
+          <div class="streak-tri" if="{{ streakTeam === 'A' && streakCount > 0 }}"></div>
+          <text class="streak-text" if="{{ streakTeam === 'A' && streakCount > 0 }}">x{{ streakCount }}</text>
         </stack>
 
         <!-- TEAM B (RIGHT) -->
@@ -33,8 +33,8 @@
           <div class="score-content {{ isWinnerB ? 'winner-glow' : '' }}">
             <text class="score-text">{{ scoreB }}</text>
           </div>
-          <div class="streak-tri tri-b" if="{{ streakTeam === 'B' && streakCount > 0 }}"></div>
-          <text class="streak-text text-b" if="{{ streakTeam === 'B' && streakCount > 0 }}">x{{ streakCount }}</text>
+          <div class="streak-tri" if="{{ streakTeam === 'B' && streakCount > 0 }}"></div>
+          <text class="streak-text" if="{{ streakTeam === 'B' && streakCount > 0 }}">x{{ streakCount }}</text>
         </stack>
       </div>
 
@@ -481,30 +481,38 @@
   }
 
   /* STREAK BADGE
-     68px square rotated 45deg, centre pinned to the card's inner top corner
+     68px square rotated 45deg, centre pinned to the card's top-left corner
      (offset = -68/2). Three quarters fall outside the card and are removed by
      .score-btn's overflow:hidden, so what shows is a right triangle with ~48px
-     legs tucked into the corner. */
+     legs, right angle in the corner.
+
+     Both cards use the top-LEFT corner on purpose: `right` is ignored for
+     absolutely positioned children of a <stack> (they fall back to left: 0),
+     which is what made the red card's badge hang off the top edge as a wedge
+     instead of sitting in a corner. Only left/top/bottom are reliable here. */
   .streak-tri {
     position: absolute;
+    top: -34px;
+    left: -34px;
     width: 68px;
     height: 68px;
     background-color: #FBBF24;
     transform: rotate(45deg);
   }
 
-  .tri-a { top: -34px; right: -34px; }
-  .tri-b { top: -34px; left: -34px; }
-
+  /* Centred on the triangle's centroid, which for a right triangle with 48px
+     legs sits at (16, 16) from the corner. Fixed width + centre alignment so
+     x1 and x12 both stay put. */
   .streak-text {
     position: absolute;
+    top: 6px;
+    left: 2px;
+    width: 30px;
+    text-align: center;
     font-size: 17px;
     font-weight: bold;
     color: #0F172A;
   }
-
-  .text-a { top: 4px; right: 6px; }
-  .text-b { top: 4px; left: 6px; }
 
   /* ZONE 4: UNDO Area (20%) */
   .undo-area {
