@@ -182,10 +182,12 @@
 </script>
 
 <style>
+  /* Same fix as pages/diag: height: 100% on a page root does not resolve, so
+     the flex: 1 list below computed to zero height and drew nothing — which
+     means the track list could never have shown up even when it did arrive. */
   .container {
     flex-direction: column;
     width: 100%;
-    height: 100%;
     background-color: #0F172A;
   }
 
@@ -243,9 +245,10 @@
     color: rgba(255, 255, 255, 0.6);
   }
 
+  /* 520 tall screen, less the header (90) and the status bar (~32). */
   .media-list {
-    flex: 1;
     width: 100%;
+    height: 395px;
   }
 
   .item-control {
