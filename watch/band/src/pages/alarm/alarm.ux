@@ -11,8 +11,8 @@
 
     <list class="opt-list">
       <list-item type="opt" for="{{ options }}" class="opt" onclick="pick($idx)">
-        <text class="opt-label">{{ $item.label }}</text>
         <text class="opt-time">{{ $item.at }}</text>
+        <text class="opt-label">{{ $item.away }}</text>
       </list-item>
     </list>
   </div>
@@ -63,19 +63,15 @@
     },
 
     /**
-     * Next half-hour boundary at or after `d`.
+     * First :00 or :30 strictly after `d`.
      *
-     * Rounds UP rather than to nearest: rounding to nearest can land the
-     * reminder sooner than the interval asked for — 18:15 plus 30 minutes is
-     * 18:45, which rounds down to 18:30, i.e. 15 minutes away. Up is never less
-     * than requested, and court bookings run on the half hour anyway.
+     * Always advances, never returns `d` itself: at 03:30:40 the boundary has
+     * already passed, and returning 03:30 would offer a reminder in the past.
      */
-    roundUp(d) {
+    nextHalfHour(d) {
       const r = new Date(d.getTime())
       r.setSeconds(0, 0)
-      const m = r.getMinutes()
-      if (m === 0 || m === 30) return r
-      if (m < 30) {
+      if (r.getMinutes() < 30) {
         r.setMinutes(30)
       } else {
         r.setMinutes(0)
@@ -84,18 +80,39 @@
       return r
     },
 
+    // "in 29m" / "in 1h" / "in 2h30"
+    humanize(mins) {
+      if (mins < 60) return 'in ' + mins + 'm'
+      const h = Math.floor(mins / 60)
+      const m = mins % 60
+      if (m === 0) return 'in ' + h + 'h'
+      return 'in ' + h + 'h' + (m < 10 ? '0' + m : m)
+    },
+
+    /**
+     * Anchored on the clock, not on the current time.
+     *
+     * The first option is the next :00 or :30, and the rest step 30 minutes
+     * from there — so at 03:01 the list opens at 03:30, not 04:00. Adding an
+     * interval to "now" and rounding that afterwards was what pushed the first
+     * option a whole half hour away.
+     *
+     * Sessions are booked on the clock, so the times are the primary label and
+     * the distance is the hint, computed exactly rather than assumed from the
+     * step: the first row can be anywhere from 1 to 30 minutes out.
+     */
     build() {
       const now = new Date()
       this.nowText = this.pad(now.getHours()) + ':' + this.pad(now.getMinutes())
 
-      const mins = [30, 60, 90, 120, 150, 180]
-      const labels = ['30p', '1h', '1h30', '2h', '2h30', '3h']
+      const base = this.nextHalfHour(now)
       const out = []
-      for (let i = 0; i < mins.length; i++) {
-        const t = this.roundUp(new Date(now.getTime() + mins[i] * 60000))
+      for (let i = 0; i < 6; i++) {
+        const t = new Date(base.getTime() + i * 30 * 60000)
+        const away = Math.round((t.getTime() - now.getTime()) / 60000)
         out.push({
-          label: labels[i],
           at: this.pad(t.getHours()) + ':' + this.pad(t.getMinutes()),
+          away: this.humanize(away),
           hour: t.getHours(),
           minute: t.getMinutes()
         })
@@ -106,7 +123,7 @@
     pick(idx) {
       const o = this.options[idx]
       if (!o) return
-      this.diag('setAlarm ' + o.at + ' (' + o.label + ')')
+      this.diag('reminder set for ' + o.at + ' (' + o.away + ')')
 
       const self = this
 
@@ -137,12 +154,12 @@
           },
           fail: function (data, code) {
             self.diag('setAlarm FAIL code=' + code + ' d=' + JSON.stringify(data))
-            self.askPhone(o.at)
+            self.tellPhone(o.at)
           }
         })
       } catch (e) {
         this.diag('setAlarm threw: ' + e.message)
-        this.askPhone(o.at)
+        this.tellPhone(o.at)
       }
     },
 
@@ -238,13 +255,12 @@
   }
 
   .opt-label {
-    font-size: 22px;
-    font-weight: bold;
-    color: #FFFFFF;
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.45);
   }
 
   .opt-time {
-    font-size: 22px;
+    font-size: 26px;
     font-weight: bold;
     color: #FBBF24;
   }
