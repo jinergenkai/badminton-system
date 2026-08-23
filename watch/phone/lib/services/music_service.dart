@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'audio_settings.dart';
 
 class MusicService extends GetxController {
   final AudioPlayer _player = AudioPlayer();
@@ -234,7 +235,29 @@ class MusicService extends GetxController {
     print('🎵 [Music] Win: ${track.split('/').last}');
   }
 
+  /// Music mode: keep a track running continuously and never duck it.
+  ///
+  /// Nothing else is competing for the speaker in this mode, so there is no
+  /// reason to fade down for a point — the whole point of the mode is that the
+  /// music is not interrupted.
+  Future<void> startContinuous() async {
+    isNonStop.value = true;
+    if (isPlaying.value) return;
+    if (playlist.isEmpty) {
+      print('🎵 [Music] Continuous requested but playlist is empty');
+      return;
+    }
+    isTensionMode.value = false;
+    final track = _getNextTrackPath();
+    if (track.isEmpty) return;
+    await _playTrack(track, volume: winVolume.value, fadeDurationMs: 1500);
+  }
+
   Future<void> playTensionMusic() async {
+    // Ducking to a tension track mid-song is exactly the mood-killer that
+    // music mode exists to avoid.
+    if (AudioSettings.maybe?.isMusicMode == true) return;
+
     if (!tensionMusicEnabled.value || playlist.isEmpty) {
       print('🎵 [Music] Tension skipped: enabled=${tensionMusicEnabled.value}, empty=${playlist.isEmpty}');
       return;
@@ -273,6 +296,11 @@ class MusicService extends GetxController {
   }
 
 
+  double _scaled(double v) {
+    final m = AudioSettings.maybe;
+    return m == null ? v : m.scale(v);
+  }
+
   Future<void> _playTrack(String track, {required double volume, int fadeDurationMs = 2000}) async {
     try {
       _currentVolume = 0.0;
@@ -286,8 +314,11 @@ class MusicService extends GetxController {
       }
       
       currentTrackName.value = track.split('/').last;
-      print('🎵 [Music] Playing track: ${currentTrackName.value} (target vol: $volume)');
-      _fadeIn(volume > 0 ? volume : 0.5, durationMs: fadeDurationMs);
+      // Scaled by the master here, at the one place a target level is chosen,
+      // so the fade ramps to the right ceiling instead of overshooting it.
+      final target = _scaled(volume > 0 ? volume : 0.5);
+      print('🎵 [Music] Playing track: ${currentTrackName.value} (target vol: $target)');
+      _fadeIn(target, durationMs: fadeDurationMs);
     } catch (e) {
       print('🎵 [Music] Play error: $e');
     }

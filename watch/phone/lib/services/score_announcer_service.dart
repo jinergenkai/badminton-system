@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tts_service.dart';
+import 'audio_settings.dart';
 
 /// Plays badminton-style score announcements using bundled MP3s
 /// (`assets/audio/score/<lang>/<number>.mp3` + `all.mp3`).
@@ -19,6 +20,15 @@ import 'tts_service.dart';
 class ScoreAnnouncerService extends GetxService {
   static const List<String> _supported = ['vi', 'en'];
   static const int _maxScore = 30;
+
+  /// The announcer's own level, kept so the master can be re-applied to it
+  /// without losing what the user set for this source.
+  double _ownVolume = 1.0;
+
+  double _scaled(double v) {
+    final m = AudioSettings.maybe;
+    return m == null ? v : m.scale(v);
+  }
 
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<void>? _completeSub;
@@ -63,7 +73,10 @@ class ScoreAnnouncerService extends GetxService {
     final prefs = await SharedPreferences.getInstance();
     currentLanguage.value = _normalize(prefs.getString('tts_language'));
     final savedVolume = prefs.getDouble('tts_volume') ?? 1.0;
-    await _player.setVolume(savedVolume);
+    _ownVolume = savedVolume;
+    await _player.setVolume(_scaled(savedVolume));
+    AudioSettings.maybe?.masterVolume
+        .listen((_) => _player.setVolume(_scaled(_ownVolume)));
 
     // Mirror live TTS language + volume changes so the two stay aligned.
     try {
@@ -71,7 +84,10 @@ class ScoreAnnouncerService extends GetxService {
       _ttsLangSub = tts.currentLanguageRx.listen((code) {
         currentLanguage.value = _normalize(code);
       });
-      _ttsVolSub = tts.volume.listen((v) => _player.setVolume(v));
+      _ttsVolSub = tts.volume.listen((v) {
+        _ownVolume = v;
+        _player.setVolume(_scaled(v));
+      });
     } catch (_) {}
 
     print('🔊 [ScoreAnnouncer] Ready (lang=${currentLanguage.value})');

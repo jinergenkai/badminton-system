@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:voice_counter/controllers/score_controller.dart';
 import '../models/game_state.dart';
 import 'music_service.dart';
+import 'audio_settings.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
 /// Service for communicating with Xiaomi Wearable SDK watch
@@ -103,9 +104,119 @@ class WatchConnectivityService extends GetxService {
     }
   }
 
+  /// One flat map, one name per setting, used in both directions.
+  ///
+  /// The watch never keeps its own copy of any of this: it asks for the state,
+  /// renders whatever comes back, sends a single key when the user changes
+  /// something, and re-renders from the echo. So there is exactly one source of
+  /// truth — the phone — and no way for the two to disagree.
+  Map<String, dynamic> _settingsSnapshot() {
+    final audio = AudioSettings.i;
+    final music = Get.find<MusicService>();
+    final hype = Get.find<HypeVoiceController>();
+    final score = Get.find<ScoreController>();
+    final tts = score.ttsService;
+
+    return {
+      'mode': audio.mode.value,
+      'master': (audio.masterVolume.value * 100).round(),
+      'announceOn': score.scoreAnnouncementsEnabled.value,
+      'announceVol': (tts.volume.value * 100).round(),
+      'hypeOn': hype.isEnabled.value,
+      'hypeVol': (hype.volume.value * 100).round(),
+      'winOn': music.winMusicEnabled.value,
+      'winVol': (music.winVolume.value * 100).round(),
+      'tensionOn': music.tensionMusicEnabled.value,
+      'tensionVol': (music.tensionVolume.value * 100).round(),
+      'playMode': music.playMode.value,
+    };
+  }
+
+  /// Echoes the whole state after any change, so the watch UI is never guessing.
+  Future<void> sendSettingsState() async {
+    if (!_isInitialized) return;
+    try {
+      await platform.invokeMethod('sendMessage', {
+        'data': {'action': 'settings_state', 's': _settingsSnapshot()},
+      });
+    } catch (e) {
+      print('⌚ [WatchService] Error sending settings: $e');
+    }
+  }
+
+  /// Applies one key from the watch. Volumes arrive as 0..100 integers, which
+  /// keeps the payload small and avoids float formatting over the wire.
+  void _applySetting(String key, dynamic value) {
+    final audio = AudioSettings.i;
+    final music = Get.find<MusicService>();
+    final hype = Get.find<HypeVoiceController>();
+    final score = Get.find<ScoreController>();
+
+    double pct(dynamic v) => ((v is num ? v.toDouble() : 0) / 100).clamp(0.0, 1.0);
+    bool flag(dynamic v) => v == true;
+
+    switch (key) {
+      case 'mode':
+        audio.setMode(value.toString());
+        break;
+      case 'master':
+        audio.setMaster(pct(value));
+        break;
+      case 'announceOn':
+        score.setScoreAnnouncementsEnabled(flag(value));
+        break;
+      case 'announceVol':
+        score.ttsService.volume.value = pct(value);
+        score.ttsService.saveVolumePreference();
+        break;
+      case 'hypeOn':
+        hype.isEnabled.value = flag(value);
+        hype.savePreferences();
+        break;
+      case 'hypeVol':
+        hype.volume.value = pct(value);
+        hype.savePreferences();
+        break;
+      case 'winOn':
+        music.winMusicEnabled.value = flag(value);
+        music.savePreferences();
+        break;
+      case 'winVol':
+        music.winVolume.value = pct(value);
+        music.savePreferences();
+        break;
+      case 'tensionOn':
+        music.tensionMusicEnabled.value = flag(value);
+        music.savePreferences();
+        break;
+      case 'tensionVol':
+        music.tensionVolume.value = pct(value);
+        music.savePreferences();
+        break;
+      case 'playMode':
+        music.playMode.value = value.toString();
+        music.savePreferences();
+        break;
+      default:
+        print('⌚ [WatchService] Unknown setting key: $key');
+        return;
+    }
+    print('⌚ [WatchService] Setting applied: $key = $value');
+  }
+
   void _handleWatchCommand(Map<String, dynamic> command) {
     final action = command['action'];
-    if (action == 'request_media_list') {
+    if (action == 'request_settings') {
+      sendSettingsState();
+    } else if (action == 'set_setting') {
+      final key = command['key'];
+      if (key is String) {
+        _applySetting(key, command['value']);
+        // Echo back so the watch renders the state the phone actually holds,
+        // not the state it assumed it would get.
+        sendSettingsState();
+      }
+    } else if (action == 'request_media_list') {
       sendMediaList();
     } else if (action == 'play_music') {
       final path = command['id'];

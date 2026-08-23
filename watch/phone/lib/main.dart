@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'views/score_screen.dart';
 import 'services/database_service.dart';
+import 'services/audio_settings.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -13,6 +14,10 @@ void main() async {
 
   // Initialize Hive database
   await DatabaseService.initialize();
+
+  // Registered before any player: every service multiplies its own level by
+  // the master volume held here.
+  await Get.putAsync(() => AudioSettings().init());
 
   runApp(const MyApp());
 }

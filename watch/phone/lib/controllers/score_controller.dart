@@ -15,6 +15,7 @@ import '../services/foreground_service.dart';
 import '../services/database_service.dart';
 import '../services/watch_connectivity_service.dart';
 import '../services/music_service.dart';
+import '../services/audio_settings.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
 class ScoreController extends GetxController {
@@ -24,6 +25,7 @@ class ScoreController extends GetxController {
   final WatchConnectivityService _watchService = Get.put(WatchConnectivityService());
   final HypeVoiceController _hypeController = Get.put(HypeVoiceController());
   final MusicService _musicService = Get.put(MusicService());
+  final AudioSettings _audio = AudioSettings.i;
   final Uuid _uuid = const Uuid();
 
   final Rx<GameState> _gameState = GameState().obs;
@@ -86,7 +88,20 @@ class ScoreController extends GetxController {
     // _initializeForegroundService(); // DISABLED: foreground notification
     _initializeWatchSync();
     _setupAudioChain();
-    _musicService.initialize();
+    _musicService.initialize().then((_) => _applyMode(_audio.mode.value));
+    // Switching mode takes effect immediately, from the phone or the watch.
+    _audio.mode.listen(_applyMode);
+  }
+
+  /// Music mode runs a track continuously; commentary mode leaves the speaker
+  /// free for the announcer and hype, with music only at tension and win.
+  void _applyMode(String mode) {
+    if (mode == PlayMode.music) {
+      _musicService.startContinuous();
+    } else {
+      _musicService.stopMusic();
+    }
+    _watchService.sendSettingsState();
   }
 
   Future<void> _loadSettings() async {
@@ -307,6 +322,11 @@ class ScoreController extends GetxController {
   }
 
   void _announceScoreChange(int a, int b, String team) {
+    // Music mode: nothing speaks over the track. Talking across a song that is
+    // already playing is exactly what kills the mood, so the whole
+    // announce-then-hype chain is skipped rather than merely quietened.
+    if (_audio.isMusicMode) return;
+
     if (scoreAnnouncementsEnabled.value) {
       _scoreAnnouncer.announceScore(a, b, team);
     } else {

@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:voice_counter/services/tts_service.dart';
 import '../models/hype_state_snapshot.dart';
 import '../models/hype_display_event.dart';
+import 'package:voice_counter/services/audio_settings.dart';
 
 class HypeVoiceController extends GetxController {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -298,8 +299,14 @@ class HypeVoiceController extends GetxController {
         isSpeakerphoneOn: false,
       ),
     ));
-    _audioPlayer.setVolume(volume.value);
-    volume.listen((v) => _audioPlayer.setVolume(v));
+    // Own level times the master, re-applied whenever either one moves.
+    void applyVol() {
+      final m = AudioSettings.maybe;
+      _audioPlayer.setVolume(m == null ? volume.value : m.scale(volume.value));
+    }
+    applyVol();
+    volume.listen((_) => applyVol());
+    AudioSettings.maybe?.masterVolume.listen((_) => applyVol());
     // Fire onPlaybackCompleted when audio finishes naturally
     _audioPlayer.onPlayerComplete.listen((_) {
       onPlaybackCompleted?.call();
@@ -617,6 +624,13 @@ class HypeVoiceController extends GetxController {
 
   /// Play pending hype. Called after TTS finishes.
   Future<void> playHype() async {
+    // Music mode never speaks. Gated here as well as at the call site so any
+    // other path into the chain — undo, manual trigger — stays silent too.
+    // onPlaybackCompleted is still fired: the chain must not stall.
+    if (AudioSettings.maybe?.isMusicMode == true) {
+      onPlaybackCompleted?.call();
+      return;
+    }
     if (_pendingHypeId == null || !isEnabled.value) {
       onPlaybackCompleted?.call();
       return;

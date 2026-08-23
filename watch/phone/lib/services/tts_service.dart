@@ -1,5 +1,6 @@
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'audio_settings.dart';
 import 'package:get/get.dart';
 
 class TtsService extends GetxService {
@@ -43,8 +44,10 @@ class TtsService extends GetxService {
       // Cấu hình TTS
       await _flutterTts.setLanguage(_currentLanguage.value);
       await _flutterTts.setSpeechRate(0.6); // Chậm để nghe rõ
-      await _flutterTts.setVolume(volume.value);
+      await _flutterTts.setVolume(_scaled(volume.value));
       await _flutterTts.setPitch(1.0);
+      AudioSettings.maybe?.masterVolume
+          .listen((_) => _flutterTts.setVolume(_scaled(volume.value)));
 
       _isInitialized = true;
       print('🔊 [TTS] ✅ Ready! Language: ${_currentLanguage.value}');
@@ -53,8 +56,13 @@ class TtsService extends GetxService {
     }
   }
 
+  double _scaled(double v) {
+    final m = AudioSettings.maybe;
+    return m == null ? v : m.scale(v);
+  }
+
   Future<void> saveVolumePreference() async {
-    await _flutterTts.setVolume(volume.value);
+    await _flutterTts.setVolume(_scaled(volume.value));
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('tts_volume', volume.value);
   }
