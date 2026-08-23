@@ -6,7 +6,7 @@
     </div>
 
     <div class="note">
-      <text class="note-text">{{ hasAlarm ? "Rings on the band" : "No alarm on band - phone will remind" }}</text>
+      <text class="note-text">{{ hasAlarm ? "Rings on the band" : "Band vibrates + phone reminds" }}</text>
     </div>
 
     <list class="opt-list">

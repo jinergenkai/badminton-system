@@ -39,6 +39,17 @@
   import interconnect from '@system.interconnect'
   import prompt from '@system.prompt'
 
+  // Module scope, not a VM property: the framework only keeps private/
+  // protected/public as data, so a bare array on the exported object is
+  // dropped and ROWS comes back undefined — which left the list empty.
+  const ROWS = [
+    { key: 'master', name: 'MASTER', hasVol: true, onKey: null },
+    { key: 'announce', name: 'SCORE', hasVol: true, onKey: 'announceOn', volKey: 'announceVol' },
+    { key: 'hype', name: 'HYPE', hasVol: true, onKey: 'hypeOn', volKey: 'hypeVol' },
+    { key: 'tension', name: 'TENSION', hasVol: true, onKey: 'tensionOn', volKey: 'tensionVol' },
+    { key: 'win', name: 'WIN MUSIC', hasVol: true, onKey: 'winOn', volKey: 'winVol' }
+  ]
+
   export default {
     private: {
       connect: null,
@@ -47,16 +58,6 @@
       // authoritative copy — the phone owns the values, this only renders them.
       rows: []
     },
-
-    // Row order is the running order of a point: what you hear first is on top.
-    // MASTER sits at the top because it is the one control reached in a hurry.
-    ROWS: [
-      { key: 'master', name: 'MASTER', hasVol: true, onKey: null },
-      { key: 'announce', name: 'SCORE', hasVol: true, onKey: 'announceOn', volKey: 'announceVol' },
-      { key: 'hype', name: 'HYPE', hasVol: true, onKey: 'hypeOn', volKey: 'hypeVol' },
-      { key: 'tension', name: 'TENSION', hasVol: true, onKey: 'tensionOn', volKey: 'tensionVol' },
-      { key: 'win', name: 'WIN MUSIC', hasVol: true, onKey: 'winOn', volKey: 'winVol' }
-    ],
 
     diag(msg) {
       const def = this.$app && this.$app.$def
@@ -119,7 +120,7 @@
     },
 
     render(s) {
-      const src = this.ROWS
+      const src = ROWS
       const out = []
       for (let i = 0; i < src.length; i++) {
         const r = src[i]
@@ -137,7 +138,7 @@
     },
 
     toggle(idx) {
-      const r = this.ROWS[idx]
+      const r = ROWS[idx]
       if (!r || !r.onKey) return
       const next = !this.rows[idx].on
       // Optimistic redraw so the tap feels instant; the echo corrects it if the
@@ -148,7 +149,7 @@
     },
 
     bump(idx, delta) {
-      const r = this.ROWS[idx]
+      const r = ROWS[idx]
       if (!r) return
       let v = this.rows[idx].vol + delta
       if (v < 0) v = 0

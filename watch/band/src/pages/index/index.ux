@@ -9,8 +9,11 @@
         <div class="progress-bar">
           <div class="progress-inner" style="width: {{ cooldownProgress }}%"></div>
         </div>
-        <text class="clock-text">{{ clockText }}</text>
-        <text class="alarm-text" if="{{ alarmAt }}">{{ alarmAt }}</text>
+        <!-- Clock and reminder share a line: "02:36 / 04:00". -->
+        <text class="clock-text">{{ clockText }}{{ alarmAt ? ' / ' + alarmAt : '' }}</text>
+        <!-- Status log. Always present so its space is reserved and nothing
+             below it shifts when a message comes and goes. -->
+        <text class="log-text">{{ statusText }}</text>
       </div>
 
       <!-- ZONE 2 & 3: SCORES (MIDDLE - 60%) -->
@@ -45,11 +48,6 @@
       </div>
     </div>
 
-    <!-- Own toast instead of prompt.showToast: the system one is drawn centred
-         over the score and its position is not configurable (the runtime uses a
-         fixed g_toastStyle; the JS API takes message and duration only). -->
-    <text class="toast" if="{{ toastText }}">{{ toastText }}</text>
-
     <!-- WIN OVERLAY -->
     <div class="win-overlay" if="{{ isWinnerA || isWinnerB }}">
       <stack class="win-container">
@@ -80,6 +78,7 @@
   import router from '@system.router'
   import app from '@system.app'
   import storage from '@system.storage'
+  import vibrator from '@system.vibrator'
 
   export default {
     private: {
@@ -103,8 +102,9 @@
       clockTimer: null,
       linkTimer: null,
       linkFast: true,
-      toastText: '',
-      toastTimer: null,
+      statusText: "",
+      statusTimer: null,
+      alarmFired: false,
       // Display only — the alarm itself lives in the watch's Clock app.
       alarmAt: '',
     },
@@ -112,6 +112,7 @@
     loadAlarm() {
       const def = this.$app && this.$app.$def
       if (def && def.alarmAt) {
+        if (this.alarmAt !== def.alarmAt) this.alarmFired = false
         this.alarmAt = def.alarmAt
         return
       }
@@ -121,6 +122,7 @@
           success: (data) => {
             if (data) {
               this.alarmAt = data
+              this.alarmFired = false
               if (def) def.alarmAt = data
             }
           }
@@ -130,14 +132,15 @@
       }
     },
 
-    // Bottom of the screen, over the undo strip, so the score stays readable.
-    toast(msg) {
-      this.toastText = msg
-      if (this.toastTimer) clearTimeout(this.toastTimer)
-      this.toastTimer = setTimeout(() => {
-        this.toastText = ''
-        this.toastTimer = null
-      }, 1600)
+    // Reads as a log line under the clock rather than a box over the score.
+    // Cleared after a few seconds so a stale message never looks current.
+    status(msg) {
+      this.statusText = msg
+      if (this.statusTimer) clearTimeout(this.statusTimer)
+      this.statusTimer = setTimeout(() => {
+        this.statusText = ""
+        this.statusTimer = null
+      }, 3000)
     },
 
     // ── Step-0 diagnostics ───────────────────────────────────────────────
@@ -233,7 +236,7 @@
 
             this.checkWinner()
             if (msg.action === 'sync' || msg.action === 'manual_sync') {
-                this.toast('Synced')
+                this.status('Synced')
             }
           }
         } catch (e) {
@@ -382,6 +385,48 @@
       const h = d.getHours()
       const m = d.getMinutes()
       this.clockText = (h < 10 ? '0' + h : '' + h) + ':' + (m < 10 ? '0' + m : '' + m)
+      this.checkAlarm(h * 60 + m)
+    },
+
+    /**
+     * The band has no alarm service — @system.alarm resolves to null — but it
+     * does have a vibrator, and a buzz on the wrist beats a noise from a phone
+     * in a bag across the court.
+     *
+     * Rides the clock's 30s tick rather than adding a timer of its own, so it
+     * costs nothing extra. The catch, stated plainly: this only fires while
+     * this page is up, because onHide stops the tick. The phone reminder set
+     * alongside it is the backstop.
+     *
+     * The ten-minute window stops a reminder from firing again the next day,
+     * and covers the case where the page was hidden right as it came due.
+     */
+    checkAlarm(nowMin) {
+      if (!this.alarmAt || this.alarmFired) return
+      const parts = this.alarmAt.split(':')
+      if (parts.length !== 2) return
+      const target = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
+      const late = nowMin - target
+      if (late < 0 || late > 10) return
+
+      this.alarmFired = true
+      this.status('TIME UP - take your stuff')
+      this.diag('reminder fired at ' + this.clockText)
+      this.buzz(0)
+    },
+
+    // Six bursts a second apart: one buzz is easy to miss mid-rally.
+    buzz(n) {
+      if (n >= 6) return
+      try {
+        if (vibrator && typeof vibrator.vibrate === 'function') {
+          vibrator.vibrate({ mode: 'long' })
+        }
+      } catch (e) {
+        this.diag('vibrate threw: ' + e.message)
+        return
+      }
+      setTimeout(() => { this.buzz(n + 1) }, 1000)
     },
 
     // ── History & streak ─────────────────────────────────────────────────
@@ -416,7 +461,7 @@
       this.sendRaw({ action: 'request_sync' })
       // Also request media list on connection
       this.sendRaw({ action: 'request_media_list' })
-      this.toast('Sync requested')
+      this.status('Sync requested')
     },
 
     // Single place where anything leaves this page, so every send gets its
@@ -453,7 +498,7 @@
       this.isWinnerA = false
       this.isWinnerB = false
       this.sendUpdate('reset', true)
-      this.toast('New match')
+      this.status('New match')
     },
 
     openSettings() {
@@ -530,7 +575,7 @@
       this.scoreA++
       this.bumpStreak('A')
       this.sendUpdate('score_A', false, 'manual_trigger')
-      this.toast('Point + hype')
+      this.status('Point + hype')
     },
 
     onQuickHypeB() {
@@ -540,7 +585,7 @@
       this.scoreB++
       this.bumpStreak('B')
       this.sendUpdate('score_B', false, 'manual_trigger')
-      this.toast('Point + hype')
+      this.status('Point + hype')
     },
 
     onUndo() {
@@ -585,9 +630,12 @@
   }
 
   /* ZONE 1: SETTINGS Area (20%) */
+  /* padding-top clears the bezel curve; the extra height is the clock and
+     status lines added below the progress bar. */
   .settings-area {
     width: 100%;
-    height: 100px;
+    height: 152px;
+    padding-top: 28px;
     flex-direction: column;
     align-items: center;
     justify-content: center;
@@ -622,30 +670,15 @@
     background-color: #448AFF;
   }
 
-  /* Pinned to the bottom strip so it never covers the score. */
-  /* Fixed width plus centred text: align-self alone leaves a content-sized
-     <text> off-centre once padding is involved. */
-  .toast {
-    position: absolute;
-    bottom: 34px;
-    align-self: center;
-    width: 188px;
-    text-align: center;
-    padding: 6px 0;
-    background-color: rgba(15, 23, 42, 0.92);
-    border-radius: 14px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    font-size: 15px;
-    font-weight: bold;
-    color: #FFFFFF;
-    lines: 1;
-  }
-
-  .alarm-text {
-    font-size: 14px;
-    font-weight: bold;
-    color: #FBBF24;
+  /* Status log: green, quiet, and always occupying its line so the layout
+     does not jump when a message appears. */
+  .log-text {
+    height: 16px;
+    font-size: 13px;
+    color: #4ADE80;
     margin-top: 2px;
+    lines: 1;
+    text-overflow: ellipsis;
   }
 
   .clock-text {
@@ -710,10 +743,10 @@
      corner mark, which is what makes it visible at a glance mid-rally.
   .streak-tri {
     position: absolute;
-    top: -108px;
+    top: -54px;
     align-self: center;
-    width: 136px;
-    height: 136px;
+    width: 102px;
+    height: 102px;
     background-color: #FBBF24;
     transform: rotate(45deg);
   }
