@@ -3,7 +3,7 @@
     <div class="header">
       <!-- Bumped on every build that changes this page, so a flash that did
            not take is obvious at a glance instead of costing a debug round. -->
-      <text class="title">DIAG b7</text>
+      <text class="title">DIAG b8</text>
       <div class="clear-btn" onclick="clearLog">
         <text class="clear-text">CLR</text>
       </div>
@@ -20,8 +20,11 @@
       <div class="api-btn" onclick="probeApi">
         <text class="probe-text">1 · LIST API</text>
       </div>
+      <div class="connect-btn" onclick="doConnect">
+        <text class="probe-text">2 · CONNECT</text>
+      </div>
       <div class="probe-btn" onclick="probe">
-        <text class="probe-text">2 · TEST SEND</text>
+        <text class="probe-text">3 · TEST SEND</text>
       </div>
     </div>
 
@@ -178,6 +181,62 @@
       prompt.showToast({ message: 'API probed' })
     },
 
+    // The probe found connect/close/init/uninit/listen/getApkStatus on the
+    // instance. We had only ever used send/getReadyState, on a channel nobody
+    // had connected — hence {"data":"not connected","code":1006}. This opens
+    // it by hand so the effect can be seen in isolation.
+    doConnect() {
+      const conn = interconnect.instance()
+      const self = this
+      const def = this.$app && this.$app.$def
+
+      if (conn && typeof conn.getApkStatus === 'function') {
+        try {
+          conn.getApkStatus({
+            success: function (data) {
+              self.diag('getApkStatus=' + JSON.stringify(data))
+              self.refresh()
+            },
+            fail: function (data, code) {
+              self.diag('getApkStatus FAIL code=' + code)
+              self.refresh()
+            }
+          })
+        } catch (e) {
+          this.diag('getApkStatus threw: ' + e.message)
+        }
+      }
+
+      if (!conn || typeof conn.connect !== 'function') {
+        this.diag('connect() unavailable')
+        this.refresh()
+        return
+      }
+      this.diag('connect() ...')
+      try {
+        conn.connect({
+          success: function () {
+            self.diag('connect() ok')
+            conn.getReadyState({
+              success: function (d) {
+                if (def) def.lastReadyStatus = d.status
+                self.diag('after connect readyState=' + d.status)
+                self.refresh()
+              }
+            })
+          },
+          fail: function (data, code) {
+            self.diag('connect() FAIL code=' + code + ' d=' + JSON.stringify(data))
+            self.refresh()
+          }
+        })
+      } catch (e) {
+        this.diag('connect() threw: ' + e.message)
+      }
+      this.refresh()
+      prompt.showToast({ message: 'Connecting...' })
+    },
+
     clearLog() {
       const def = this.$app && this.$app.$def
       if (def) {
@@ -269,6 +328,16 @@
     flex-direction: column;
     width: 100%;
     padding: 8px 12px;
+  }
+
+  .connect-btn {
+    width: 100%;
+    height: 42px;
+    margin-top: 8px;
+    background-color: #22C55E;
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
   }
 
   .probe-btn {

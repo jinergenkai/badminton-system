@@ -139,12 +139,40 @@
           if (def) def.lastReadyStatus = data.status
           this.diag('getReadyState status=' + data.status)
           this.connected = (data.status === 1)
-          if (this.connected) this.requestMediaList()
+          if (this.connected) {
+            this.requestMediaList()
+          } else {
+            this.openChannel()
+          }
         },
         fail: (data, code) => {
           this.diag('getReadyState FAIL code=' + code)
+          this.openChannel()
         }
       })
+    },
+
+    // See index.ux: instance() returns a channel, it does not connect it.
+    openChannel() {
+      if (!this.connect || typeof this.connect.connect !== 'function') {
+        this.diag('connect() unavailable')
+        return
+      }
+      this.diag('connect() ...')
+      try {
+        this.connect.connect({
+          success: () => {
+            this.diag('connect() ok')
+            this.connected = true
+            this.requestMediaList()
+          },
+          fail: (data, code) => {
+            this.diag('connect() FAIL code=' + code + ' d=' + JSON.stringify(data))
+          }
+        })
+      } catch (e) {
+        this.diag('connect() threw: ' + e.message)
+      }
     },
 
     sendRaw(payload, toast) {

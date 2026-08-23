@@ -203,12 +203,52 @@
           // collapses to "red", which hides why it is not ready.
           this.diag('getReadyState status=' + data.status)
           this.connected = (data.status === 1)
-          if (this.connected) this.requestSync()
+          if (this.connected) {
+            this.requestSync()
+          } else {
+            this.openChannel()
+          }
         },
         fail: (data, code) => {
           this.diag('getReadyState FAIL code=' + code)
+          this.openChannel()
         }
       })
+    },
+
+    /**
+     * Opens the channel. This is the piece that was missing all along.
+     *
+     * instance() hands back a channel object, it does not connect it — the
+     * instance exposes connect/close/init/uninit/listen, and we were calling
+     * send() on a channel nobody had ever connected. send() answered
+     * {"data":"not connected","code":1006} and getReadyState answered 2, on
+     * every run. Inbound messages kept working because delivery to the app
+     * does not go through this channel, which is what made the failure look
+     * like a one-way link rather than a channel that was never opened.
+     *
+     * Handlers are attached before this runs so an immediate onopen is caught.
+     */
+    openChannel() {
+      if (!this.connect || typeof this.connect.connect !== 'function') {
+        this.diag('connect() unavailable')
+        return
+      }
+      this.diag('connect() ...')
+      try {
+        this.connect.connect({
+          success: () => {
+            this.diag('connect() ok')
+            this.connected = true
+            this.requestSync()
+          },
+          fail: (data, code) => {
+            this.diag('connect() FAIL code=' + code + ' d=' + JSON.stringify(data))
+          }
+        })
+      } catch (e) {
+        this.diag('connect() threw: ' + e.message)
+      }
     },
 
     onHide() {
