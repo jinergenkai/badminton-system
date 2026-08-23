@@ -265,14 +265,68 @@ Watch chỉ gọi `instance()` rồi `send()` luôn.
   minh được từ tài liệu — simulator không implement interconnect, binary không
   chứa API này.
 
-### Đang đo tiếp
+### ✅ KẾT QUẢ PROBE API (2026-08-24)
 
-- Nút **PROBE API** trên trang DIAG: liệt kê thẳng những gì module và instance
-  thực sự phơi ra (`typeof` + `getOwnPropertyNames` + prototype). Nếu tồn tại
-  `connect()`, nó sẽ hiện ra ở đây → chốt (g).
-- Android gọi `launchWearApp()` sau khi `addListener` thành công, và có thêm nút
-  **Launch App on Watch** để bấm tay → chốt (f). Cần xem sau khi bấm thì watch có
-  nổ `onopen` và `ready` có chuyển sang 1 không.
+Nút LIST API trên đồng hồ trả về:
+
+```
+instance own   = package, send, onmessage, onopen, onclose, onerror,
+                 getApkStatus, getReadyState, stored_onopen, stored_onclose,
+                 stored_onmessage
+instance proto = RECV_DATA, CONNECTED, DISCONNECTED, CONNECT_ERROR,
+                 create, connect, init, uninit, send, close, listen, getApkStatus
+```
+
+Và lỗi send nói thẳng: `{"data":"not connected","code":1006}`.
+
+**`connect()` có tồn tại** → giả thuyết (g) đúng về mặt tồn tại. Nhưng gọi
+`conn.connect({success, fail})` thì ném **`miwear object expected`**.
+
+Để ý: `send` và `getApkStatus` nằm ở **cả `own` lẫn `proto`** — framework có bọc
+wrapper JS. `connect` **chỉ có ở `proto`** → nó là hàm native thô, sai receiver
+hoặc sai kiểu tham số. Chữ ký đúng **vẫn chưa tìm ra**.
+
+### 🔧 Cách đã xử lý (không cần biết chữ ký `connect()`)
+
+Manh mối quyết định đến từ người dùng: **có một thứ tự khiến nó xanh ngay** —
+Mi Fitness → band app → Flutter app. Nghĩa là **kênh vẫn tự mở được**, chỉ là
+đồng hồ phải đang nhìn đúng lúc.
+
+Lý do: `getReadyState` chỉ được lấy mẫu **đúng một lần** lúc `onShow`, còn cạnh
+`onopen` thì đã nổ trước đó và không ai nghe. Mở band app trước thì kịp bắt; mở
+ngược lại thì hụt, và **không bao giờ có lần kiểm tra thứ hai**.
+
+Nên thay vì đoán chữ ký, ta bỏ luôn sự phụ thuộc vào thứ tự:
+
+- **Poll `getReadyState` mỗi 3s** khi trang đang hiển thị, xử lý lúc chuyển
+  trạng thái → phone bật lúc nào, đồng hồ nhận ra trong vài giây.
+- **Hàng đợi gửi** trên app object (đổi trang không mất), tối đa 20, phát lại
+  cách nhau 300ms khi kênh lên. Điểm bấm lúc mất kết nối không còn biến mất.
+
+### Còn tồn đọng
+
+- Chữ ký `connect()` — nếu tìm ra thì đồng hồ chủ động mở kênh được, không phải
+  chờ phone. Nút **2 · CONNECT TRY** trên trang DIAG thử 8 dạng gọi và log lỗi
+  từng cái.
+- `launchWearApp()` trả OK nhưng **chưa xác minh được nó có thật sự bật app trên
+  đồng hồ hay không** — `open` vẫn 0 sau lệnh đó.
+- **Vẫn phải vào Mi Fitness sync để lấy auth khi mất.** Nằm ngoài tầm ta: SDK
+  bind vào service XMS trong Mi Fitness.
+
+### 🐛 Bug list nhạc: tìm ra một nguyên nhân độc lập
+
+`<list-item>` **không có `height` thì tính ra 0px và không vẽ gì**, kéo theo cả
+con của nó:
+
+| Trang | style list-item | Kết quả |
+|---|---|---|
+| `settings` | `height: 100px` | ✅ hiện |
+| `media_list` | *không có* | ❌ trắng |
+| `diag` | *không có* | ❌ trắng |
+
+Nghĩa là **kể cả những lần payload về tới nơi, danh sách nhạc cũng không thể hiện
+ra được**. Đã cho height cả 4 loại item. Phần truyền dữ liệu có hỏng nữa hay
+không thì log `recv action=media_list` sẽ trả lời.
 
 Hai cơ chế khả dĩ khiến `addListener` chết, cả hai đều đang hiện diện trong code:
 
