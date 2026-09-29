@@ -37,7 +37,7 @@ TRIM = ('silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03,
         'silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.06,'
         'areverse')
 COMPRESS = 'acompressor=threshold=-20dB:ratio=3:attack=5:release=60'
-LIMIT = 'alimiter=limit=0.891:level=false'  # 0.891 = -1 dBFS
+LIMIT = 'alimiter=limit=0.841:level=false'  # 0.841 = -1.5 dBFS: MP3 re-encode overshoots ~1 dB
 
 
 def mean_max(path, pre_filter=''):
