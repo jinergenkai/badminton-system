@@ -7,6 +7,7 @@ import 'music_service.dart';
 import 'player_service.dart';
 import 'score_announcer_service.dart';
 import 'tts_service.dart';
+import 'voice_clip_service.dart';
 
 /// One thing the sound check plays. [run] starts it; the check then waits
 /// [hold] before moving on, so each sound is heard on its own.
@@ -36,6 +37,10 @@ class SoundCheckService extends GetxService {
   final RxInt index = 0.obs;
   final RxInt total = 0.obs;
 
+  /// Average ms to synthesize + boost one phrase on this device, measured by
+  /// the first step. Shown in Settings: it says whether the tablet keeps up.
+  final RxInt prepareMs = 0.obs;
+
   int _run = 0;
 
   ScoreAnnouncerService get _announcer => Get.find<ScoreAnnouncerService>();
@@ -58,7 +63,22 @@ class SoundCheckService extends GetxService {
   List<SoundCheckStep> _steps() {
     final names = _names();
     final pair = _vi ? 'Đội đỏ, ${names[0]} và ${names[1]}' : 'Red: ${names[0]} and ${names[1]}';
+    final lang = _tts.currentLanguage;
+    final phrases = [
+      ScoreAnnouncerService.serveTail(names[0], lang),
+      ScoreAnnouncerService.serveTail(names[1], lang),
+      ScoreAnnouncerService.winnerLine(pair, lang),
+    ];
     return [
+      // Rendered first so the steps below play the boosted clips, and timed:
+      // this is the real cost of a phrase on this device.
+      SoundCheckStep('Preparing voice clips', () async {
+        final clips = VoiceClipService.maybe;
+        if (clips == null) return;
+        final sw = Stopwatch()..start();
+        await clips.prepareAll(phrases);
+        prepareMs.value = sw.elapsedMilliseconds ~/ phrases.length;
+      }, Duration.zero),
       SoundCheckStep('Score (15 – 13)', () => _announcer.announceScore(15, 13, 'A'),
           const Duration(milliseconds: 2800)),
       SoundCheckStep('Score + server name', () => _announcer.announceScore(5, 3, 'A', serverName: names[0]),

@@ -5,6 +5,8 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'tts_service.dart';
 import 'audio_settings.dart';
+import 'voice_clip_service.dart';
+import 'dart:io';
 
 /// Plays badminton-style score announcements using bundled MP3s
 /// (`assets/audio/score/<lang>/<number>.mp3` + `all.mp3`).
@@ -138,9 +140,14 @@ class ScoreAnnouncerService extends GetxService {
       ];
     }
 
-    final String? tail = serverName == null || serverName.isEmpty
-        ? null
-        : (lang == 'vi' ? '$serverName giao cầu' : '$serverName to serve');
+    String? tail = serverName == null || serverName.isEmpty ? null : serveTail(serverName, lang);
+    // Boosted clip ready: it simply joins the file sequence. Otherwise the
+    // tail is spoken live by TTS after the files.
+    final clip = tail == null ? null : _clip(tail);
+    if (clip != null) {
+      files.add(clip);
+      tail = null;
+    }
     await _playSequence(myJob, files, fallback, tail: tail);
   }
 
@@ -196,11 +203,41 @@ class ScoreAnnouncerService extends GetxService {
     await _cancelInFlight();
     if (myJob != _currentJob) return;
 
+    // Boosted clip + bundled number clips when ready; plain TTS otherwise.
+    final lang = currentLanguage.value;
+    final clip = _clip(winnerLine(winnerName, lang));
+    if (clip != null && _inRange(teamAScore) && _inRange(teamBScore)) {
+      await _playSequence(
+        myJob,
+        [clip, 'audio/score/$lang/$teamAScore.mp3', 'audio/score/$lang/$teamBScore.mp3'],
+        () => _fallbackTts(
+            () => Get.find<TtsService>().announceWinner(winnerName, teamAScore, teamBScore)),
+      );
+      return;
+    }
     await _fallbackTts(
         () => Get.find<TtsService>().announceWinner(winnerName, teamAScore, teamBScore));
   }
 
   bool _inRange(int score) => score >= 0 && score <= _maxScore;
+
+  /// "<name> giao cầu" — read after the score when the set is named.
+  static String serveTail(String name, String lang) =>
+      lang.startsWith('vi') ? '$name giao cầu' : '$name to serve';
+
+  /// "<winner> thắng" — followed by the two scores as bundled number clips.
+  static String winnerLine(String winnerName, String lang) =>
+      lang.startsWith('vi') ? '$winnerName thắng' : '$winnerName wins';
+
+  /// A boosted clip for [text] if one is ready; otherwise null, and one is
+  /// prepared in the background for next time.
+  String? _clip(String text) {
+    final v = VoiceClipService.maybe;
+    if (v == null) return null;
+    final p = v.ready(text);
+    if (p == null) v.prepare(text);
+    return p;
+  }
 
   /// Plays `files` sequentially with cancel awareness. On any missing asset
   /// or playback error, delegates to `onFallback` (which speaks via TTS).
@@ -214,6 +251,10 @@ class ScoreAnnouncerService extends GetxService {
     // mid-chain (which would leave the hype callback un-fired).
     for (final f in files) {
       try {
+        if (f.startsWith('/')) {
+          if (!File(f).existsSync()) throw Exception('gone');
+          continue;
+        }
         await rootBundle.load('assets/$f');
       } catch (_) {
         print('🔊 [ScoreAnnouncer] Missing asset: $f — falling back to TTS');
@@ -232,7 +273,7 @@ class ScoreAnnouncerService extends GetxService {
         // on quick taps). The local completer is completed by that cancel.
         final done = Completer<void>();
         _playCompleter = done;
-        await _player.play(AssetSource(f));
+        await _player.play(f.startsWith('/') ? DeviceFileSource(f) : AssetSource(f));
         await done.future;
         if (myJob != _currentJob) return;
       }

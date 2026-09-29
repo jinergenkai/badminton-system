@@ -9,6 +9,7 @@ import '../services/music_service.dart';
 import '../services/audio_settings.dart';
 import '../services/tts_service.dart';
 import '../services/sound_check_service.dart';
+import '../services/voice_clip_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -772,7 +773,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     child: Text(
                       on
                           ? '${check.index.value}/${check.total.value}  ${check.current.value}'
-                          : 'Plays every sound once, in turn',
+                          : check.prepareMs.value > 0
+                              ? 'Voice clip: ${check.prepareMs.value} ms each on this device'
+                              : 'Plays every sound once, in turn',
                       style: TextStyle(color: on ? Colors.white : Colors.white54, fontSize: 13),
                     ),
                   ),
@@ -785,6 +788,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
               () => audio.setMaster(audio.masterVolume.value)),
           _buildVolumeRow('Voice (score, names)', tts.volume, Colors.amber,
               () => tts.saveVolumePreference()),
+          if (VoiceClipService.maybe != null)
+            _buildVolumeRow('Voice boost (names, winner)', VoiceClipService.maybe!.boost,
+                Colors.amberAccent, () => VoiceClipService.maybe!.setBoost(VoiceClipService.maybe!.boost.value),
+                max: 2.0),
           _buildVolumeRow('Hype', hype.volume, Colors.cyanAccent, () => hype.savePreferences()),
           _buildVolumeRow('Tension music', music.tensionVolume, Colors.orangeAccent,
               () => music.savePreferences()),
@@ -808,7 +815,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _buildVolumeRow(String label, RxDouble rxVolume, Color color, VoidCallback? onSave) {
+  Widget _buildVolumeRow(String label, RxDouble rxVolume, Color color, VoidCallback? onSave,
+      {double min = 0.0, double max = 1.0}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
       child: Obx(() => Row(
@@ -823,9 +831,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: color, fontWeight: FontWeight.bold, fontSize: 13)),
               Expanded(
                 child: Slider(
-                  value: rxVolume.value,
-                  min: 0.0,
-                  max: 1.0,
+                  value: rxVolume.value.clamp(min, max),
+                  min: min,
+                  max: max,
                   activeColor: color,
                   inactiveColor: Colors.white12,
                   onChanged: (v) => rxVolume.value = v,

@@ -6,6 +6,7 @@ import 'views/score_screen.dart';
 import 'services/database_service.dart';
 import 'services/audio_settings.dart';
 import 'services/player_service.dart';
+import 'services/voice_clip_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,7 @@ void main() async {
   // the master volume held here.
   await Get.putAsync(() => AudioSettings().init());
   await Get.putAsync(() => PlayerService().init());
+  await Get.putAsync(() => VoiceClipService().init());
 
   runApp(const MyApp());
 }

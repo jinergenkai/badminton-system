@@ -19,6 +19,7 @@ import '../services/music_service.dart';
 import '../services/audio_settings.dart';
 import '../services/player_service.dart';
 import '../services/sound_check_service.dart';
+import '../services/voice_clip_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
 class ScoreController extends GetxController {
@@ -106,9 +107,10 @@ class ScoreController extends GetxController {
 
   /// Winner as read aloud: the team plus both full names when the set is
   /// named — "Đội đỏ, Hùng Đại Ca và Như Quỳnh" (then "thắng 21 18").
-  String _winnerSpoken() {
+  String _winnerSpoken() => _winnerSpokenFor(gameState.winner);
+
+  String _winnerSpokenFor(String w) {
     final lu = lineup.value;
-    final w = gameState.winner;
     if (lu == null || (w != 'A' && w != 'B')) return gameState.winnerName;
     final vi = _ttsService.currentLanguageRx.value.toLowerCase().startsWith('vi');
     final names = lu.pair(w).map(lu.fullOf).toList();
@@ -116,6 +118,20 @@ class ScoreController extends GetxController {
       return '${w == 'A' ? 'Đội đỏ' : 'Đội xanh'}, ${names[0]} và ${names[1]}';
     }
     return '${w == 'A' ? 'Red' : 'Blue'}: ${names[0]} and ${names[1]}';
+  }
+
+  /// Every phrase this lineup can need, rendered before the first point:
+  /// four "<name> giao cầu" and both winner lines.
+  void _prepareVoiceClips(Lineup lu) {
+    final clips = VoiceClipService.maybe;
+    if (clips == null) return;
+    final lang = _ttsService.currentLanguage;
+    clips.prepareAll([
+      for (final id in [...lu.red, ...lu.blue])
+        ScoreAnnouncerService.serveTail(lu.fullOf(id), lang),
+      ScoreAnnouncerService.winnerLine(_winnerSpokenFor('A'), lang),
+      ScoreAnnouncerService.winnerLine(_winnerSpokenFor('B'), lang),
+    ]);
   }
 
   /// Full name of whoever serves after [rallies], for the voice.
@@ -315,7 +331,12 @@ class ScoreController extends GetxController {
       final pv = event['pv'];
       if (pv is num) PlayerService.maybe?.onBandVersion(pv.toInt());
       if (event['rallies'] != null) _lastBandRallies = event['rallies'].toString();
-      lineup.value = Lineup.fromBand(event['lu']);
+      final newLu = Lineup.fromBand(event['lu']);
+      final changed = newLu?.srv != lineup.value?.srv ||
+          newLu?.red.join() != lineup.value?.red.join() ||
+          newLu?.blue.join() != lineup.value?.blue.join();
+      lineup.value = newLu;
+      if (changed && newLu != null) _prepareVoiceClips(newLu);
       serverId.value = event['srv']?.toString() ?? '';
       if (bandMatchId != null && bandRevision >= 0) {
         isNewRev = !(_lastBandMatchId == bandMatchId && bandRevision <= _lastBandRevision);

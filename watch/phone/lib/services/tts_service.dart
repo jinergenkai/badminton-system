@@ -187,6 +187,23 @@ class TtsService extends GetxService {
     }
   }
 
+  /// Render [text] to a WAV file at [path] (for VoiceClipService). Waits for
+  /// the engine to finish; its completion is a separate "synth" event, so the
+  /// speech-completed hype chain is not triggered.
+  Future<bool> synthesizeTo(String text, String path) async {
+    if (!_isInitialized) await initialize();
+    try {
+      await _flutterTts.awaitSynthCompletion(true);
+      final r = await _flutterTts
+          .synthesizeToFile(text, path, true)
+          .timeout(const Duration(seconds: 10));
+      return r == 1;
+    } catch (e) {
+      print('🔊 [TTS] synthesize failed: $e');
+      return false;
+    }
+  }
+
   /// Speak any text
   Future<void> speak(String text) async {
     if (!_isInitialized) await initialize();
