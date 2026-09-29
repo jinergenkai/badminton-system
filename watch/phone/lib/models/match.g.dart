@@ -30,13 +30,14 @@ class MatchAdapter extends TypeAdapter<Match> {
       status: fields[10] as String? ?? 'completed',
       durationEstimated: fields[11] as bool? ?? false,
       rallySequence: fields[12] as String? ?? '',
+      rallyTimes: fields[13] as String? ?? '',
     );
   }
 
   @override
   void write(BinaryWriter writer, Match obj) {
     writer
-      ..writeByte(13)
+      ..writeByte(14)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -62,7 +63,9 @@ class MatchAdapter extends TypeAdapter<Match> {
       ..writeByte(11)
       ..write(obj.durationEstimated)
       ..writeByte(12)
-      ..write(obj.rallySequence);
+      ..write(obj.rallySequence)
+      ..writeByte(13)
+      ..write(obj.rallyTimes);
   }
 
   @override

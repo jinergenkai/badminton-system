@@ -16,6 +16,7 @@ import '../services/database_service.dart';
 import '../services/watch_connectivity_service.dart';
 import '../services/music_service.dart';
 import '../services/audio_settings.dart';
+import '../services/player_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
 class ScoreController extends GetxController {
@@ -247,6 +248,9 @@ class ScoreController extends GetxController {
     bool isNewRev = true;
     if (fromBand) {
       _lastBandSeen = DateTime.now();
+      // Every band state carries the version of the player list it holds.
+      final pv = event['pv'];
+      if (pv is num) PlayerService.maybe?.onBandVersion(pv.toInt());
       if (event['rallies'] != null) _lastBandRallies = event['rallies'].toString();
       if (bandMatchId != null && bandRevision >= 0) {
         isNewRev = !(_lastBandMatchId == bandMatchId && bandRevision <= _lastBandRevision);
@@ -437,6 +441,7 @@ class ScoreController extends GetxController {
       status: status,
       durationEstimated: seeded,
       rallySequence: rallies,
+      rallyTimes: event['ralT']?.toString() ?? '',
     ));
   }
 

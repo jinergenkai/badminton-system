@@ -5,6 +5,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'views/score_screen.dart';
 import 'services/database_service.dart';
 import 'services/audio_settings.dart';
+import 'services/player_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,7 @@ void main() async {
   // Registered before any player: every service multiplies its own level by
   // the master volume held here.
   await Get.putAsync(() => AudioSettings().init());
+  await Get.putAsync(() => PlayerService().init());
 
   runApp(const MyApp());
 }

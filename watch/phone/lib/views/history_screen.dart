@@ -12,8 +12,17 @@ class HistoryScreen extends StatefulWidget {
 }
 
 class _HistoryScreenState extends State<HistoryScreen> {
+  List<Match> _all = [];
   List<Match> _matches = [];
   bool _isLoading = true;
+
+  /// Complete sets by default: those are what analysis uses. Stopped sets
+  /// (reset mid-game) are one tap away.
+  String _filter = 'completed';
+
+  void _applyFilter() {
+    _matches = _filter == 'all' ? _all : _all.where((m) => m.status == _filter).toList();
+  }
 
   @override
   void initState() {
@@ -27,7 +36,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
     });
 
     try {
-      _matches = DatabaseService.getAllMatches();
+      _all = DatabaseService.getAllMatches();
+      _applyFilter();
     } catch (e) {
       print('Error loading matches: $e');
     } finally {
@@ -103,8 +113,31 @@ class _HistoryScreenState extends State<HistoryScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Match History'),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                for (final f in const [['completed', 'Completed'], ['stopped', 'Stopped'], ['all', 'All']])
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: ChoiceChip(
+                      label: Text(f[1]),
+                      selected: _filter == f[0],
+                      onSelected: (_) => setState(() {
+                        _filter = f[0];
+                        _applyFilter();
+                      }),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
         actions: [
-          if (_matches.isNotEmpty)
+          if (_all.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep),
               onPressed: _clearAllMatches,
@@ -210,6 +243,18 @@ class _MatchCard extends StatelessWidget {
                           fontWeight: FontWeight.w900,
                         ),
                       ),
+                      if (match.status == 'stopped') ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Colors.orangeAccent.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: const Text('STOP',
+                              style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
                       const SizedBox(width: 10),
                       Icon(
                         Icons.calendar_today,

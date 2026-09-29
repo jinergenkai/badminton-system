@@ -11,6 +11,7 @@ import '../widgets/cooldown_bar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
+import 'players_screen.dart';
 
 class ScoreScreen extends StatefulWidget {
   const ScoreScreen({super.key});
@@ -256,6 +257,8 @@ class _ScoreScreenState extends State<ScoreScreen> {
           }),
           Row(
             children: [
+              _buildTopIconButton(icon: Icons.groups, onPressed: () => Get.to(() => const PlayersScreen())),
+              const SizedBox(width: 12),
               _buildTopIconButton(icon: Icons.history, onPressed: () => Get.to(() => const HistoryScreen())),
               const SizedBox(width: 12),
               _buildTopIconButton(icon: Icons.settings, onPressed: () => Get.to(() => const SettingsScreen())),
