@@ -118,18 +118,19 @@ class ScoreAnnouncerService extends GetxService {
         () => Get.find<TtsService>().announceScore(teamAScore, teamBScore, scoringTeam));
 
     final lang = currentLanguage.value;
+    int say(int n) => AudioSettings.spokenScore(n, lang);
 
     // Badminton convention: server reads first; on tie, single number + "all".
     final List<String> files;
     if (teamAScore == teamBScore) {
       if (!_inRange(teamAScore)) return fallback();
       files = [
-        'audio/score/$lang/$teamAScore.mp3',
+        'audio/score/$lang/${say(teamAScore)}.mp3',
         'audio/score/$lang/all.mp3',
       ];
     } else {
-      final int first = scoringTeam == 'A' ? teamAScore : teamBScore;
-      final int second = scoringTeam == 'A' ? teamBScore : teamAScore;
+      final int first = say(scoringTeam == 'A' ? teamAScore : teamBScore);
+      final int second = say(scoringTeam == 'A' ? teamBScore : teamAScore);
       if (!_inRange(first) || !_inRange(second)) return fallback();
       files = [
         'audio/score/$lang/$first.mp3',
@@ -156,6 +157,7 @@ class ScoreAnnouncerService extends GetxService {
         () => Get.find<TtsService>().announceUndo(teamAScore, teamBScore, undoneTeam));
 
     final lang = currentLanguage.value;
+    int say(int n) => AudioSettings.spokenScore(n, lang);
 
     // After undo, the team that LOST the point no longer serves — the other
     // team is now the server and reads first.
@@ -164,13 +166,13 @@ class ScoreAnnouncerService extends GetxService {
       if (!_inRange(teamAScore)) return fallback();
       files = [
         'audio/score/$lang/undo.mp3',
-        'audio/score/$lang/$teamAScore.mp3',
+        'audio/score/$lang/${say(teamAScore)}.mp3',
         'audio/score/$lang/all.mp3',
       ];
     } else {
       final bool serverIsA = undoneTeam == 'B';
-      final int first = serverIsA ? teamAScore : teamBScore;
-      final int second = serverIsA ? teamBScore : teamAScore;
+      final int first = say(serverIsA ? teamAScore : teamBScore);
+      final int second = say(serverIsA ? teamBScore : teamAScore);
       if (!_inRange(first) || !_inRange(second)) return fallback();
       files = [
         'audio/score/$lang/undo.mp3',

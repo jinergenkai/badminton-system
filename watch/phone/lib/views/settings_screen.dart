@@ -8,6 +8,7 @@ import '../services/database_service.dart';
 import '../services/music_service.dart';
 import '../services/audio_settings.dart';
 import '../services/tts_service.dart';
+import '../services/sound_check_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -90,6 +91,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 120, 16, 40),
           children: [
+            _buildSectionHeader('SOUND'),
+            const SizedBox(height: 16),
+            _buildSoundCard().animate().fadeIn(delay: 50.ms),
+            const SizedBox(height: 32),
             _buildSectionHeader('TEAM PROFILES'),
             const SizedBox(height: 16),
             _buildCompactTeamCard().animate().fadeIn(delay: 100.ms).slideY(begin: 0.1),
@@ -224,7 +229,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildPreferencesCard() {
     final controller = Get.find<ScoreController>();
-    final tts = Get.find<TtsService>();
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
@@ -243,10 +247,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               activeColor: Colors.amber,
             ),
           )),
-          Obx(() => controller.scoreAnnouncementsEnabled.value
-              ? _buildVolumeRow('Score Volume', tts.volume, Colors.amber,
-                  () => tts.saveVolumePreference())
-              : const SizedBox.shrink()),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
           // Mode first: it decides whether anything below it is audible at all.
           Obx(() {
@@ -265,28 +265,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onChanged: (v) => audio
                         .setMode(v ? PlayMode.music : PlayMode.commentary),
                     activeColor: Colors.amber,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  child: Row(
-                    children: [
-                      const Text('Master Volume',
-                          style: TextStyle(color: Colors.white70, fontSize: 13)),
-                      Expanded(
-                        child: Slider(
-                          value: audio.masterVolume.value,
-                          activeColor: Colors.amber,
-                          onChanged: (v) => audio.masterVolume.value = v,
-                          onChangeEnd: (v) => audio.setMaster(v),
-                        ),
-                      ),
-                      Text('${(audio.masterVolume.value * 100).round()}%',
-                          style: const TextStyle(
-                              color: Colors.amber,
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold)),
-                    ],
                   ),
                 ),
               ],
@@ -466,8 +444,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           )),
           Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          _buildVolumeRow('Hype Volume', hype.volume, Colors.cyanAccent, () => hype.savePreferences()),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
           Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
@@ -569,10 +545,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeColor: Colors.pinkAccent,
                 ),
               )),
-          Obx(() => music.winMusicEnabled.value
-              ? _buildVolumeRow('Win Volume', music.winVolume, Colors.pinkAccent,
-                  () => music.savePreferences())
-              : const SizedBox.shrink()),
           // Play mode chips
           Obx(() => music.winMusicEnabled.value
               ? Padding(
@@ -605,10 +577,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   activeColor: Colors.orangeAccent,
                 ),
               )),
-          Obx(() => music.tensionMusicEnabled.value
-              ? _buildVolumeRow('Tension Volume', music.tensionVolume, Colors.orangeAccent,
-                  () => music.savePreferences())
-              : const SizedBox.shrink()),
           Obx(() => music.tensionMusicEnabled.value
               ? Padding(
                   padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
@@ -759,6 +727,82 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             );
           }),
+        ],
+      ),
+    );
+  }
+
+  /// Every volume in one place, under the button that plays them all.
+  Widget _buildSoundCard() {
+    final audio = Get.find<AudioSettings>();
+    final tts = Get.find<TtsService>();
+    final hype = Get.find<HypeVoiceController>();
+    final music = Get.find<MusicService>();
+    final check = Get.isRegistered<SoundCheckService>()
+        ? Get.find<SoundCheckService>()
+        : Get.put(SoundCheckService());
+    Widget div() => Divider(color: Colors.white.withOpacity(0.05), height: 1);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+            child: Obx(() {
+              final on = check.running.value;
+              return Row(
+                children: [
+                  FilledButton.icon(
+                    onPressed: on ? check.stop : check.start,
+                    icon: Icon(on ? Icons.stop : Icons.play_arrow),
+                    label: Text(on ? 'Stop' : 'Sound check'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: on ? Colors.redAccent : Colors.amber,
+                      foregroundColor: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      on
+                          ? '${check.index.value}/${check.total.value}  ${check.current.value}'
+                          : 'Plays every sound once, in turn',
+                      style: TextStyle(color: on ? Colors.white : Colors.white54, fontSize: 13),
+                    ),
+                  ),
+                ],
+              );
+            }),
+          ),
+          div(),
+          _buildVolumeRow('Master', audio.masterVolume, Colors.amber,
+              () => audio.setMaster(audio.masterVolume.value)),
+          _buildVolumeRow('Voice (score, names)', tts.volume, Colors.amber,
+              () => tts.saveVolumePreference()),
+          _buildVolumeRow('Hype', hype.volume, Colors.cyanAccent, () => hype.savePreferences()),
+          _buildVolumeRow('Tension music', music.tensionVolume, Colors.orangeAccent,
+              () => music.savePreferences()),
+          _buildVolumeRow('Win / playlist music', music.winVolume, Colors.pinkAccent,
+              () => music.savePreferences()),
+          _buildVolumeRow('Music while talking', music.duckLevel, Colors.white70,
+              () => music.savePreferences()),
+          div(),
+          Obx(() => _buildSettingsTile(
+                icon: Icons.short_text,
+                title: 'Short score reading',
+                subtitle: 'Vietnamese: 15 – 13 is read "năm – ba"',
+                trailing: Switch(
+                  value: audio.shortScore.value,
+                  onChanged: audio.setShortScore,
+                  activeColor: Colors.amber,
+                ),
+              )),
         ],
       ),
     );

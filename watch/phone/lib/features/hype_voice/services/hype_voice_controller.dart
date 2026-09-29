@@ -454,6 +454,20 @@ class HypeVoiceController extends GetxController {
     }
   }
 
+  /// Sound check: one hype clip at the current hype volume, bypassing the
+  /// triggers and the on/off switch.
+  Future<void> preview() async {
+    for (final id in const ['double_kill_1', 'triple_kill_1', 'godlike_1', 'game_on_1']) {
+      try {
+        await rootBundle.load('assets/audio/hype/$id.mp3');
+      } catch (_) {
+        continue;
+      }
+      await _audioPlayer.play(AssetSource('audio/hype/$id.mp3'));
+      return;
+    }
+  }
+
   Future<void> stopAudio() async {
     _pendingHypeId = null;
     await _audioPlayer.stop();

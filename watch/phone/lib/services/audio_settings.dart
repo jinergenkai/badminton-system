@@ -30,6 +30,21 @@ class AudioSettings extends GetxService {
 
   final RxString mode = PlayMode.commentary.obs;
 
+  /// Casual Vietnamese reading: from 11 up only the last digit is said,
+  /// "mười lăm – mười ba" becomes "năm – ba". Round tens (10, 20, 30) keep
+  /// their full name — "không" would say nothing useful.
+  final RxBool shortScore = true.obs;
+
+  /// The number to say for [n]. Only Vietnamese is shortened: English has no
+  /// such habit ("five three" for 15-13 would just be wrong).
+  static int spokenScore(int n, String lang) {
+    final s = maybe;
+    if (s == null || !s.shortScore.value) return n;
+    if (!lang.toLowerCase().startsWith('vi')) return n;
+    if (n < 10 || n % 10 == 0) return n;
+    return n % 10;
+  }
+
   bool get isMusicMode => mode.value == PlayMode.music;
 
   /// A player's own level, scaled by the master and clamped to a valid range.
@@ -42,6 +57,7 @@ class AudioSettings extends GetxService {
     final prefs = await SharedPreferences.getInstance();
     masterVolume.value = prefs.getDouble('${_pref}master') ?? 1.0;
     mode.value = prefs.getString('${_pref}mode') ?? PlayMode.commentary;
+    shortScore.value = prefs.getBool('${_pref}short_score') ?? true;
     return this;
   }
 
@@ -49,6 +65,12 @@ class AudioSettings extends GetxService {
     masterVolume.value = v.clamp(0.0, 1.0);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble('${_pref}master', masterVolume.value);
+  }
+
+  Future<void> setShortScore(bool v) async {
+    shortScore.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('${_pref}short_score', v);
   }
 
   Future<void> setMode(String m) async {

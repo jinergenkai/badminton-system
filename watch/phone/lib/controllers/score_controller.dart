@@ -18,6 +18,7 @@ import '../services/watch_connectivity_service.dart';
 import '../services/music_service.dart';
 import '../services/audio_settings.dart';
 import '../services/player_service.dart';
+import '../services/sound_check_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
 class ScoreController extends GetxController {
@@ -221,10 +222,13 @@ class ScoreController extends GetxController {
     //   2. TtsService finishes (covers: winner — always TTS since team name
     //      is dynamic — and any score/undo fallback path)
     // Both wired to the same hype trigger so the chain stays consistent.
+    // The sound check plays these sounds on its own: nothing chains off them.
     _scoreAnnouncer.onAnnouncementCompleted = () {
+      if (SoundCheckService.active) return;
       _hypeController.playHype();
     };
     _ttsService.onSpeechCompleted = () {
+      if (SoundCheckService.active) return;
       _hypeController.playHype();
     };
 
@@ -232,6 +236,9 @@ class ScoreController extends GetxController {
     // Tension music is started HERE (not during score update) so it never
     // competes with TTS or hype for AudioFocus.
     _hypeController.onPlaybackCompleted = () {
+      // End of the talking chain (score -> name -> hype): music back up.
+      _musicService.unduck();
+      if (SoundCheckService.active) return;
       if (isGameEnded.value) {
         _musicService.playWinMusic();
       } else if (_musicService.isTensionMode.value && !_musicService.isPlaying.value) {
@@ -518,6 +525,8 @@ class ScoreController extends GetxController {
     // announce-then-hype chain is skipped rather than merely quietened.
     if (_audio.isMusicMode) return;
 
+    // Music steps aside for the whole chain; onPlaybackCompleted restores it.
+    _musicService.duck();
     if (scoreAnnouncementsEnabled.value) {
       _scoreAnnouncer.announceScore(a, b, team, serverName: serverName);
     } else {

@@ -26,6 +26,9 @@ class MusicService extends GetxController {
   final RxBool tensionMusicEnabled = true.obs;
   final RxDouble winVolume = 1.0.obs;
   final RxDouble tensionVolume = 0.45.obs;
+
+  /// Music level while anyone speaks, as a fraction of its normal level.
+  final RxDouble duckLevel = 0.25.obs;
   final RxInt tensionThreshold = 15.obs;
   final RxString playMode = 'random'.obs; // 'random' | 'sequential'
 
@@ -254,6 +257,68 @@ class MusicService extends GetxController {
     await _playTrack(track, volume: winVolume.value, fadeDurationMs: 1500);
   }
 
+  /// Tension track selection, shared by the match and the sound check.
+  String _pickTensionTrack() {
+    final tensionTracks = playlist.where((p) => p.toLowerCase().contains('tension')).toList();
+    if (tensionTracks.isEmpty) return _getNextTrackPath();
+    return playMode.value == 'random'
+        ? tensionTracks[_random.nextInt(tensionTracks.length)]
+        : tensionTracks[0];
+  }
+
+  /// Sound check: play regardless of mode and on/off switches.
+  Future<void> previewTension() async {
+    if (playlist.isEmpty) return;
+    await stopMusic(fadeOut: false);
+    await _playTrack(_pickTensionTrack(), volume: tensionVolume.value, fadeDurationMs: 600);
+  }
+
+  Future<void> previewWin() async {
+    if (playlist.isEmpty) return;
+    await stopMusic(fadeOut: false);
+    final track = _getNextTrackPath();
+    if (track.isEmpty) return;
+    await _playTrack(track, volume: winVolume.value, fadeDurationMs: 600);
+  }
+
+  // ── Ducking ──────────────────────────────────────────────────────────
+  // Speech never out-shouts a mastered track at the same level: music is
+  // dense, speech has gaps. So the music steps aside instead — down to
+  // [duckLevel] while anyone talks, back up when the talking chain ends.
+  bool _ducked = false;
+  Timer? _duckSafety;
+
+  void duck() {
+    if (_player.state != PlayerState.playing) return;
+    _ducked = true;
+    // Never stay down if the chain that should restore it stalls.
+    _duckSafety?.cancel();
+    _duckSafety = Timer(const Duration(seconds: 12), unduck);
+    _fadeTo(_scaled(_ownTarget) * duckLevel.value, 250);
+  }
+
+  void unduck() {
+    _duckSafety?.cancel();
+    if (!_ducked) return;
+    _ducked = false;
+    if (_player.state != PlayerState.playing) return;
+    _fadeTo(_scaled(_ownTarget), 800);
+  }
+
+  /// Linear fade from the current level to [target], up or down.
+  void _fadeTo(double target, int durationMs) {
+    _fadeTimer?.cancel();
+    const steps = 15;
+    final start = _currentVolume;
+    var i = 0;
+    _fadeTimer = Timer.periodic(Duration(milliseconds: durationMs ~/ steps), (t) {
+      i++;
+      _currentVolume = i >= steps ? target : start + (target - start) * i / steps;
+      _player.setVolume(_currentVolume.clamp(0.0, 1.0));
+      if (i >= steps) t.cancel();
+    });
+  }
+
   Future<void> playTensionMusic() async {
     // Ducking to a tension track mid-song is exactly the mood-killer that
     // music mode exists to avoid.
@@ -275,21 +340,7 @@ class MusicService extends GetxController {
       await stopMusic(fadeOut: true);
     }
 
-    // Filter tracks containing "tension"
-    final tensionTracks = playlist.where(
-      (p) => p.toLowerCase().contains('tension')
-    ).toList();
-
-    String track;
-    if (tensionTracks.isNotEmpty) {
-      if (playMode.value == 'random') {
-        track = tensionTracks[_random.nextInt(tensionTracks.length)];
-      } else {
-        track = tensionTracks[0];
-      }
-    } else {
-      track = _getNextTrackPath();
-    }
+    final track = _pickTensionTrack();
 
     print('🎵 [Music] Starting Tension: ${track.split('/').last} at volume ${tensionVolume.value}');
     await _playTrack(track, volume: tensionVolume.value, fadeDurationMs: 3000);
@@ -324,7 +375,7 @@ class MusicService extends GetxController {
       // The fade has to be cancelled first — otherwise its next tick writes the
       // old ceiling straight back over this.
       _fadeTimer?.cancel();
-      _currentVolume = _scaled(_ownTarget);
+      _currentVolume = _scaled(_ownTarget) * (_ducked ? duckLevel.value : 1.0);
       _player.setVolume(_currentVolume);
       print('🎵 [Music] master=$v -> volume ${_currentVolume.toStringAsFixed(2)}'
           ' (own ${_ownTarget.toStringAsFixed(2)})');
@@ -332,6 +383,8 @@ class MusicService extends GetxController {
   }
 
   Future<void> _playTrack(String track, {required double volume, int fadeDurationMs = 2000}) async {
+    _ducked = false;
+    _duckSafety?.cancel();
     try {
       _currentVolume = 0.0;
       await _player.setVolume(0.0);
@@ -439,6 +492,7 @@ class MusicService extends GetxController {
     winVolume.value = prefs.getDouble('${_pref}win_volume') ?? 1.0;
     tensionVolume.value = prefs.getDouble('${_pref}tension_volume') ?? 0.45;
     tensionThreshold.value = prefs.getInt('${_pref}tension_threshold') ?? 15;
+    duckLevel.value = prefs.getDouble('${_pref}duck_level') ?? 0.25;
     playMode.value = prefs.getString('${_pref}play_mode') ?? 'random';
     isNonStop.value = prefs.getBool('${_pref}non_stop') ?? false;
   }
@@ -450,6 +504,7 @@ class MusicService extends GetxController {
     await prefs.setDouble('${_pref}win_volume', winVolume.value);
     await prefs.setDouble('${_pref}tension_volume', tensionVolume.value);
     await prefs.setInt('${_pref}tension_threshold', tensionThreshold.value);
+    await prefs.setDouble('${_pref}duck_level', duckLevel.value);
     await prefs.setString('${_pref}play_mode', playMode.value);
   }
 

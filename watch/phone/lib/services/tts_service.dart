@@ -96,14 +96,15 @@ class TtsService extends GetxService {
 
     try {
       String announcement;
+      int say(int n) => AudioSettings.spokenScore(n, _currentLanguage.value);
       if (teamAScore == teamBScore) {
         announcement = _currentLanguage.value.startsWith('vi')
-            ? "$teamAScore đều"
+            ? "${say(teamAScore)} đều"
             : "$teamAScore all";
       } else {
         // Scoring team reads first (badminton rule: server announces first)
-        final first = scoringTeam == 'A' ? teamAScore : teamBScore;
-        final second = scoringTeam == 'A' ? teamBScore : teamAScore;
+        final first = say(scoringTeam == 'A' ? teamAScore : teamBScore);
+        final second = say(scoringTeam == 'A' ? teamBScore : teamAScore);
         announcement = "$first, $second";
       }
 
