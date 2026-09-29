@@ -116,6 +116,8 @@
       serveTeam: '',
       serveName: '',
       serveCourt: '',
+      // Pending deferred history push (pushUnsyncedHistory).
+      historyTimer: null,
       connected: false,
       isConnecting: false,
       connect: null,
@@ -382,7 +384,21 @@
     // after a set is archived. One record per message; the next goes only
     // after the phone acks the previous one, so nothing is ever sent in a
     // burst. With nothing unsynced this sends nothing at all.
-    pushUnsyncedHistory() {
+    //
+    // Always deferred. Every caller has just sent a state message, and two
+    // large messages back to back lose the second one: with a lineup on
+    // board the winning `score_X` (~650 B) never reached the phone right
+    // after the `match_record` (~600 B), so the phone never showed the win.
+    // Seen in logcat; the smaller unnamed pair happened to survive.
+    pushUnsyncedHistory(delay) {
+      if (this.historyTimer) clearTimeout(this.historyTimer)
+      this.historyTimer = setTimeout(() => {
+        this.historyTimer = null
+        this.pushNextRecord()
+      }, delay === undefined ? 1200 : delay)
+    },
+
+    pushNextRecord() {
       const def = this.$app && this.$app.$def
       if (!def || !def.matchHistory || !this.connected || !this.stateLoaded) return
       if (def.historyInFlight && Date.now() - def.historyInFlight < 5000) return
@@ -413,7 +429,8 @@
       }
       def.historyInFlight = 0
       if (changed) this.saveHistory()
-      setTimeout(() => { this.pushUnsyncedHistory() }, 300)
+      // Nothing else is in flight right after an ack: the next can go sooner.
+      this.pushUnsyncedHistory(300)
     },
 
     startFreshMatch() {
