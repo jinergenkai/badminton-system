@@ -94,6 +94,29 @@ class ScoreController extends GetxController {
     return lu.pair(team).map((id) => (id == srv ? '🏸' : '') + lu.shortOf(id)).join(' · ');
   }
 
+  /// Winner as shown on the win overlay: the pair's band names when the set
+  /// is named ("Hùng · Quỳnh"), otherwise the team name.
+  String winnerDisplay() {
+    final lu = lineup.value;
+    final w = gameState.winner;
+    if (lu == null || (w != 'A' && w != 'B')) return gameState.winnerName;
+    return lu.pair(w).map(lu.shortOf).join(' · ');
+  }
+
+  /// Winner as read aloud: the team plus both full names when the set is
+  /// named — "Đội đỏ, Hùng Đại Ca và Như Quỳnh" (then "thắng 21 18").
+  String _winnerSpoken() {
+    final lu = lineup.value;
+    final w = gameState.winner;
+    if (lu == null || (w != 'A' && w != 'B')) return gameState.winnerName;
+    final vi = _ttsService.currentLanguageRx.value.toLowerCase().startsWith('vi');
+    final names = lu.pair(w).map(lu.fullOf).toList();
+    if (vi) {
+      return '${w == 'A' ? 'Đội đỏ' : 'Đội xanh'}, ${names[0]} và ${names[1]}';
+    }
+    return '${w == 'A' ? 'Red' : 'Blue'}: ${names[0]} and ${names[1]}';
+  }
+
   /// Full name of whoever serves after [rallies], for the voice.
   String? _serverFullName(String rallies) {
     final lu = lineup.value;
@@ -261,6 +284,17 @@ class ScoreController extends GetxController {
     if (action == 'match_record') {
       _lastBandSeen = DateTime.now();
       _storeBandRecord(event);
+      // Backstop for a lost live state: the record of the set on court says
+      // it is over, but the board has not ended it. Seen with a lineup on
+      // board: the winning score_X (sent right after this record) was dropped
+      // by the transport, so the phone never showed the win. Replayed as a
+      // state; a state that did arrive has an equal revision and is a no-op.
+      if (event['status'] == 'completed' &&
+          event['matchId'] == _lastBandMatchId &&
+          !isGameEnded.value) {
+        print('⌚ [Controller] record says set won; live state missing -> applying');
+        _handleWatchCommand({...event, 'action': 'record_state'});
+      }
       return;
     }
 
@@ -367,7 +401,7 @@ class ScoreController extends GetxController {
     if (action == 'score_A' || action == 'score_B' || action == 'seed_score' ||
         action == 'band_online' || action == 'band_ready' ||
         action == 'band_reconnected' || action == 'state_reply' ||
-        action == 'manual_state') {
+        action == 'manual_state' || action == 'record_state') {
       if (newScoreA >= 0 && newScoreB >= 0) {
         final int oldA = gameState.teamAScore;
         final int oldB = gameState.teamBScore;
@@ -704,7 +738,7 @@ class ScoreController extends GetxController {
       _musicService.stopMusic(fadeOut: true);
       
       if (scoreAnnouncementsEnabled.value) {
-        _scoreAnnouncer.announceWinner(gameState.winnerName, gameState.teamAScore, gameState.teamBScore);
+        _scoreAnnouncer.announceWinner(_winnerSpoken(), gameState.teamAScore, gameState.teamBScore);
       } else {
         _hypeController.playHype();
       }

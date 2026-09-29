@@ -224,9 +224,14 @@ class ScoreAnnouncerService extends GetxService {
     try {
       for (final f in files) {
         if (myJob != _currentJob) return;
-        _playCompleter = Completer<void>();
+        // Held locally: a newer announcement's _cancelInFlight() nulls the
+        // field while play() is still awaiting, and `_playCompleter!` then
+        // threw "Null check operator used on a null value" (seen in logcat
+        // on quick taps). The local completer is completed by that cancel.
+        final done = Completer<void>();
+        _playCompleter = done;
         await _player.play(AssetSource(f));
-        await _playCompleter!.future;
+        await done.future;
         if (myJob != _currentJob) return;
       }
       if (tail != null) {

@@ -161,7 +161,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
 
   Widget _buildEpicWinOverlay(ScoreController controller) {
     final winner = controller.gameState.winner;
-    final winnerName = controller.gameState.winnerName;
+    final winnerName = controller.winnerDisplay();
     final isTeamA = winner == 'A';
     final winColor = isTeamA ? Colors.redAccent : Colors.blueAccent;
     final mascot = isTeamA ? 'assets/image/dog_smash.png' : 'assets/image/cat_dropshot.png';
