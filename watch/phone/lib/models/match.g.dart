@@ -31,13 +31,20 @@ class MatchAdapter extends TypeAdapter<Match> {
       durationEstimated: fields[11] as bool? ?? false,
       rallySequence: fields[12] as String? ?? '',
       rallyTimes: fields[13] as String? ?? '',
+      redIds: (fields[14] as List?)?.cast<String>() ?? const [],
+      blueIds: (fields[15] as List?)?.cast<String>() ?? const [],
+      playerNames: (fields[16] as Map?)?.cast<String, String>() ?? const {},
+      playerShorts: (fields[17] as Map?)?.cast<String, String>() ?? const {},
+      server0: fields[18] as String? ?? '',
+      receiver0: fields[19] as String? ?? '',
+      lineupMode: fields[20] as String? ?? '',
     );
   }
 
   @override
   void write(BinaryWriter writer, Match obj) {
     writer
-      ..writeByte(14)
+      ..writeByte(21)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -65,7 +72,21 @@ class MatchAdapter extends TypeAdapter<Match> {
       ..writeByte(12)
       ..write(obj.rallySequence)
       ..writeByte(13)
-      ..write(obj.rallyTimes);
+      ..write(obj.rallyTimes)
+      ..writeByte(14)
+      ..write(obj.redIds)
+      ..writeByte(15)
+      ..write(obj.blueIds)
+      ..writeByte(16)
+      ..write(obj.playerNames)
+      ..writeByte(17)
+      ..write(obj.playerShorts)
+      ..writeByte(18)
+      ..write(obj.server0)
+      ..writeByte(19)
+      ..write(obj.receiver0)
+      ..writeByte(20)
+      ..write(obj.lineupMode);
   }
 
   @override

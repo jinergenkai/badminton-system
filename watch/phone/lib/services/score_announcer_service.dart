@@ -102,11 +102,14 @@ class ScoreAnnouncerService extends GetxService {
     return 'en';
   }
 
+  /// [serverName], when the set is named, is read after the score:
+  /// "Năm – Ba, Hùng giao cầu".
   Future<void> announceScore(
     int teamAScore,
     int teamBScore,
-    String scoringTeam,
-  ) async {
+    String scoringTeam, {
+    String? serverName,
+  }) async {
     final int myJob = ++_currentJob;
     await _cancelInFlight();
     if (myJob != _currentJob) return;
@@ -134,7 +137,10 @@ class ScoreAnnouncerService extends GetxService {
       ];
     }
 
-    await _playSequence(myJob, files, fallback);
+    final String? tail = serverName == null || serverName.isEmpty
+        ? null
+        : (lang == 'vi' ? '$serverName giao cầu' : '$serverName to serve');
+    await _playSequence(myJob, files, fallback, tail: tail);
   }
 
   Future<void> announceUndo(
@@ -199,8 +205,9 @@ class ScoreAnnouncerService extends GetxService {
   Future<void> _playSequence(
     int myJob,
     List<String> files,
-    Future<void> Function() onFallback,
-  ) async {
+    Future<void> Function() onFallback, {
+    String? tail,
+  }) async {
     // Pre-flight: verify every file is actually bundled. Cheaper than failing
     // mid-chain (which would leave the hype callback un-fired).
     for (final f in files) {
@@ -221,6 +228,12 @@ class ScoreAnnouncerService extends GetxService {
         await _player.play(AssetSource(f));
         await _playCompleter!.future;
         if (myJob != _currentJob) return;
+      }
+      if (tail != null) {
+        // Spoken by TTS; its completion handler continues the hype chain
+        // exactly like the MP3 path would have.
+        await _fallbackTts(() => Get.find<TtsService>().speak(tail));
+        return;
       }
       onAnnouncementCompleted?.call();
     } catch (e) {

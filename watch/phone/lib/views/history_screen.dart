@@ -1,3 +1,4 @@
+import 'match_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -223,7 +224,7 @@ class _MatchCard extends StatelessWidget {
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () => _showMatchDetails(context),
+        onTap: () => Get.to(() => MatchDetailScreen(match: match, number: number)),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -416,115 +417,4 @@ class _MatchCard extends StatelessWidget {
     }
   }
 
-  void _showMatchDetails(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Match Details'),
-        content: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _DetailRow(
-                label: 'Winner',
-                value: match.winnerDisplay,
-              ),
-              _DetailRow(
-                label: 'Final Score',
-                value: '${match.teamAScore} - ${match.teamBScore}',
-              ),
-              _DetailRow(
-                label: 'Duration',
-                value: match.formattedDuration,
-              ),
-              _DetailRow(
-                label: 'Started',
-                value: _formatFullDate(match.startTime),
-              ),
-              _DetailRow(
-                label: 'Ended',
-                value: _formatFullDate(match.endTime),
-              ),
-              const SizedBox(height: 16),
-              if (match.actionHistory.isNotEmpty) ...[
-                const Text(
-                  'Actions:',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                ...match.actionHistory.take(10).map(
-                      (action) => Padding(
-                        padding: const EdgeInsets.only(bottom: 4),
-                        child: Text(
-                          '• $action',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[300],
-                          ),
-                        ),
-                      ),
-                    ),
-                if (match.actionHistory.length > 10)
-                  Text(
-                    '... and ${match.actionHistory.length - 10} more actions',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-              ],
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  String _formatFullDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-  }
-}
-
-class _DetailRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _DetailRow({
-    required this.label,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            '$label:',
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 14,
-            ),
-          ),
-          Text(
-            value,
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 }

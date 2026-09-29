@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/game_state.dart';
 import '../models/match.dart';
+import '../models/lineup.dart';
 import '../models/team_config.dart';
 import '../services/voice_service.dart';
 import '../services/tts_service.dart';
@@ -78,6 +79,27 @@ class ScoreController extends GetxController {
   String? _lastBandMatchId;
   int _lastBandRevision = -1;
   String _lastBandRallies = '';
+
+  /// Named players of the band's current set (null = unnamed) and who serves
+  /// next, both straight from the band's state messages.
+  final Rxn<Lineup> lineup = Rxn<Lineup>();
+  final RxString serverId = ''.obs;
+
+  /// Card label for a team when the set is named: "🏸Hùng · Duyên", the
+  /// shuttle marking who serves next. Null means use the team name.
+  String? labelFor(String team) {
+    final lu = lineup.value;
+    if (lu == null) return null;
+    final srv = serverId.value;
+    return lu.pair(team).map((id) => (id == srv ? '🏸' : '') + lu.shortOf(id)).join(' · ');
+  }
+
+  /// Full name of whoever serves after [rallies], for the voice.
+  String? _serverFullName(String rallies) {
+    final lu = lineup.value;
+    if (lu == null || !_bandLive) return null;
+    return lu.fullOf(ServeEngine.current(lu, rallies).srv);
+  }
   DateTime? _lastBandSeen;
   Future<void> _dbChain = Future.value();
 
@@ -252,6 +274,8 @@ class ScoreController extends GetxController {
       final pv = event['pv'];
       if (pv is num) PlayerService.maybe?.onBandVersion(pv.toInt());
       if (event['rallies'] != null) _lastBandRallies = event['rallies'].toString();
+      lineup.value = Lineup.fromBand(event['lu']);
+      serverId.value = event['srv']?.toString() ?? '';
       if (bandMatchId != null && bandRevision >= 0) {
         isNewRev = !(_lastBandMatchId == bandMatchId && bandRevision <= _lastBandRevision);
         _lastBandMatchId = bandMatchId;
@@ -391,7 +415,8 @@ class ScoreController extends GetxController {
           _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB, manualHype: manualHype);
         }
         if (!gameState.hasWinner && isPoint) {
-          _announceScoreChange(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
+          _announceScoreChange(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B',
+              serverName: _serverFullName(_lastBandRallies));
         }
         // _checkTensionMusic() moved to onPlaybackCompleted — avoids AudioFocus conflict
         // ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
@@ -427,10 +452,11 @@ class ScoreController extends GetxController {
     final seeded = event['seededScoreA'] is num && (event['seededScoreA'] as num) >= 0;
     final rallies = event['rallies']?.toString() ?? '';
     final winner = status == 'completed' ? (a > b ? 'A' : 'B') : '';
+    final lu = Lineup.fromBand(event['lu']);
     await DatabaseService.upsertMatch(Match(
       id: id,
-      teamAName: gameState.teamAName,
-      teamBName: gameState.teamBName,
+      teamAName: lu == null ? gameState.teamAName : '${lu.fullOf(lu.red[0])} & ${lu.fullOf(lu.red[1])}',
+      teamBName: lu == null ? gameState.teamBName : '${lu.fullOf(lu.blue[0])} & ${lu.fullOf(lu.blue[1])}',
       teamAScore: a,
       teamBScore: b,
       winner: winner,
@@ -442,17 +468,24 @@ class ScoreController extends GetxController {
       durationEstimated: seeded,
       rallySequence: rallies,
       rallyTimes: event['ralT']?.toString() ?? '',
+      redIds: lu?.red ?? const [],
+      blueIds: lu?.blue ?? const [],
+      playerNames: lu?.full ?? const {},
+      playerShorts: lu?.short ?? const {},
+      server0: lu?.srv ?? '',
+      receiver0: lu?.rcv ?? '',
+      lineupMode: lu?.mode ?? '',
     ));
   }
 
-  void _announceScoreChange(int a, int b, String team) {
+  void _announceScoreChange(int a, int b, String team, {String? serverName}) {
     // Music mode: nothing speaks over the track. Talking across a song that is
     // already playing is exactly what kills the mood, so the whole
     // announce-then-hype chain is skipped rather than merely quietened.
     if (_audio.isMusicMode) return;
 
     if (scoreAnnouncementsEnabled.value) {
-      _scoreAnnouncer.announceScore(a, b, team);
+      _scoreAnnouncer.announceScore(a, b, team, serverName: serverName);
     } else {
       // If score announcement is disabled, we must trigger hype manually
       // so the audio chain continues.
@@ -565,8 +598,10 @@ class ScoreController extends GetxController {
     }
 
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
+    if (_bandLive) _lastBandRallies += 'A';
     if (!gameState.hasWinner) {
-      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'A');
+      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'A',
+          serverName: _serverFullName(_lastBandRallies));
     }
     if (fromVoice) _startCooldown();
     // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
@@ -595,8 +630,10 @@ class ScoreController extends GetxController {
     }
 
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
+    if (_bandLive) _lastBandRallies += 'B';
     if (!gameState.hasWinner) {
-      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'B');
+      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'B',
+          serverName: _serverFullName(_lastBandRallies));
     }
     if (fromVoice) _startCooldown();
     // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
@@ -644,6 +681,9 @@ class ScoreController extends GetxController {
 
   void undo() {
     if (!_isSyncingFromWatch) _watchService.sendScoreCommand('undo');
+    if (_bandLive && _lastBandRallies.isNotEmpty) {
+      _lastBandRallies = _lastBandRallies.substring(0, _lastBandRallies.length - 1);
+    }
     if (!gameState.canUndo) return;
     final stack = List<GameState>.from(gameState.stateStack);
     final previousState = stack.removeLast();

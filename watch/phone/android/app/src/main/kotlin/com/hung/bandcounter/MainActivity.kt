@@ -15,6 +15,7 @@ import com.xiaomi.xms.wearable.message.OnMessageReceivedListener
 import com.xiaomi.xms.wearable.node.Node
 import com.xiaomi.xms.wearable.node.NodeApi
 import kotlinx.coroutines.*
+import org.json.JSONArray
 import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
@@ -66,7 +67,7 @@ class MainActivity : FlutterActivity() {
             val keys = json.keys()
             while (keys.hasNext()) {
                 val key = keys.next()
-                map[key] = json.get(key)
+                map[key] = toCodec(json.get(key))
             }
             map["type"] = "command" // Ensure type is command for ScoreController
 
@@ -74,6 +75,24 @@ class MainActivity : FlutterActivity() {
                 eventSink?.success(map)
             }
         } catch (e: Exception) { Log.e(TAG, "Parse error: ${e.message}") }
+    }
+
+    // The EventChannel codec only takes plain Kotlin values: a raw JSONObject,
+    // JSONArray or JSONObject.NULL makes eventSink.success throw and the whole
+    // message is lost. Match records carry a nested lineup, so convert deeply.
+    private fun toCodec(v: Any?): Any? = when (v) {
+        null, JSONObject.NULL -> null
+        is JSONObject -> {
+            val m = HashMap<String, Any?>()
+            val it = v.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                m[k] = toCodec(v.get(k))
+            }
+            m
+        }
+        is JSONArray -> (0 until v.length()).map { toCodec(v.get(it)) }
+        else -> v
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

@@ -73,7 +73,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
                           flex: 10,
                           child: TeamCard(
                             teamId: 'A',
-                            teamName: state.teamAName,
+                            teamName: controller.labelFor('A') ?? state.teamAName,
                             score: state.teamAScore,
                             primaryColor: Colors.redAccent,
                             accentColor: Colors.orangeAccent,
@@ -88,7 +88,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
                           flex: 10,
                           child: TeamCard(
                             teamId: 'B',
-                            teamName: state.teamBName,
+                            teamName: controller.labelFor('B') ?? state.teamBName,
                             score: state.teamBScore,
                             primaryColor: Colors.blueAccent,
                             accentColor: Colors.cyanAccent,

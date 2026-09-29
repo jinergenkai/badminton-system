@@ -1,3 +1,4 @@
+import 'lineup.dart';
 import 'package:hive/hive.dart';
 
 part 'match.g.dart';
@@ -48,6 +49,33 @@ class Match extends HiveObject {
   @HiveField(13)
   final String rallyTimes;
 
+  // ── Named players (band lineup). Empty when the set was played unnamed.
+  // Ids are the phone's permanent player ids; the name maps are a snapshot
+  // taken when the set was played, so renames never rewrite history.
+  @HiveField(14)
+  final List<String> redIds;
+
+  @HiveField(15)
+  final List<String> blueIds;
+
+  @HiveField(16)
+  final Map<String, String> playerNames;
+
+  @HiveField(17)
+  final Map<String, String> playerShorts;
+
+  /// First server and first receiver at 0-0: with [rallySequence] these
+  /// reconstruct who served and received every rally (ServeEngine).
+  @HiveField(18)
+  final String server0;
+
+  @HiveField(19)
+  final String receiver0;
+
+  /// 'new' | 'same' | '' (unnamed).
+  @HiveField(20)
+  final String lineupMode;
+
   Match({
     required this.id,
     required this.teamAName,
@@ -63,7 +91,28 @@ class Match extends HiveObject {
     this.durationEstimated = false,
     this.rallySequence = '',
     this.rallyTimes = '',
+    this.redIds = const [],
+    this.blueIds = const [],
+    this.playerNames = const {},
+    this.playerShorts = const {},
+    this.server0 = '',
+    this.receiver0 = '',
+    this.lineupMode = '',
   });
+
+  bool get isNamed => redIds.length == 2 && blueIds.length == 2 && server0.isNotEmpty;
+
+  Lineup? get lineup => isNamed
+      ? Lineup(
+          red: redIds,
+          blue: blueIds,
+          srv: server0,
+          rcv: receiver0,
+          short: playerShorts,
+          full: playerNames,
+          mode: lineupMode,
+        )
+      : null;
 
   Duration get duration => Duration(seconds: durationSeconds);
 
