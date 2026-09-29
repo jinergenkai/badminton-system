@@ -1,0 +1,60 @@
+<template>
+  <div class="page">
+    <div class="header"><text class="title">SET SCORE</text></div>
+    <text class="hint" if="{{ step === 0 }}">BLUE SCORE</text>
+    <text class="hint" if="{{ step === 1 }}">RED SCORE</text>
+    <text class="hint" if="{{ step === 2 }}">WHO SERVES?</text>
+
+    <list class="numbers" if="{{ step < 2 }}">
+      <list-item type="score" for="{{ numbers }}" class="number-row" onclick="chooseScore($idx)">
+        <text class="number">{{ $item }}</text>
+      </list-item>
+    </list>
+
+    <div class="serve red" if="{{ step === 2 }}" onclick="chooseServe('A')"><text class="serve-text">RED SERVES</text></div>
+    <div class="serve blue" if="{{ step === 2 }}" onclick="chooseServe('B')"><text class="serve-text">BLUE SERVES</text></div>
+    <div class="back" onclick="onBack"><text class="back-text">BACK</text></div>
+  </div>
+</template>
+
+<script>
+  import router from '@system.router'
+
+  export default {
+    private: { step: 0, blue: 0, red: 0, numbers: [] },
+    onInit() {
+      const n = []
+      for (let i = 0; i <= 30; i++) n.push(i)
+      this.numbers = n
+    },
+    // $idx, not $item: the proven pattern (alarm.ux). numbers[i] === i.
+    chooseScore(value) {
+      if (this.step === 0) { this.blue = value; this.step = 1 }
+      else { this.red = value; this.step = 2 }
+    },
+    chooseServe(team) {
+      const def = this.$app && this.$app.$def
+      if (def) def.pendingMatchCommand = {
+        action: 'seed_score', scoreA: this.red, scoreB: this.blue, servingTeam: team
+      }
+      router.back()
+    },
+    onBack() { router.back() }
+  }
+</script>
+
+<style>
+  .page { flex-direction: column; width: 100%; background-color: #0F172A; padding: 28px 16px 0 16px; }
+  .header { height: 48px; justify-content: center; align-items: center; }
+  .title { color: #FFFFFF; font-size: 22px; font-weight: bold; }
+  .hint { width: 100%; height: 34px; color: #94A3B8; font-size: 14px; text-align: center; }
+  .numbers { width: 100%; height: 315px; }
+  .number-row { width: 100%; height: 48px; margin-bottom: 5px; justify-content: center; align-items: center; background-color: rgba(255,255,255,0.08); border-radius: 12px; }
+  .number { color: #FFFFFF; font-size: 22px; font-weight: bold; }
+  .serve { width: 100%; height: 78px; margin-bottom: 12px; justify-content: center; align-items: center; border-radius: 16px; }
+  .red { background-color: #FF5252; }
+  .blue { background-color: #448AFF; }
+  .serve-text { color: #FFFFFF; font-size: 18px; font-weight: bold; }
+  .back { width: 100%; height: 48px; justify-content: center; align-items: center; }
+  .back-text { color: #94A3B8; font-size: 15px; font-weight: bold; }
+</style>

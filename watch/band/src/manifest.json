@@ -42,6 +42,12 @@
       },
       "pages/sound": {
         "component": "sound"
+      },
+      "pages/seed_score": {
+        "component": "seed_score"
+      },
+      "pages/match_history": {
+        "component": "match_history"
       }
     }
   },

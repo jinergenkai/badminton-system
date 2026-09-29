@@ -85,6 +85,18 @@
       scoreA: 0,
       scoreB: 0,
       history: [],
+      // Durable match state. `history` above is only the short undo stack;
+      // completed matches live separately in app storage.
+      matchId: '',
+      matchRevision: 0,
+      startedAt: 0,
+      endedAt: 0,
+      matchStatus: 'active',
+      seededScoreA: -1,
+      seededScoreB: -1,
+      seedServingTeam: '',
+      rallies: '',
+      stateLoaded: false,
       connected: false,
       isConnecting: false,
       connect: null,
@@ -107,6 +119,283 @@
       alarmFired: false,
       // Display only — the alarm itself lives in the watch's Clock app.
       alarmAt: '',
+    },
+
+    // ── Durable, Band-owned match state ──────────────────────────────────
+    // The Band is the authority for an active game. Phone traffic is a mirror
+    // or an explicit command, never a stale snapshot that can overwrite this.
+    matchStorageKey() { return 'bc_active_match_v2' },
+    matchHistoryKey() { return 'bc_match_history_v2' },
+
+    newMatchId() {
+      const def = this.$app && this.$app.$def
+      const install = (def && def.bandInstallId) || 'band'
+      return install + '-' + Date.now() + '-' + Math.floor(Math.random() * 100000)
+    },
+
+    ensureInstallId() {
+      const def = this.$app && this.$app.$def
+      if (!def || def.bandInstallId) return
+      try {
+        storage.get({
+          key: 'bc_install_id_v1',
+          success: (value) => {
+            def.bandInstallId = value || ('b10-' + Date.now() + '-' + Math.floor(Math.random() * 100000))
+            if (!value) storage.set({ key: 'bc_install_id_v1', value: def.bandInstallId })
+          },
+          fail: () => {
+            def.bandInstallId = 'b10-' + Date.now() + '-' + Math.floor(Math.random() * 100000)
+          }
+        })
+      } catch (e) { this.diag('install id failed: ' + e.message) }
+    },
+
+    // Nothing is sent to the phone until this has finished: an early onopen
+    // would otherwise publish 0-0 with no matchId and wipe the phone board.
+    loadMatchState() {
+      this.ensureInstallId()
+      this.loadHistory()
+      try {
+        storage.get({
+          key: this.matchStorageKey(),
+          success: (raw) => {
+            if (raw) {
+              try {
+                const s = JSON.parse(raw)
+                this.scoreA = s.scoreA || 0
+                this.scoreB = s.scoreB || 0
+                this.matchId = s.matchId || ''
+                this.matchRevision = s.revision || 0
+                this.startedAt = s.startedAt || 0
+                this.endedAt = s.endedAt || 0
+                this.matchStatus = s.status || 'active'
+                this.seededScoreA = s.seededScoreA === undefined ? -1 : s.seededScoreA
+                this.seededScoreB = s.seededScoreB === undefined ? -1 : s.seededScoreB
+                this.seedServingTeam = s.seedServingTeam || ''
+                this.rallies = s.rallies || ''
+                this.streakTeam = s.streakTeam || ''
+                this.streakCount = s.streakCount || 0
+                this.history = s.undoHistory || []
+                this.checkWinner()
+                this.diag('restored ' + this.matchId + ' r' + this.matchRevision + ' ' + this.scoreA + '-' + this.scoreB)
+              } catch (e) { this.diag('active parse failed: ' + e.message) }
+            }
+            this.onStateLoaded()
+          },
+          fail: () => { this.onStateLoaded() }
+        })
+      } catch (e) {
+        this.diag('active read failed: ' + e.message)
+        this.onStateLoaded()
+      }
+    },
+
+    onStateLoaded() {
+      if (!this.matchId) this.matchId = this.newMatchId()
+      this.stateLoaded = true
+      if (this.connected) {
+        this.sendState('band_ready')
+        this.pushUnsyncedHistory()
+      }
+    },
+
+    activeSnapshot() {
+      return {
+        matchId: this.matchId,
+        revision: this.matchRevision,
+        scoreA: this.scoreA,
+        scoreB: this.scoreB,
+        startedAt: this.startedAt,
+        endedAt: this.endedAt,
+        status: this.matchStatus,
+        seededScoreA: this.seededScoreA,
+        seededScoreB: this.seededScoreB,
+        seedServingTeam: this.seedServingTeam,
+        rallies: this.rallies,
+        streakTeam: this.streakTeam,
+        streakCount: this.streakCount,
+        undoHistory: this.history
+      }
+    },
+
+    persistMatch() {
+      if (!this.stateLoaded) return
+      try {
+        storage.set({
+          key: this.matchStorageKey(),
+          value: JSON.stringify(this.activeSnapshot()),
+          fail: (data, code) => this.diag('active save FAIL ' + code)
+        })
+      } catch (e) { this.diag('active save threw: ' + e.message) }
+    },
+
+    // ── Last-20 history ──────────────────────────────────────────────────
+    // Kept in app memory ($def.matchHistory) and written through to storage,
+    // so win → undo in quick succession cannot interleave two read-modify-
+    // write cycles on storage and resurrect a record.
+    loadHistory() {
+      const def = this.$app && this.$app.$def
+      if (!def || def.matchHistory) return
+      def.matchHistory = []
+      try {
+        storage.get({
+          key: this.matchHistoryKey(),
+          success: (raw) => {
+            let stored = []
+            try { stored = raw ? JSON.parse(raw) : [] } catch (e) { stored = [] }
+            // Anything archived before the read returned is newer: keep it.
+            const fresh = def.matchHistory
+            for (let i = 0; i < stored.length; i++) {
+              let dup = false
+              for (let j = 0; j < fresh.length; j++) {
+                if (fresh[j].matchId === stored[i].matchId) { dup = true; break }
+              }
+              if (!dup) fresh.push(stored[i])
+            }
+            def.matchHistory = fresh.slice(0, 20)
+            this.diag('history loaded ' + def.matchHistory.length)
+          }
+        })
+      } catch (e) { this.diag('history read failed: ' + e.message) }
+    },
+
+    saveHistory() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.matchHistory) return
+      try {
+        storage.set({
+          key: this.matchHistoryKey(),
+          value: JSON.stringify(def.matchHistory),
+          fail: (data, code) => this.diag('history save FAIL ' + code)
+        })
+      } catch (e) { this.diag('history save threw: ' + e.message) }
+    },
+
+    archiveCurrent(status) {
+      const def = this.$app && this.$app.$def
+      if (!def) return
+      if (this.scoreA === 0 && this.scoreB === 0) return
+      if (!def.matchHistory) def.matchHistory = []
+      const record = this.activeSnapshot()
+      record.status = status
+      record.endedAt = this.endedAt || Date.now()
+      record.syncedRev = -1
+      delete record.undoHistory
+      delete record.streakTeam
+      delete record.streakCount
+      const list = def.matchHistory.filter((r) => r.matchId !== record.matchId)
+      list.unshift(record)
+      def.matchHistory = list.slice(0, 20)
+      this.saveHistory()
+      this.pushUnsyncedHistory()
+    },
+
+    removeArchivedCurrent() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.matchHistory) return
+      const before = def.matchHistory.length
+      def.matchHistory = def.matchHistory.filter((r) => r.matchId !== this.matchId)
+      if (def.matchHistory.length !== before) this.saveHistory()
+    },
+
+    // ── Offline history → phone ──────────────────────────────────────────
+    // Event driven, never on a timer: runs when the link comes up and right
+    // after a set is archived. One record per message; the next goes only
+    // after the phone acks the previous one, so nothing is ever sent in a
+    // burst. With nothing unsynced this sends nothing at all.
+    pushUnsyncedHistory() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.matchHistory || !this.connected || !this.stateLoaded) return
+      if (def.historyInFlight && Date.now() - def.historyInFlight < 5000) return
+      let next = null
+      for (let i = def.matchHistory.length - 1; i >= 0; i--) {
+        const r = def.matchHistory[i]
+        if (r.syncedRev !== r.revision) { next = r; break }
+      }
+      if (!next) { def.historyInFlight = 0; return }
+      def.historyInFlight = Date.now()
+      // Flat, like every other message: MainActivity converts only the top
+      // level of the JSON, and a nested object cannot cross the EventChannel.
+      const msg = { action: 'match_record', source: 'band' }
+      for (const k in next) { if (k !== 'syncedRev') msg[k] = next[k] }
+      this.sendRaw(msg, null, true)
+    },
+
+    onMatchAck(matchId, revision) {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.matchHistory) return
+      let changed = false
+      for (let i = 0; i < def.matchHistory.length; i++) {
+        const r = def.matchHistory[i]
+        if (r.matchId === matchId && r.revision === revision && r.syncedRev !== revision) {
+          r.syncedRev = revision
+          changed = true
+        }
+      }
+      def.historyInFlight = 0
+      if (changed) this.saveHistory()
+      setTimeout(() => { this.pushUnsyncedHistory() }, 300)
+    },
+
+    startFreshMatch() {
+      this.scoreA = 0
+      this.scoreB = 0
+      this.history = []
+      this.rallies = ''
+      this.startedAt = 0
+      this.endedAt = 0
+      this.matchStatus = 'active'
+      this.seededScoreA = -1
+      this.seededScoreB = -1
+      this.seedServingTeam = ''
+      this.clearStreak()
+      this.isWinnerA = false
+      this.isWinnerB = false
+      this.matchId = this.newMatchId()
+      this.matchRevision = 0
+      this.persistMatch()
+    },
+
+    // Close a non-empty unfinished set as `stopped`. A completed set was
+    // archived at its winning point and must not be overwritten.
+    closeUnfinished() {
+      if (this.scoreA === 0 && this.scoreB === 0) return
+      if (this.matchStatus === 'completed') return
+      this.endedAt = Date.now()
+      this.matchStatus = 'stopped'
+      this.matchRevision++
+      this.archiveCurrent('stopped')
+    },
+
+    applySeed(scoreA, scoreB, servingTeam) {
+      // A seed is honest about what is unknown: earlier rallies cannot be
+      // reconstructed from a scoreboard, so only later rallies are logged.
+      // The serving team *is* known, and is shown as a streak of 1.
+      this.closeUnfinished()
+      this.startFreshMatch()
+      this.scoreA = scoreA
+      this.scoreB = scoreB
+      this.seededScoreA = scoreA
+      this.seededScoreB = scoreB
+      this.seedServingTeam = servingTeam
+      this.streakTeam = servingTeam
+      this.streakCount = 1
+      this.startedAt = Date.now() - (scoreA + scoreB) * 20000
+      this.checkWinner()
+      this.matchRevision++
+      this.persistMatch()
+      this.sendState('seed_score')
+      this.status('Score set')
+    },
+
+    applyPendingMatchCommand() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.pendingMatchCommand) return
+      const c = def.pendingMatchCommand
+      def.pendingMatchCommand = null
+      if (c.action === 'seed_score') this.applySeed(c.scoreA, c.scoreB, c.servingTeam)
+      else if (c.action === 'new_match') this.resetGame()
+      else if (c.action === 'publish_state') this.sendState('manual_state')
     },
 
     loadAlarm() {
@@ -162,6 +451,7 @@
       this.connect = interconnect.instance()
       this.diag('instance=' + (this.connect ? 'ok' : 'NULL'))
       this.updateClock()
+      this.loadMatchState()
     },
 
     onReady() {
@@ -178,6 +468,7 @@
       this.startClock()
       this.startLinkPoll()
       this.loadAlarm()
+      this.applyPendingMatchCommand()
     },
 
     setupConnect() {
@@ -190,7 +481,10 @@
         this.diag('onopen')
         this.connected = true
         this.isConnecting = false
-        this.requestSync()
+        // A link opening is not permission for the phone to overwrite the
+        // Band. Publish our durable state once instead.
+        this.sendState('band_online')
+        this.pushUnsyncedHistory()
       }
       this.connect.onclose = () => {
         const def = this.$app && this.$app.$def
@@ -213,7 +507,50 @@
             return
           }
 
-          if (msg.scoreA !== undefined && msg.scoreB !== undefined) {
+          // Explicit phone commands. They contain no score snapshot: Band
+          // applies and persists them, then publishes the resulting state.
+          // Phone commands skip the tap cooldown — that guard is for a finger
+          // bouncing on the band, not for a different device. A command the
+          // Band refuses still answers with its state, so the phone's
+          // optimistic value snaps back instead of drifting.
+          if (msg.action === 'point_A' || msg.action === 'point_B') {
+            const team = msg.action === 'point_A' ? 'A' : 'B'
+            if (!this.applyPoint(team, null, true)) this.sendState('state_reply')
+            return
+          }
+          if (msg.action === 'minus_A' || msg.action === 'minus_B') {
+            // -1 is only honoured when it is an undo of that team's last rally.
+            const team = msg.action === 'minus_A' ? 'A' : 'B'
+            if (this.rallies.charAt(this.rallies.length - 1) !== team || !this.doUndo()) {
+              this.sendState('state_reply')
+            }
+            return
+          }
+          if (msg.action === 'undo') {
+            if (!this.doUndo()) this.sendState('state_reply')
+            return
+          }
+          if (msg.action === 'match_ack') { this.onMatchAck(msg.matchId, msg.revision); return }
+          if (msg.action === 'new_match' || msg.action === 'reset') { this.resetGame(); return }
+          if (msg.action === 'request_current_state') { this.sendState('state_reply'); return }
+          if (msg.action === 'set_score_seed') {
+            this.applySeed(parseInt(msg.scoreA, 10) || 0, parseInt(msg.scoreB, 10) || 0,
+              msg.servingTeam === 'B' ? 'B' : 'A')
+            return
+          }
+
+          // Protocol v2 deliberately ignores a phone `sync` snapshot. Old
+          // versions used it to replace the Band score after every reconnect.
+          if (msg.action === 'sync' || msg.action === 'manual_sync') {
+            this.diag('ignored legacy phone sync')
+            this.sendState('state_reply')
+            return
+          }
+
+          // No ordinary inbound message is allowed to replace an active Band
+          // match. `acceptedBandState` is reserved for a future explicit,
+          // user-confirmed restore flow.
+          if (msg.acceptedBandState === true && msg.scoreA !== undefined && msg.scoreB !== undefined) {
             // Mirror phone-originated state changes into local history so undo stays aligned
             if (msg.action === 'score_A' || msg.action === 'score_B' || msg.action === 'reset') {
               this.pushHistory()
@@ -259,7 +596,10 @@
           // collapses to "red", which hides why it is not ready.
           this.diag('getReadyState status=' + data.status)
           this.connected = (data.status === 1)
-          if (this.connected) this.requestSync()
+          if (this.connected) {
+            this.sendState('band_ready')
+            this.pushUnsyncedHistory()
+          }
         },
         fail: (data, code) => {
           this.diag('getReadyState FAIL code=' + code)
@@ -320,8 +660,9 @@
             this.diag('link ' + (ready ? 'UP' : 'DOWN') + ' status=' + data.status)
             this.connected = ready
             if (ready) {
-              this.requestSync()
+              this.sendState('band_reconnected')
               this.flushQueue()
+              this.pushUnsyncedHistory()
             }
             // Swap cadence to match the new state.
             if (this.linkFast === ready) this.startLinkPoll()
@@ -452,7 +793,11 @@
         a: this.scoreA,
         b: this.scoreB,
         st: this.streakTeam,
-        sc: this.streakCount
+        sc: this.streakCount,
+        rallies: this.rallies,
+        startedAt: this.startedAt,
+        endedAt: this.endedAt,
+        status: this.matchStatus
       })
       if (this.history.length > 20) this.history.shift()
     },
@@ -471,12 +816,28 @@
       this.streakCount = 0
     },
 
-    requestSync() {
-      if (!this.connect) return
-      this.sendRaw({ action: 'request_sync' })
-      // Also request media list on connection
-      this.sendRaw({ action: 'request_media_list' })
-      this.status('Sync requested')
+    sendState(action, manualHype) {
+      if (!this.stateLoaded) return
+      this.sendRaw({
+        action: action || 'band_state',
+        scoreA: this.scoreA,
+        scoreB: this.scoreB,
+        matchId: this.matchId,
+        revision: this.matchRevision,
+        startedAt: this.startedAt,
+        endedAt: this.endedAt,
+        status: this.matchStatus,
+        seededScoreA: this.seededScoreA,
+        seededScoreB: this.seededScoreB,
+        seedServingTeam: this.seedServingTeam,
+        rallies: this.rallies,
+        streakTeam: this.streakTeam,
+        streakCount: this.streakCount,
+        manualHype: manualHype || null,
+        source: 'band',
+        silent: true,
+        timestamp: Date.now()
+      })
     },
 
     // Single place where anything leaves this page, so every send gets its
@@ -498,21 +859,25 @@
           this.diag('send FAIL: ' + payload.action + ' code=' + code +
             ' d=' + JSON.stringify(data))
           // Not while replaying, or a still-down link would refill the queue.
-          if (!isReplay) this.queueSend(payload)
+          // Band state is never queued either: replaying ten stale states
+          // would make the phone announce ten old points. The latest state
+          // goes out on its own when the link comes back.
+          if (!isReplay && payload.source !== 'band') this.queueSend(payload)
+          if (payload.action === 'match_record') {
+            const def = this.$app && this.$app.$def
+            if (def) def.historyInFlight = 0
+          }
         }
       })
     },
 
     resetGame() {
-      // Save current state to history so we can UNDO the reset
-      this.pushHistory()
-
-      this.scoreA = 0
-      this.scoreB = 0
-      this.clearStreak()
-      this.isWinnerA = false
-      this.isWinnerB = false
-      this.sendUpdate('reset', true)
+      // A non-empty unfinished set is closed as `stopped` and archived; the
+      // phone learns about it through the history push, not a second live
+      // message sent back-to-back with `new_match` (that one tended to drop).
+      this.closeUnfinished()
+      this.startFreshMatch()
+      this.sendState('new_match')
       this.status('New match')
     },
 
@@ -567,66 +932,78 @@
       if (Date.now() - this.lastLongPressTime < 500) return
       
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
-      this.pushHistory()
-      this.scoreA++
-      this.bumpStreak('A')
-      this.sendUpdate('score_A')
+      this.applyPoint('A')
     },
 
     onScoreB() {
       if (Date.now() - this.lastLongPressTime < 500) return
 
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
-      this.pushHistory()
-      this.scoreB++
-      this.bumpStreak('B')
-      this.sendUpdate('score_B')
+      this.applyPoint('B')
     },
 
     onQuickHypeA() {
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
       this.lastLongPressTime = Date.now()
-      this.pushHistory()
-      this.scoreA++
-      this.bumpStreak('A')
-      this.sendUpdate('score_A', false, 'manual_trigger')
+      this.applyPoint('A', 'manual_trigger')
       this.status('Point + hype')
     },
 
     onQuickHypeB() {
       if (this.isLocked || this.isWinnerA || this.isWinnerB) return
       this.lastLongPressTime = Date.now()
-      this.pushHistory()
-      this.scoreB++
-      this.bumpStreak('B')
-      this.sendUpdate('score_B', false, 'manual_trigger')
+      this.applyPoint('B', 'manual_trigger')
       this.status('Point + hype')
     },
 
     onUndo() {
-      if (this.isLocked || this.history.length === 0) return
+      if (this.isLocked) return
+      this.doUndo()
+    },
+
+    // Shared by the band button and phone commands. Returns false when there
+    // is nothing to undo.
+    doUndo() {
+      if (this.history.length === 0) return false
       const lastState = this.history.pop()
       this.scoreA = lastState.a
       this.scoreB = lastState.b
       this.streakTeam = lastState.st
       this.streakCount = lastState.sc
-      this.sendUpdate('undo')
+      this.rallies = lastState.rallies || ''
+      this.startedAt = lastState.startedAt || 0
+      this.endedAt = 0
+      // Undoing a winning point reopens the same matchId; winning again
+      // updates that record instead of creating a second one.
+      this.matchStatus = 'active'
+      this.checkWinner()
+      this.removeArchivedCurrent()
+      this.matchRevision++
+      this.persistMatch()
+      this.startCooldown()
+      this.sendState('undo')
+      return true
     },
 
-    sendUpdate(action, isReset = false, manualHype = null) {
+    // Returns false when the point is refused (cooldown, or set already won).
+    applyPoint(team, manualHype, fromPhone) {
+      if (this.isWinnerA || this.isWinnerB) return false
+      if (this.isLocked && !fromPhone) return false
+      this.pushHistory()
+      if (!this.startedAt) this.startedAt = Date.now()
+      if (team === 'A') this.scoreA++
+      else this.scoreB++
+      this.rallies += team
+      this.bumpStreak(team)
       this.checkWinner()
+      this.matchStatus = (this.isWinnerA || this.isWinnerB) ? 'completed' : 'active'
+      this.endedAt = this.matchStatus === 'completed' ? Date.now() : 0
+      this.matchRevision++
+      this.persistMatch()
+      if (this.matchStatus === 'completed') this.archiveCurrent('completed')
       this.startCooldown()
-      this.sendRaw({
-        action: action,
-        scoreA: this.scoreA,
-        scoreB: this.scoreB,
-        reset: isReset,
-        manualHype: manualHype,
-        // index.ux always mutates local state before sending; phone must NOT echo back
-        // (otherwise we'd double-push history). Settings page omits this so phone echoes.
-        silent: true,
-        timestamp: Date.now(),
-      })
+      this.sendState(team === 'A' ? 'score_A' : 'score_B', manualHype)
+      return true
     }
   }
 </script>

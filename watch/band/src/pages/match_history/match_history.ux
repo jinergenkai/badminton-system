@@ -1,0 +1,89 @@
+<template>
+  <div class="page">
+    <div class="header"><text class="title">LAST 20 SETS</text></div>
+    <text class="empty" if="{{ rows.length === 0 }}">NO SETS YET</text>
+    <list class="history-list" if="{{ rows.length > 0 }}">
+      <list-item type="match" for="{{ rows }}" class="record">
+        <div class="line">
+          <text class="red">{{ $item.a }}</text>
+          <text class="dash">-</text>
+          <text class="blue">{{ $item.b }}</text>
+          <text class="status">{{ $item.status }}</text>
+        </div>
+        <text class="meta">{{ $item.meta }}</text>
+      </list-item>
+    </list>
+    <div class="back" onclick="onBack"><text class="back-text">BACK</text></div>
+  </div>
+</template>
+
+<script>
+  import storage from '@system.storage'
+  import router from '@system.router'
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n }
+
+  // Everything the template shows is precomputed here: calling methods
+  // from `{{ }}` has no precedent on this band and is exactly the kind of
+  // thing that renders as nothing (docs/watch-ui-gotchas.md).
+  function toRow(r) {
+    let when = '--:--'
+    if (r.startedAt) {
+      const d = new Date(r.startedAt)
+      when = pad(d.getHours()) + ':' + pad(d.getMinutes())
+    }
+    let dur = '--'
+    if (r.startedAt && r.endedAt) {
+      const s = Math.max(0, Math.floor((r.endedAt - r.startedAt) / 1000))
+      dur = Math.floor(s / 60) + 'm'
+      if (r.seededScoreA >= 0) dur = '~' + dur
+    }
+    const synced = r.syncedRev === r.revision ? ' · SYNCED' : ''
+    return {
+      a: '' + r.scoreA,
+      b: '' + r.scoreB,
+      status: r.status === 'completed' ? 'DONE' : 'STOP',
+      meta: when + ' · ' + dur + synced
+    }
+  }
+
+  export default {
+    private: { rows: [] },
+
+    onShow() {
+      const def = this.$app && this.$app.$def
+      if (def && def.matchHistory) {
+        this.rows = def.matchHistory.map(toRow)
+        return
+      }
+      storage.get({
+        key: 'bc_match_history_v2',
+        success: (raw) => {
+          let list = []
+          try { list = raw ? JSON.parse(raw) : [] } catch (e) { list = [] }
+          this.rows = list.map(toRow)
+        },
+        fail: () => { this.rows = [] }
+      })
+    },
+
+    onBack() { router.back() }
+  }
+</script>
+
+<style>
+  .page { flex-direction: column; width: 100%; background-color: #0F172A; padding: 28px 16px 0 16px; }
+  .header { height: 48px; justify-content: center; align-items: center; }
+  .title { color: #FFFFFF; font-size: 20px; font-weight: bold; }
+  .history-list { width: 100%; height: 360px; }
+  .record { width: 100%; height: 72px; margin-bottom: 8px; padding: 8px 12px; flex-direction: column; background-color: rgba(255,255,255,0.08); border-radius: 12px; }
+  .line { width: 100%; height: 30px; flex-direction: row; align-items: center; }
+  .red { color: #FF5252; font-size: 22px; font-weight: bold; }
+  .dash { color: #94A3B8; font-size: 22px; margin-left: 6px; margin-right: 6px; }
+  .blue { color: #448AFF; font-size: 22px; font-weight: bold; }
+  .status { color: #94A3B8; font-size: 13px; margin-left: 12px; }
+  .meta { color: #CBD5E1; font-size: 14px; height: 20px; margin-top: 4px; }
+  .empty { width: 100%; height: 360px; color: #64748B; font-size: 15px; text-align: center; }
+  .back { width: 100%; height: 48px; justify-content: center; align-items: center; }
+  .back-text { color: #94A3B8; font-size: 15px; font-weight: bold; }
+</style>
