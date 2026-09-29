@@ -915,8 +915,10 @@
       if (this.cooldownTimer) clearInterval(this.cooldownTimer)
       this.isLocked = true
       this.cooldownProgress = 100
+      // 250ms lockout (5 ticks of 50ms): short enough for quick rallies,
+      // long enough to swallow a finger bounce.
       this.cooldownTimer = setInterval(() => {
-        if (this.cooldownProgress > 0) this.cooldownProgress -= 10
+        if (this.cooldownProgress > 0) this.cooldownProgress -= 20
         else this.stopCooldown()
       }, 50)
     },
