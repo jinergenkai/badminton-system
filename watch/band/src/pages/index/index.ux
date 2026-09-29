@@ -96,6 +96,8 @@
       seededScoreB: -1,
       seedServingTeam: '',
       rallies: '',
+      // Seconds from startedAt at which each rally ended, comma separated.
+      ralT: '',
       stateLoaded: false,
       connected: false,
       isConnecting: false,
@@ -155,6 +157,7 @@
     loadMatchState() {
       this.ensureInstallId()
       this.loadHistory()
+      this.loadPlayers()
       try {
         storage.get({
           key: this.matchStorageKey(),
@@ -173,6 +176,7 @@
                 this.seededScoreB = s.seededScoreB === undefined ? -1 : s.seededScoreB
                 this.seedServingTeam = s.seedServingTeam || ''
                 this.rallies = s.rallies || ''
+                this.ralT = s.ralT || ''
                 this.streakTeam = s.streakTeam || ''
                 this.streakCount = s.streakCount || 0
                 this.history = s.undoHistory || []
@@ -188,6 +192,49 @@
         this.diag('active read failed: ' + e.message)
         this.onStateLoaded()
       }
+    },
+
+    // ── Today's players (from the phone) ─────────────────────────────────
+    playersVersion() {
+      const def = this.$app && this.$app.$def
+      return (def && def.players && def.players.v) || 0
+    },
+
+    loadPlayers() {
+      const def = this.$app && this.$app.$def
+      if (!def || def.playersLoaded) return
+      def.playersLoaded = true
+      try {
+        storage.get({
+          key: 'bc_players_v1',
+          success: (raw) => {
+            // A list that arrived while this read was in flight is newer.
+            if (raw && !def.players) {
+              try { def.players = JSON.parse(raw) } catch (e) {}
+            }
+          }
+        })
+        storage.get({
+          key: 'bc_players_on',
+          success: (v) => { def.playersOn = (v === '1') }
+        })
+      } catch (e) { this.diag('players read failed: ' + e.message) }
+    },
+
+    storePlayers(msg) {
+      const def = this.$app && this.$app.$def
+      if (!def) return
+      const list = Array.isArray(msg.list) ? msg.list : []
+      def.players = { v: msg.v || 0, at: Date.now(), list: list }
+      try {
+        storage.set({
+          key: 'bc_players_v1',
+          value: JSON.stringify(def.players),
+          fail: (data, code) => this.diag('players save FAIL ' + code)
+        })
+      } catch (e) { this.diag('players save threw: ' + e.message) }
+      this.diag('players v' + def.players.v + ' n=' + list.length)
+      this.status('Players synced: ' + list.length)
     },
 
     onStateLoaded() {
@@ -342,6 +389,7 @@
       this.scoreB = 0
       this.history = []
       this.rallies = ''
+      this.ralT = ''
       this.startedAt = 0
       this.endedAt = 0
       this.matchStatus = 'active'
@@ -530,6 +578,7 @@
             if (!this.doUndo()) this.sendState('state_reply')
             return
           }
+          if (msg.action === 'players') { this.storePlayers(msg); return }
           if (msg.action === 'match_ack') { this.onMatchAck(msg.matchId, msg.revision); return }
           if (msg.action === 'new_match' || msg.action === 'reset') { this.resetGame(); return }
           if (msg.action === 'request_current_state') { this.sendState('state_reply'); return }
@@ -795,6 +844,7 @@
         st: this.streakTeam,
         sc: this.streakCount,
         rallies: this.rallies,
+        ralT: this.ralT,
         startedAt: this.startedAt,
         endedAt: this.endedAt,
         status: this.matchStatus
@@ -834,6 +884,7 @@
         streakTeam: this.streakTeam,
         streakCount: this.streakCount,
         manualHype: manualHype || null,
+        pv: this.playersVersion(),
         source: 'band',
         silent: true,
         timestamp: Date.now()
@@ -973,6 +1024,7 @@
       this.streakTeam = lastState.st
       this.streakCount = lastState.sc
       this.rallies = lastState.rallies || ''
+      this.ralT = lastState.ralT || ''
       this.startedAt = lastState.startedAt || 0
       this.endedAt = 0
       // Undoing a winning point reopens the same matchId; winning again
@@ -999,6 +1051,8 @@
       if (team === 'A') this.scoreA++
       else this.scoreB++
       this.rallies += team
+      const sec = Math.round((Date.now() - this.startedAt) / 1000)
+      this.ralT = this.ralT ? this.ralT + ',' + sec : '' + sec
       this.bumpStreak(team)
       this.checkWinner()
       this.matchStatus = (this.isWinnerA || this.isWinnerB) ? 'completed' : 'active'

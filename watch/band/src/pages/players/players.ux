@@ -1,0 +1,69 @@
+<template>
+  <!-- Read-only: what the band holds right now. Names are managed on the
+       phone (Players screen); the band cannot type. -->
+  <div class="page">
+    <text class="title">PLAYERS · {{ count }}</text>
+    <text class="sub">{{ syncText }}</text>
+    <text class="empty" if="{{ count === 0 }}">Pick today's players on the phone, then Send to band</text>
+    <list class="list" if="{{ count > 0 }}">
+      <!-- One type, identical structure for every row: `full` is an empty
+           string when it would repeat the short name. -->
+      <list-item type="player" for="{{ rows }}" class="row">
+        <text class="short">{{ $item.s }}</text>
+        <text class="full">{{ $item.full }}</text>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import storage from '@system.storage'
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n }
+
+  export default {
+    private: { rows: [], count: 0, syncText: '' },
+
+    onShow() {
+      const def = this.$app && this.$app.$def
+      if (def && def.players) {
+        this.render(def.players)
+        return
+      }
+      // Index page not visited yet this run: read storage directly.
+      storage.get({
+        key: 'bc_players_v1',
+        success: (raw) => {
+          let p = null
+          try { p = raw ? JSON.parse(raw) : null } catch (e) { p = null }
+          this.render(p)
+        },
+        fail: () => { this.render(null) }
+      })
+    },
+
+    render(p) {
+      const list = (p && p.list) || []
+      this.rows = list.map((x) => ({ s: x.s, full: x.n && x.n !== x.s ? x.n : '' }))
+      this.count = list.length
+      if (!p || !p.at) {
+        this.syncText = 'never synced'
+      } else {
+        const d = new Date(p.at)
+        this.syncText = 'synced ' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1) +
+          ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes())
+      }
+    }
+  }
+</script>
+
+<style>
+  .page { flex-direction: column; width: 100%; background-color: #0F172A; padding: 30px 12px 0 12px; }
+  .title { width: 100%; height: 36px; color: #FFFFFF; font-size: 22px; font-weight: bold; text-align: center; }
+  .sub { width: 100%; height: 24px; color: #4ADE80; font-size: 14px; text-align: center; }
+  .empty { width: 100%; height: 300px; color: #94A3B8; font-size: 16px; text-align: center; }
+  .list { width: 100%; height: 420px; margin-top: 8px; }
+  .row { width: 100%; height: 68px; margin-bottom: 8px; padding: 6px 14px; flex-direction: column; justify-content: center; background-color: rgba(255,255,255,0.08); border-radius: 14px; }
+  .short { color: #FFFFFF; font-size: 24px; font-weight: bold; height: 32px; }
+  .full { color: #94A3B8; font-size: 13px; height: 18px; }
+</style>

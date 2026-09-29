@@ -48,6 +48,9 @@
       },
       "pages/match_history": {
         "component": "match_history"
+      },
+      "pages/players": {
+        "component": "players"
       }
     }
   },
