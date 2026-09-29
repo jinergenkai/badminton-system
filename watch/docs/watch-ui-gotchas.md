@@ -93,3 +93,36 @@ bị thiếu suốt một thời gian dài.
 Mỗi lần flash tốn nguyên quy trình cài lại, nên **"đây là bản mới hay bản cũ?"**
 là câu hỏi tốn tiền. Trang `diag` có nhãn `DIAG b9` ngay trên tiêu đề. Đã mất 2
 vòng debug chỉ vì câu hỏi này trước khi thêm nhãn.
+
+## 8. Hai kiểu dòng trong một `<list>`: chưa có tiền lệ, đừng dùng
+
+Chưa có code band nào dùng `<block for>` + `list-item if/else` để trộn hai kiểu
+dòng. Dự án ebook mẫu còn **comment bỏ** đúng kiểu `list-item if=...`. Build có
+cảnh báo: *"list-item cùng type phải có cấu trúc DOM giống hệt nhau"*.
+
+Cách đang dùng (`match_history`): **một type, một cấu trúc cho mọi dòng**. Dòng
+nào không cần phần phụ thì để chuỗi rỗng, và chiều cao đổi bằng style binding:
+
+```html
+<list-item type="match" for="{{ rows }}" class="record" style="height: {{ $item.h }}px">
+```
+
+`class` vẫn mang `height` mặc định. Nếu binding không ăn thì dòng chỉ thấp lại,
+**không biến mất** (xem §1). ⚠️ Binding `height` trên `list-item` chưa được xác
+nhận trên máy thật; `style` binding mới chỉ được chứng minh trên `div` (thanh
+cooldown).
+
+## 9. Thuộc tính làm việc của page: khai báo trong `private`
+
+Gán ad hoc `this.foo = ...` cho thứ không khai báo là đánh cược. Lỗi Sound list
+rỗng xảy ra vì một thuộc tính không nằm trong data bị framework bỏ đi. Mọi state
+làm việc (kể cả không hiển thị) khai báo trong `private`. Mảng thì gán lại
+(`this.red = this.red.concat([id])`) thay vì `push`, để thay đổi chắc chắn được
+thấy.
+
+## 10. Kiểm tra CSS sau build: tìm đúng định dạng
+
+Bảng style biên dịch nằm trong `build/pages/<page>/<page>.js` dưới dạng
+`[[0, "ten-class"]], {...}`, không phải `".ten-class"`. Một rule mất (ví dụ do
+comment `/* */` không đóng) sẽ **không có** mục này. Tìm theo regex
+`\[\s*0,\s*"ten-class"\s*\]`.

@@ -51,6 +51,9 @@
       },
       "pages/players": {
         "component": "players"
+      },
+      "pages/lineup": {
+        "component": "lineup"
       }
     }
   },

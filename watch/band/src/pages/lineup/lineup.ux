@@ -1,0 +1,195 @@
+<template>
+  <!-- Opened by the index page at the start of a set while Players is on.
+       Swiping back out of it counts as Skip: the set is played unnamed. -->
+  <div class="page">
+    <!-- Step 0: how to start -->
+    <text class="title" if="{{ step === 0 }}">PLAYERS</text>
+    <div class="big new" if="{{ step === 0 }}" onclick="onNew"><text class="big-text">NEW</text></div>
+    <div class="big same" if="{{ step === 0 && hasSame }}" onclick="onSame">
+      <text class="big-text">SAME 4</text>
+      <text class="big-sub">{{ sameText }}</text>
+    </div>
+    <div class="big skip" if="{{ step === 0 }}" onclick="onSkip"><text class="big-text">SKIP</text></div>
+
+    <!-- Steps 1-4: pick one player each -->
+    <text class="title t-blue" if="{{ step === 1 }}">BLUE 1</text>
+    <text class="title t-blue" if="{{ step === 2 }}">BLUE 2</text>
+    <text class="title t-red" if="{{ step === 3 }}">RED 1</text>
+    <text class="title t-red" if="{{ step === 4 }}">RED 2</text>
+    <list class="pick-list" if="{{ step >= 1 && step <= 4 }}">
+      <!-- One type, identical structure: `full` is '' when it would repeat. -->
+      <list-item type="pick" for="{{ rows }}" class="pick-row" onclick="onPick($idx)">
+        <text class="pick-short">{{ $item.s }}</text>
+        <text class="pick-full">{{ $item.full }}</text>
+      </list-item>
+    </list>
+
+    <!-- Step 5: server (any of the four) -->
+    <text class="title" if="{{ step === 5 }}">WHO SERVES?</text>
+    <div class="who red" if="{{ step === 5 }}" onclick="onServer(0)"><text class="who-text">{{ n0 }}</text></div>
+    <div class="who red" if="{{ step === 5 }}" onclick="onServer(1)"><text class="who-text">{{ n1 }}</text></div>
+    <div class="who blue" if="{{ step === 5 }}" onclick="onServer(2)"><text class="who-text">{{ n2 }}</text></div>
+    <div class="who blue" if="{{ step === 5 }}" onclick="onServer(3)"><text class="who-text">{{ n3 }}</text></div>
+
+    <!-- Step 6: receiver (the other pair only) -->
+    <text class="title" if="{{ step === 6 }}">WHO RECEIVES?</text>
+    <div class="who {{ rcvColor }}" if="{{ step === 6 }}" onclick="onReceiver(0)"><text class="who-text">{{ r0 }}</text></div>
+    <div class="who {{ rcvColor }}" if="{{ step === 6 }}" onclick="onReceiver(1)"><text class="who-text">{{ r1 }}</text></div>
+  </div>
+</template>
+
+<script>
+  import router from '@system.router'
+
+  export default {
+    private: {
+      step: 0,
+      hasSame: false,
+      sameText: '',
+      rows: [],
+      // Order is fixed everywhere: red1, red2, blue1, blue2.
+      n0: '', n1: '', n2: '', n3: '',
+      r0: '', r1: '',
+      rcvColor: 'red',
+      // Working state. Declared here, not assigned ad hoc on `this`: the
+      // framework only keeps what is declared (see the Sound page bug).
+      all: [],
+      names: {},
+      blue: [],
+      red: [],
+      srv: '',
+      rcvIds: [],
+      sameRed: [],
+      sameBlue: [],
+      mode: 'new'
+    },
+
+    onInit() {
+      const def = this.$app && this.$app.$def
+      const all = (def && def.players && def.players.list) || []
+      const names = {}
+      for (let i = 0; i < all.length; i++) names[all[i].i] = { s: all[i].s, n: all[i].n }
+      this.all = all
+      this.names = names
+      const last = def && def.lastLineup
+      // Same 4 only if all four are still on today's list.
+      if (last && last.red && last.blue) {
+        const ids = last.red.concat(last.blue)
+        let ok = true
+        for (let i = 0; i < ids.length; i++) { if (!this.names[ids[i]]) ok = false }
+        if (ok) {
+          this.hasSame = true
+          this.sameRed = last.red.slice()
+          this.sameBlue = last.blue.slice()
+          this.sameText = this.short(last.red[0]) + ' ' + this.short(last.red[1]) +
+            ' / ' + this.short(last.blue[0]) + ' ' + this.short(last.blue[1])
+        }
+      }
+    },
+
+    short(id) { return (this.names[id] && this.names[id].s) || '?' },
+
+    buildRows() {
+      const taken = this.blue.concat(this.red)
+      const rows = []
+      for (let i = 0; i < this.all.length; i++) {
+        const p = this.all[i]
+        if (taken.indexOf(p.i) >= 0) continue
+        rows.push({ i: p.i, s: p.s, full: p.n && p.n !== p.s ? p.n : '' })
+      }
+      this.rows = rows
+    },
+
+    onNew() {
+      this.step = 1
+      this.buildRows()
+    },
+
+    onSame() {
+      this.red = this.sameRed.slice()
+      this.blue = this.sameBlue.slice()
+      this.mode = 'same'
+      this.toServer()
+    },
+
+    onSkip() {
+      const def = this.$app && this.$app.$def
+      if (def) def.pendingMatchCommand = { action: 'skip_lineup' }
+      router.back()
+    },
+
+    onPick(idx) {
+      const row = this.rows[idx]
+      if (!row) return
+      if (this.step <= 2) this.blue = this.blue.concat([row.i])
+      else this.red = this.red.concat([row.i])
+      if (this.step < 4) {
+        this.step = this.step + 1
+        this.buildRows()
+      } else {
+        this.mode = 'new'
+        this.toServer()
+      }
+    },
+
+    toServer() {
+      this.n0 = this.short(this.red[0])
+      this.n1 = this.short(this.red[1])
+      this.n2 = this.short(this.blue[0])
+      this.n3 = this.short(this.blue[1])
+      this.step = 5
+    },
+
+    onServer(k) {
+      const four = [this.red[0], this.red[1], this.blue[0], this.blue[1]]
+      this.srv = four[k]
+      // The receiver comes from the other pair.
+      this.rcvIds = k < 2 ? this.blue.slice() : this.red.slice()
+      this.rcvColor = k < 2 ? 'blue' : 'red'
+      this.r0 = this.short(this.rcvIds[0])
+      this.r1 = this.short(this.rcvIds[1])
+      this.step = 6
+    },
+
+    onReceiver(k) {
+      const def = this.$app && this.$app.$def
+      const ids = this.red.concat(this.blue)
+      const names = {}
+      for (let i = 0; i < ids.length; i++) names[ids[i]] = this.names[ids[i]]
+      if (def) def.pendingMatchCommand = {
+        action: 'set_lineup',
+        lu: {
+          red: this.red.slice(),
+          blue: this.blue.slice(),
+          srv: this.srv,
+          rcv: this.rcvIds[k],
+          // Name snapshot: records stay readable after renames/removals.
+          names: names,
+          mode: this.mode
+        }
+      }
+      router.back()
+    }
+  }
+</script>
+
+<style>
+  .page { flex-direction: column; width: 100%; background-color: #0F172A; padding: 30px 8px 0 8px; }
+  .title { width: 100%; height: 52px; color: #FFFFFF; font-size: 24px; font-weight: bold; text-align: center; }
+  .t-blue { color: #448AFF; }
+  .t-red { color: #FF5252; }
+  .big { width: 100%; height: 110px; margin-top: 14px; flex-direction: column; justify-content: center; align-items: center; border-radius: 18px; }
+  .new { background-color: #16A34A; }
+  .same { background-color: #334155; }
+  .skip { background-color: rgba(255,255,255,0.08); }
+  .big-text { color: #FFFFFF; font-size: 26px; font-weight: bold; }
+  .big-sub { color: #CBD5E1; font-size: 13px; margin-top: 6px; }
+  .pick-list { width: 100%; height: 410px; }
+  .pick-row { width: 100%; height: 76px; margin-bottom: 8px; padding: 6px 14px; flex-direction: column; justify-content: center; background-color: rgba(255,255,255,0.08); border-radius: 14px; }
+  .pick-short { color: #FFFFFF; font-size: 26px; font-weight: bold; height: 34px; }
+  .pick-full { color: #94A3B8; font-size: 13px; height: 18px; }
+  .who { width: 100%; height: 88px; margin-top: 10px; justify-content: center; align-items: center; border-radius: 16px; }
+  .red { background-color: #FF5252; }
+  .blue { background-color: #448AFF; }
+  .who-text { color: #FFFFFF; font-size: 26px; font-weight: bold; }
+</style>

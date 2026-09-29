@@ -29,6 +29,9 @@
                leaving a downward wedge. Label is a separate un-rotated layer. -->
           <div class="streak-tri" if="{{ streakTeam === 'A' && streakCount > 0 }}"></div>
           <text class="streak-text" if="{{ streakTeam === 'A' && streakCount > 0 }}">x{{ streakCount }}</text>
+          <!-- Who serves, from which court (only when players are named). -->
+          <text class="serve-name" if="{{ serveTeam === 'A' }}">{{ serveName }}</text>
+          <text class="serve-court" if="{{ serveTeam === 'A' }}">{{ serveCourt }}</text>
         </stack>
 
         <!-- TEAM B (RIGHT) -->
@@ -39,6 +42,8 @@
           </div>
           <div class="streak-tri" if="{{ streakTeam === 'B' && streakCount > 0 }}"></div>
           <text class="streak-text" if="{{ streakTeam === 'B' && streakCount > 0 }}">x{{ streakCount }}</text>
+          <text class="serve-name" if="{{ serveTeam === 'B' }}">{{ serveName }}</text>
+          <text class="serve-court" if="{{ serveTeam === 'B' }}">{{ serveCourt }}</text>
         </stack>
       </div>
 
@@ -99,6 +104,18 @@
       // Seconds from startedAt at which each rally ended, comma separated.
       ralT: '',
       stateLoaded: false,
+      // Named players for this set: { red, blue, srv, rcv, names, mode } or
+      // null. Fixed from the first point; set by pages/lineup.
+      lineup: null,
+      // The start-of-set question has been answered (named, skipped, or not
+      // applicable), so the lineup page must not open again for this set.
+      luDone: false,
+      // Lineup of the set before this one: what "Same 4" offers.
+      prevLu: null,
+      // Derived from lineup + rallies on every change (refreshServe).
+      serveTeam: '',
+      serveName: '',
+      serveCourt: '',
       connected: false,
       isConnecting: false,
       connect: null,
@@ -180,6 +197,9 @@
                 this.streakTeam = s.streakTeam || ''
                 this.streakCount = s.streakCount || 0
                 this.history = s.undoHistory || []
+                this.lineup = s.lu || null
+                this.luDone = !!s.luDone
+                this.prevLu = s.prevLu || null
                 this.checkWinner()
                 this.diag('restored ' + this.matchId + ' r' + this.matchRevision + ' ' + this.scoreA + '-' + this.scoreB)
               } catch (e) { this.diag('active parse failed: ' + e.message) }
@@ -216,7 +236,10 @@
         })
         storage.get({
           key: 'bc_players_on',
-          success: (v) => { def.playersOn = (v === '1') }
+          success: (v) => {
+            def.playersOn = (v === '1')
+            this.maybeAskLineup()
+          }
         })
       } catch (e) { this.diag('players read failed: ' + e.message) }
     },
@@ -240,6 +263,8 @@
     onStateLoaded() {
       if (!this.matchId) this.matchId = this.newMatchId()
       this.stateLoaded = true
+      this.refreshServe()
+      this.maybeAskLineup()
       if (this.connected) {
         this.sendState('band_ready')
         this.pushUnsyncedHistory()
@@ -261,11 +286,16 @@
         rallies: this.rallies,
         streakTeam: this.streakTeam,
         streakCount: this.streakCount,
+        ralT: this.ralT,
+        lu: this.lineup,
+        luDone: this.luDone,
+        prevLu: this.prevLu,
         undoHistory: this.history
       }
     },
 
     persistMatch() {
+      this.refreshServe()
       if (!this.stateLoaded) return
       try {
         storage.set({
@@ -330,6 +360,8 @@
       delete record.undoHistory
       delete record.streakTeam
       delete record.streakCount
+      delete record.luDone
+      delete record.prevLu
       const list = def.matchHistory.filter((r) => r.matchId !== record.matchId)
       list.unshift(record)
       def.matchHistory = list.slice(0, 20)
@@ -401,6 +433,11 @@
       this.isWinnerB = false
       this.matchId = this.newMatchId()
       this.matchRevision = 0
+      // Only the set immediately before counts: a skipped, seeded or
+      // players-off set has no lineup, so it clears "Same 4".
+      this.prevLu = this.lineup
+      this.lineup = null
+      this.luDone = false
       this.persistMatch()
     },
 
@@ -426,6 +463,9 @@
       this.seededScoreA = scoreA
       this.seededScoreB = scoreB
       this.seedServingTeam = servingTeam
+      // Joined mid-set: who stands where is unknown, so no names.
+      this.prevLu = null
+      this.luDone = true
       this.streakTeam = servingTeam
       this.streakCount = 1
       this.startedAt = Date.now() - (scoreA + scoreB) * 20000
@@ -444,6 +484,103 @@
       if (c.action === 'seed_score') this.applySeed(c.scoreA, c.scoreB, c.servingTeam)
       else if (c.action === 'new_match') this.resetGame()
       else if (c.action === 'publish_state') this.sendState('manual_state')
+      else if (c.action === 'set_lineup') this.applyLineup(c.lu)
+      else if (c.action === 'skip_lineup') this.skipLineup()
+    },
+
+    // ── Players / lineup ─────────────────────────────────────────────────
+    // Asked once per set, at 0-0, only while Players is on and the band holds
+    // at least four names.
+    maybeAskLineup() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.playersOn || !this.stateLoaded || this.luDone) return
+      if (this.scoreA !== 0 || this.scoreB !== 0 || this.rallies) return
+      if (def.lineupOpen) return
+      const n = (def.players && def.players.list) ? def.players.list.length : 0
+      if (n < 4) { this.status('Players: need 4 on list'); return }
+      def.lastLineup = this.prevLu
+      def.lineupOpen = true
+      setTimeout(() => { router.push({ uri: 'pages/lineup' }) }, 50)
+    },
+
+    applyLineup(lu) {
+      // A point scored meanwhile (phone command) means the set has started
+      // without names; a lineup can no longer be placed on it truthfully.
+      if (!lu || this.rallies || this.scoreA !== 0 || this.scoreB !== 0) {
+        this.skipLineup()
+        return
+      }
+      this.lineup = lu
+      this.luDone = true
+      this.matchRevision++
+      this.persistMatch()
+      this.sendState('lineup')
+      this.status(this.serveName + ' serves')
+    },
+
+    skipLineup() {
+      this.lineup = null
+      this.luDone = true
+      this.persistMatch()
+    },
+
+    // Who serves now, from the lineup at 0-0 and the rally log. Pure and
+    // recomputed on every change, so undo needs no bookkeeping.
+    //   - The serving side wins: its two players swap courts, same server.
+    //   - The receiving side wins: it gets the serve, nobody moves; its
+    //     server is whoever stands in the court matching its own score
+    //     (even = right, odd = left).
+    //   - The receiver stands in the same-named court, diagonally opposite.
+    computeServe(lu, rallies) {
+      if (!lu || !lu.red || !lu.blue || !lu.srv || !lu.rcv) return null
+      const pairOf = (t) => (t === 'A' ? lu.red : lu.blue)
+      const partner = (t, id) => (pairOf(t)[0] === id ? pairOf(t)[1] : pairOf(t)[0])
+      const s0 = lu.red.indexOf(lu.srv) >= 0 ? 'A' : 'B'
+      const r0 = s0 === 'A' ? 'B' : 'A'
+      const right = {}
+      const left = {}
+      right[s0] = lu.srv
+      left[s0] = partner(s0, lu.srv)
+      right[r0] = lu.rcv
+      left[r0] = partner(r0, lu.rcv)
+      let serving = s0
+      let a = 0
+      let b = 0
+      for (let i = 0; i < rallies.length; i++) {
+        const w = rallies.charAt(i)
+        if (w === 'A') a++
+        else b++
+        if (w === serving) {
+          const t = right[w]
+          right[w] = left[w]
+          left[w] = t
+        } else {
+          serving = w
+        }
+      }
+      const own = serving === 'A' ? a : b
+      const court = own % 2 === 0 ? 'R' : 'L'
+      const other = serving === 'A' ? 'B' : 'A'
+      return {
+        team: serving,
+        court: court,
+        srv: court === 'R' ? right[serving] : left[serving],
+        rcv: court === 'R' ? right[other] : left[other]
+      }
+    },
+
+    refreshServe() {
+      const sv = this.computeServe(this.lineup, this.rallies)
+      if (!sv) {
+        this.serveTeam = ''
+        this.serveName = ''
+        this.serveCourt = ''
+        return
+      }
+      const nm = this.lineup.names && this.lineup.names[sv.srv]
+      this.serveTeam = sv.team
+      this.serveName = (nm && nm.s) || '?'
+      this.serveCourt = sv.court === 'R' ? 'RIGHT' : 'LEFT'
     },
 
     loadAlarm() {
@@ -516,7 +653,12 @@
       this.startClock()
       this.startLinkPoll()
       this.loadAlarm()
+      const def = this.$app && this.$app.$def
+      const fromLineup = !!(def && def.lineupOpen)
+      if (def) def.lineupOpen = false
       this.applyPendingMatchCommand()
+      if (fromLineup && !this.luDone) this.skipLineup()
+      else this.maybeAskLineup()
     },
 
     setupConnect() {
@@ -885,6 +1027,9 @@
         streakCount: this.streakCount,
         manualHype: manualHype || null,
         pv: this.playersVersion(),
+        lu: this.lineup,
+        srv: this.serveTeam ? this.computeServe(this.lineup, this.rallies).srv : '',
+        srvC: this.serveCourt,
         source: 'band',
         silent: true,
         timestamp: Date.now()
@@ -930,6 +1075,7 @@
       this.startFreshMatch()
       this.sendState('new_match')
       this.status('New match')
+      this.maybeAskLineup()
     },
 
     openSettings() {
@@ -1206,6 +1352,31 @@
   /* Sits across the wide part of the wedge; the descender ends up over the card
      itself, which is why it is white rather than dark. Fixed width + centre
      alignment so x1 and x12 stay put instead of drifting with the digit count. */
+  /* Server label at the bottom of the serving card. Only left/bottom work
+     for absolute children of <stack> (docs/watch-ui-gotchas.md). */
+  .serve-name {
+    position: absolute;
+    bottom: 26px;
+    align-self: center;
+    width: 86px;
+    height: 24px;
+    text-align: center;
+    font-size: 18px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .serve-court {
+    position: absolute;
+    bottom: 8px;
+    align-self: center;
+    width: 86px;
+    height: 18px;
+    text-align: center;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.85);
+  }
+
   .streak-text {
     position: absolute;
     top: 6px;

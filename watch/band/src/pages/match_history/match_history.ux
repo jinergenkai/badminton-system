@@ -3,7 +3,10 @@
     <div class="header"><text class="title">LAST 20 SETS</text></div>
     <text class="empty" if="{{ rows.length === 0 }}">NO SETS YET</text>
     <list class="history-list" if="{{ rows.length > 0 }}">
-      <list-item type="match" for="{{ rows }}" class="record">
+      <!-- One type, one structure for every row (no if/else inside list-item:
+           no precedent on this band). A set without names gets '' in the
+           name lines and a shorter height through the style binding. -->
+      <list-item type="match" for="{{ rows }}" class="record" style="height: {{ $item.h }}px">
         <div class="line">
           <text class="num">{{ $item.n }}</text>
           <text class="red">{{ $item.a }}</text>
@@ -12,6 +15,16 @@
           <text class="status">{{ $item.status }}</text>
         </div>
         <text class="meta">{{ $item.meta }}</text>
+        <div class="names">
+          <text class="nm-red">{{ $item.r1 }}</text>
+          <text class="vs">{{ $item.x }}</text>
+          <text class="nm-blue">{{ $item.b1 }}</text>
+        </div>
+        <div class="names">
+          <text class="nm-red">{{ $item.r2 }}</text>
+          <text class="vs"></text>
+          <text class="nm-blue">{{ $item.b2 }}</text>
+        </div>
       </list-item>
     </list>
     <div class="back" onclick="onBack"><text class="back-text">BACK</text></div>
@@ -41,7 +54,16 @@
       if (r.seededScoreA >= 0) dur = '~' + dur
     }
     const synced = r.syncedRev === r.revision ? ' · SYNCED' : ''
+    const lu = r.lu
+    const nm = (id) => (lu && lu.names && lu.names[id] && lu.names[id].s) || ''
+    const named = !!(lu && lu.red && lu.blue)
     return {
+      h: named ? 126 : 72,
+      r1: named ? nm(lu.red[0]) : '',
+      r2: named ? nm(lu.red[1]) : '',
+      b1: named ? nm(lu.blue[0]) : '',
+      b2: named ? nm(lu.blue[1]) : '',
+      x: named ? 'x' : '',
       n: '#' + (i + 1),
       a: '' + r.scoreA,
       b: '' + r.scoreB,
@@ -87,6 +109,11 @@
   .blue { color: #448AFF; font-size: 22px; font-weight: bold; }
   .status { color: #94A3B8; font-size: 13px; margin-left: 12px; }
   .meta { color: #CBD5E1; font-size: 14px; height: 20px; margin-top: 4px; }
+  /* Red on the left, blue on the right: same sides as the score cards. */
+  .names { width: 100%; height: 24px; flex-direction: row; align-items: center; }
+  .nm-red { width: 45%; height: 24px; color: #FF7A7A; font-size: 17px; font-weight: bold; }
+  .vs { width: 10%; height: 24px; color: #94A3B8; font-size: 14px; text-align: center; }
+  .nm-blue { width: 45%; height: 24px; color: #7AAEFF; font-size: 17px; font-weight: bold; text-align: right; }
   .empty { width: 100%; height: 360px; color: #64748B; font-size: 15px; text-align: center; }
   .back { width: 100%; height: 48px; justify-content: center; align-items: center; }
   .back-text { color: #94A3B8; font-size: 15px; font-weight: bold; }
