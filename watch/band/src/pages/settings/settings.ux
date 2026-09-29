@@ -10,6 +10,10 @@
         <text class="item-text">Swap Side</text>
       </list-item>
 
+      <list-item type="setting" class="item" onclick="onPhoneScreen">
+        <text class="item-text">{{ phoneBlank ? 'Wake Phone' : 'Blank Phone' }}</text>
+      </list-item>
+
       <list-item type="setting" class="item" onclick="onMediaControl">
         <text class="item-text">Media Control</text>
       </list-item>
@@ -62,7 +66,8 @@
     protected: {
       connected: false,
       scoreA: 0,
-      scoreB: 0
+      scoreB: 0,
+      phoneBlank: false
     },
 
     // ── Step-0 diagnostics ───────────────────────────────────────────────
@@ -73,7 +78,11 @@
 
     onInit() { this.diag('onInit') },
     onReady() { this.diag('onReady') },
-    onShow() { this.diag('onShow') },
+    onShow() {
+      this.diag('onShow')
+      const def = this.$app && this.$app.$def
+      this.phoneBlank = !!(def && def.phoneBlank)
+    },
     // Worth noticing in the log: this page never attaches an onmessage
     // handler, so while it is up the app's single receive slot is whatever
     // the previous page left behind — possibly null.
@@ -133,6 +142,29 @@
     onSwapSides() {
       this.sendRaw({ action: 'swap_sides' }, 'Swapped sides on phone')
       router.back()
+    },
+
+    // Explicit on/off, not a toggle: a resend can never flip it the wrong way.
+    // The state only changes once the band has actually handed it over.
+    onPhoneScreen() {
+      const blank = !this.phoneBlank
+      const connect = interconnect.instance()
+      if (!connect) { prompt.showToast({ message: 'Phone not reachable' }); return }
+      const self = this
+      connect.send({
+        data: { action: 'phone_screen', blank: blank },
+        success: function () {
+          const def = self.$app && self.$app.$def
+          if (def) def.phoneBlank = blank
+          self.diag('send ok: phone_screen ' + blank)
+          prompt.showToast({ message: blank ? 'Phone blanked' : 'Phone awake' })
+          router.back()
+        },
+        fail: function (data, code) {
+          self.diag('send FAIL: phone_screen code=' + code)
+          prompt.showToast({ message: 'Phone not reachable' })
+        }
+      })
     },
 
     onReconnect() {

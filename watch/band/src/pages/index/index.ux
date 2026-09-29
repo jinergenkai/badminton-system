@@ -989,6 +989,9 @@
     applyPoint(team, manualHype, fromPhone) {
       if (this.isWinnerA || this.isWinnerB) return false
       if (this.isLocked && !fromPhone) return false
+      // The phone wakes itself on a new point; keep the Settings label true.
+      const def = this.$app && this.$app.$def
+      if (def) def.phoneBlank = false
       this.pushHistory()
       if (!this.startedAt) this.startedAt = Date.now()
       if (team === 'A') this.scoreA++
