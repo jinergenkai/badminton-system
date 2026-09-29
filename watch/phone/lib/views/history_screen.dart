@@ -49,10 +49,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              // In Hive, delete by key (which is the index in the box)
-              DatabaseService.deleteMatch(index);
+              // By id: the list index is not a Hive key (keys are never
+              // reused and the list is sorted), so it deleted the wrong set.
+              await DatabaseService.deleteMatchById(_matches[index].id);
               _loadMatches();
               Get.snackbar(
                 'Match Deleted',
@@ -149,6 +150,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     final match = _matches[index];
                     return _MatchCard(
                       match: match,
+                      number: index + 1,
                       onDelete: () => _deleteMatch(index),
                     ).animate().fadeIn(delay: (index * 50).ms).slideX(
                           begin: 0.2,
@@ -163,9 +165,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
 class _MatchCard extends StatelessWidget {
   final Match match;
   final VoidCallback onDelete;
+  /// 1 = most recent set, so today's count is the number on today's oldest.
+  final int number;
 
   const _MatchCard({
     required this.match,
+    required this.number,
     required this.onDelete,
   });
 
@@ -197,6 +202,15 @@ class _MatchCard extends StatelessWidget {
                 children: [
                   Row(
                     children: [
+                      Text(
+                        '#$number',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
                       Icon(
                         Icons.calendar_today,
                         size: 16,

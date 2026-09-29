@@ -73,7 +73,11 @@ class DatabaseService {
       throw Exception('Database not initialized. Call initialize() first.');
     }
 
-    return _matchesBox!.values.toList().reversed.toList();
+    // Newest start first. Not box order: band sets synced after an offline
+    // session are inserted late, and an upsert keeps its original slot.
+    final list = _matchesBox!.values.toList();
+    list.sort((a, b) => b.startTime.compareTo(a.startTime));
+    return list;
   }
 
   /// Get recent matches (limit)
