@@ -15,12 +15,15 @@
           <text class="status">{{ $item.status }}</text>
         </div>
         <text class="meta">{{ $item.meta }}</text>
-        <div class="names">
+        <!-- Name lines are 0px tall on an unnamed set. Leaving them at 24px
+             inside a 72px card made flexbox squeeze every line to fit, which
+             cut the meta line in half and left the lower half blank. -->
+        <div class="names" style="height: {{ $item.nh }}px">
           <text class="nm-red">{{ $item.r1 }}</text>
           <text class="vs">{{ $item.x }}</text>
           <text class="nm-blue">{{ $item.b1 }}</text>
         </div>
-        <div class="names">
+        <div class="names" style="height: {{ $item.nh }}px">
           <text class="nm-red">{{ $item.r2 }}</text>
           <text class="vs"></text>
           <text class="nm-blue">{{ $item.b2 }}</text>
@@ -59,6 +62,7 @@
     const named = !!(lu && lu.red && lu.blue)
     return {
       h: named ? 126 : 72,
+      nh: named ? 24 : 0,
       r1: named ? nm(lu.red[0]) : '',
       r2: named ? nm(lu.red[1]) : '',
       b1: named ? nm(lu.blue[0]) : '',
@@ -102,15 +106,15 @@
   .title { color: #FFFFFF; font-size: 20px; font-weight: bold; }
   .history-list { width: 100%; height: 360px; }
   .record { width: 100%; height: 72px; margin-bottom: 8px; padding: 8px 12px; flex-direction: column; background-color: rgba(255,255,255,0.08); border-radius: 12px; }
-  .line { width: 100%; height: 30px; flex-direction: row; align-items: center; }
+  .line { width: 100%; height: 30px; flex-shrink: 0; flex-direction: row; align-items: center; }
   .num { color: #FFFFFF; font-size: 18px; font-weight: bold; width: 44px; }
   .red { color: #FF5252; font-size: 22px; font-weight: bold; }
   .dash { color: #94A3B8; font-size: 22px; margin-left: 6px; margin-right: 6px; }
   .blue { color: #448AFF; font-size: 22px; font-weight: bold; }
   .status { color: #94A3B8; font-size: 13px; margin-left: 12px; }
-  .meta { color: #CBD5E1; font-size: 14px; height: 20px; margin-top: 4px; }
+  .meta { color: #CBD5E1; font-size: 14px; height: 20px; flex-shrink: 0; margin-top: 4px; }
   /* Red on the left, blue on the right: same sides as the score cards. */
-  .names { width: 100%; height: 24px; flex-direction: row; align-items: center; }
+  .names { width: 100%; height: 24px; flex-shrink: 0; overflow: hidden; flex-direction: row; align-items: center; }
   .nm-red { width: 45%; height: 24px; color: #FF7A7A; font-size: 17px; font-weight: bold; }
   .vs { width: 10%; height: 24px; color: #94A3B8; font-size: 14px; text-align: center; }
   .nm-blue { width: 45%; height: 24px; color: #7AAEFF; font-size: 17px; font-weight: bold; text-align: right; }

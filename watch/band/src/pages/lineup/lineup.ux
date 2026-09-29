@@ -4,12 +4,16 @@
   <div class="page">
     <!-- Step 0: how to start -->
     <text class="title" if="{{ step === 0 }}">PLAYERS</text>
+    <!-- First, so the phone board can be lined up with the court before
+         anyone is put on a colour. Stays on this page. -->
+    <div class="swap" if="{{ step === 0 }}" onclick="onSwap"><text class="swap-text">SWAP SIDE</text></div>
     <div class="big new" if="{{ step === 0 }}" onclick="onNew"><text class="big-text">NEW</text></div>
     <div class="big same" if="{{ step === 0 && hasSame }}" onclick="onSame">
-      <text class="big-text">SAME 4</text>
-      <text class="big-sub">{{ sameText }}</text>
+      <text class="same-title">SAME 4</text>
+      <text class="same-red">{{ sameRedText }}</text>
+      <text class="same-blue">{{ sameBlueText }}</text>
     </div>
-    <div class="big skip" if="{{ step === 0 }}" onclick="onSkip"><text class="big-text">SKIP</text></div>
+    <div class="skip" if="{{ step === 0 }}" onclick="onSkip"><text class="skip-text">SKIP</text></div>
 
     <!-- Steps 1-4: pick one player each -->
     <text class="title t-blue" if="{{ step === 1 }}">BLUE 1</text>
@@ -40,12 +44,15 @@
 
 <script>
   import router from '@system.router'
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
 
   export default {
     private: {
       step: 0,
       hasSame: false,
-      sameText: '',
+      sameRedText: '',
+      sameBlueText: '',
       rows: [],
       // Order is fixed everywhere: red1, red2, blue1, blue2.
       n0: '', n1: '', n2: '', n3: '',
@@ -81,8 +88,8 @@
           this.hasSame = true
           this.sameRed = last.red.slice()
           this.sameBlue = last.blue.slice()
-          this.sameText = this.short(last.red[0]) + ' ' + this.short(last.red[1]) +
-            ' / ' + this.short(last.blue[0]) + ' ' + this.short(last.blue[1])
+          this.sameRedText = this.short(last.red[0]) + ' · ' + this.short(last.red[1])
+          this.sameBlueText = this.short(last.blue[0]) + ' · ' + this.short(last.blue[1])
         }
       }
     },
@@ -110,6 +117,17 @@
       this.blue = this.sameBlue.slice()
       this.mode = 'same'
       this.toServer()
+    },
+
+    // Same stateless trigger as Settings > Swap Side: only the phone flips.
+    onSwap() {
+      const connect = interconnect.instance()
+      if (!connect) { prompt.showToast({ message: 'Phone not reachable' }); return }
+      connect.send({
+        data: { action: 'swap_sides' },
+        success: function () { prompt.showToast({ message: 'Swapped on phone' }) },
+        fail: function () { prompt.showToast({ message: 'Phone not reachable' }) }
+      })
     },
 
     onSkip() {
@@ -178,12 +196,18 @@
   .title { width: 100%; height: 52px; color: #FFFFFF; font-size: 24px; font-weight: bold; text-align: center; }
   .t-blue { color: #448AFF; }
   .t-red { color: #FF5252; }
-  .big { width: 100%; height: 110px; margin-top: 14px; flex-direction: column; justify-content: center; align-items: center; border-radius: 18px; }
-  .new { background-color: #16A34A; }
-  .same { background-color: #334155; }
-  .skip { background-color: rgba(255,255,255,0.08); }
+  /* Step 0 fits one screen: title 52 + swap 68 + new 96 + same 128 + skip 80. */
+  .swap { width: 100%; height: 60px; margin-top: 8px; justify-content: center; align-items: center; border-radius: 14px; border-width: 2px; border-color: #FBBF24; }
+  .swap-text { color: #FBBF24; font-size: 20px; font-weight: bold; }
+  .big { width: 100%; margin-top: 8px; flex-direction: column; justify-content: center; align-items: center; border-radius: 18px; }
+  .new { height: 88px; background-color: #16A34A; }
+  .same { height: 120px; background-color: #334155; }
   .big-text { color: #FFFFFF; font-size: 26px; font-weight: bold; }
-  .big-sub { color: #CBD5E1; font-size: 13px; margin-top: 6px; }
+  .same-title { height: 34px; color: #FFFFFF; font-size: 24px; font-weight: bold; }
+  .same-red { height: 26px; color: #FF7A7A; font-size: 19px; font-weight: bold; }
+  .same-blue { height: 26px; color: #7AAEFF; font-size: 19px; font-weight: bold; }
+  .skip { width: 100%; height: 72px; margin-top: 8px; justify-content: center; align-items: center; border-radius: 14px; background-color: rgba(255,255,255,0.08); }
+  .skip-text { color: #CBD5E1; font-size: 22px; font-weight: bold; }
   .pick-list { width: 100%; height: 410px; }
   .pick-row { width: 100%; height: 76px; margin-bottom: 8px; padding: 6px 14px; flex-direction: column; justify-content: center; background-color: rgba(255,255,255,0.08); border-radius: 14px; }
   .pick-short { color: #FFFFFF; font-size: 26px; font-weight: bold; height: 34px; }

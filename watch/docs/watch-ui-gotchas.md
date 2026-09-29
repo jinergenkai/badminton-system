@@ -107,10 +107,15 @@ nào không cần phần phụ thì để chuỗi rỗng, và chiều cao đổi
 <list-item type="match" for="{{ rows }}" class="record" style="height: {{ $item.h }}px">
 ```
 
-`class` vẫn mang `height` mặc định. Nếu binding không ăn thì dòng chỉ thấp lại,
-**không biến mất** (xem §1). ⚠️ Binding `height` trên `list-item` chưa được xác
-nhận trên máy thật; `style` binding mới chỉ được chứng minh trên `div` (thanh
-cooldown).
+`class` vẫn mang `height` mặc định. ✅ Binding `height` trên `list-item` **đã
+xác nhận chạy trên máy thật** (card có tên cao đúng 126px).
+
+⚠️ Bẫy đi kèm: phần con không dùng tới cũng phải **co về 0px**, không chỉ để
+chuỗi rỗng. Card không tên cao 72px mà vẫn chứa 2 dòng tên 24px rỗng, nên
+flexbox bóp mọi dòng cho vừa: dòng giờ bị cắt nửa, nửa dưới card trống. Cách
+sửa: bind luôn chiều cao phần phụ (`style="height: {{ $item.nh }}px"`, 0 khi
+không dùng), và đặt `flex-shrink: 0` cho các dòng chính để chúng không bao giờ
+bị bóp.
 
 ## 9. Thuộc tính làm việc của page: khai báo trong `private`
 
