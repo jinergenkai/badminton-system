@@ -63,6 +63,18 @@ class ScoreController extends GetxController {
   TeamConfig? _teamConfig;
   StreamSubscription? _watchCommandSubscription;
   bool _isSyncingFromWatch = false;
+  String? _lastBandMatchId;
+  int _lastBandRevision = -1;
+  String _lastBandRallies = '';
+  DateTime? _lastBandSeen;
+  Future<void> _dbChain = Future.value();
+
+  /// The band app has spoken recently, so it is the scoreboard's authority:
+  /// phone taps become commands, and saved history comes from band records.
+  /// Without a recent band message the phone runs standalone as before.
+  bool get _bandLive =>
+      _lastBandSeen != null &&
+      DateTime.now().difference(_lastBandSeen!) < const Duration(minutes: 15);
 
   Rx<GameState> get gameStateObservable => _gameState;
   TtsService get ttsService => _ttsService;
@@ -205,6 +217,42 @@ class ScoreController extends GetxController {
     // `silent` = sender already mutated its local state (e.g., watch index page).
     // When false (e.g., from settings page), phone MUST echo back so watch index can mirror.
     final bool silent = event['silent'] == true;
+    final bool fromBand = event['source'] == 'band';
+    final String? bandMatchId = event['matchId'] as String?;
+    final int bandRevision = event['revision'] is num
+        ? (event['revision'] as num).toInt() : -1;
+
+    // Band history push: upsert by matchId, then ack so the band moves on to
+    // the next unsynced record. Upserts are chained so two never race.
+    if (action == 'match_record') {
+      _lastBandSeen = DateTime.now();
+      _storeBandRecord(event);
+      return;
+    }
+
+    // Revisions only gate side effects (hype, voice). The score itself is
+    // always mirrored: an explicit refresh carries the same revision as the
+    // last message, and dropping it would leave a diverged phone diverged.
+    bool isNewRev = true;
+    if (fromBand) {
+      _lastBandSeen = DateTime.now();
+      if (event['rallies'] != null) _lastBandRallies = event['rallies'].toString();
+      if (bandMatchId != null && bandRevision >= 0) {
+        isNewRev = !(_lastBandMatchId == bandMatchId && bandRevision <= _lastBandRevision);
+        _lastBandMatchId = bandMatchId;
+        _lastBandRevision = bandRevision;
+      }
+      // Band state says this set is open again (undo after a win): reopen it
+      // here too, and drop any record already saved for it.
+      if (event['status'] == 'active' && isGameEnded.value) {
+        _autoResetTimer?.cancel();
+        isGameEnded.value = false;
+        _gameState.value = gameState.copyWith(isGameActive: true);
+        if (bandMatchId != null) {
+          _dbChain = _dbChain.then((_) => DatabaseService.deleteMatchById(bandMatchId));
+        }
+      }
+    }
 
     print('⌚ [Controller] Command from watch: $action (Scores: $newScoreA-$newScoreB, silent=$silent)');
 
@@ -219,13 +267,16 @@ class ScoreController extends GetxController {
     }
 
     // Handle sync requests
-    if (action == 'request_sync' || action == 'sync') {
-      _watchService.sendScoreUpdate(gameState, action: 'sync');
+    if (action == 'request_sync' || action == 'request_current_state') {
+      _watchService.sendScoreCommand('request_current_state');
       return;
     }
 
     // Handle reset/next match
-    if (action == 'reset' || action == 'next_match') {
+    if (action == 'reset' || action == 'next_match' || action == 'new_match') {
+      // Echo of a reset the phone already applied optimistically.
+      if (fromBand && gameState.teamAScore == 0 && gameState.teamBScore == 0 &&
+          !isGameEnded.value) return;
       if (silent) _isSyncingFromWatch = true;
       resetGame();
       if (silent) _isSyncingFromWatch = false;
@@ -269,26 +320,30 @@ class ScoreController extends GetxController {
     }
 
     // Handle score updates
-    if (action == 'score_A' || action == 'score_B') {
+    if (action == 'score_A' || action == 'score_B' || action == 'seed_score' ||
+        action == 'band_online' || action == 'band_ready' ||
+        action == 'band_reconnected' || action == 'state_reply' ||
+        action == 'manual_state') {
       if (newScoreA >= 0 && newScoreB >= 0) {
         final int oldA = gameState.teamAScore;
         final int oldB = gameState.teamBScore;
         final String? manualHype = event['manualHype'];
         
-        // Duplicate-message guard
+        // Duplicate-message guard. Also absorbs the band's echo of a point
+        // the phone already applied optimistically — no second announcement.
         if (newScoreA == oldA && newScoreB == oldB && manualHype == null) return;
 
         // DEFENSIVE LOGIC: If watch sends a score that is lower than phone (and not a reset), 
         // it likely means the watch app just restarted and hasn't synced yet.
         // We catch this BEFORE the 'hasWinner' reset check to avoid accidental match resets.
-        if (!isResetFromWatch && (newScoreA < oldA || newScoreB < oldB)) {
+        if (!fromBand && !isResetFromWatch && (newScoreA < oldA || newScoreB < oldB)) {
           print('⌚ [Controller] Rejected lower scores from watch. Forcing sync back.');
-          _watchService.sendScoreUpdate(gameState, action: 'sync');
+          _watchService.sendScoreCommand('request_current_state');
           return;
         }
 
         // If game ended, any score button from watch resets the game (if it's not a stale update from restart)
-        if (gameState.hasWinner) {
+        if (!fromBand && gameState.hasWinner) {
           resetGame();
           return;
         }
@@ -309,16 +364,62 @@ class ScoreController extends GetxController {
 
         _isSyncingFromWatch = false;
 
-        _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB, manualHype: manualHype);
-        if (!gameState.hasWinner) {
+        final bool isPoint = (action == 'score_A' || action == 'score_B') && isNewRev;
+        if (isPoint) {
+          _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB, manualHype: manualHype);
+        }
+        if (!gameState.hasWinner && isPoint) {
           _announceScoreChange(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
         }
         // _checkTensionMusic() moved to onPlaybackCompleted — avoids AudioFocus conflict
         // ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
-        _checkGameEnd();
+        _checkGameEnd(fromBand: fromBand);
       }
     }
+  }
 
+  void _storeBandRecord(Map<String, dynamic> event) {
+    final id = event['matchId'];
+    final rev = event['revision'] is num ? (event['revision'] as num).toInt() : -1;
+    _dbChain = _dbChain.then((_) async {
+      try {
+        await _persistBandTerminalMatch(event);
+      } catch (e) {
+        print('⌚ [Controller] band record save failed: $e');
+        return; // no ack: the band retries on its next trigger
+      }
+      if (id is String) {
+        _watchService.sendScoreCommand('match_ack', extra: {'matchId': id, 'revision': rev});
+      }
+    });
+  }
+
+  Future<void> _persistBandTerminalMatch(Map<String, dynamic> event) async {
+    final id = event['matchId'];
+    final status = event['status'];
+    if (id is! String || (status != 'completed' && status != 'stopped')) return;
+    final a = event['scoreA'] is num ? (event['scoreA'] as num).toInt() : teamAScore;
+    final b = event['scoreB'] is num ? (event['scoreB'] as num).toInt() : teamBScore;
+    final startMs = event['startedAt'] is num ? (event['startedAt'] as num).toInt() : DateTime.now().millisecondsSinceEpoch;
+    final endMs = event['endedAt'] is num ? (event['endedAt'] as num).toInt() : DateTime.now().millisecondsSinceEpoch;
+    final seeded = event['seededScoreA'] is num && (event['seededScoreA'] as num) >= 0;
+    final rallies = event['rallies']?.toString() ?? '';
+    final winner = status == 'completed' ? (a > b ? 'A' : 'B') : '';
+    await DatabaseService.upsertMatch(Match(
+      id: id,
+      teamAName: gameState.teamAName,
+      teamBName: gameState.teamBName,
+      teamAScore: a,
+      teamBScore: b,
+      winner: winner,
+      startTime: DateTime.fromMillisecondsSinceEpoch(startMs),
+      endTime: DateTime.fromMillisecondsSinceEpoch(endMs),
+      actionHistory: rallies.split('').where((x) => x == 'A' || x == 'B').toList(),
+      durationSeconds: ((endMs - startMs) ~/ 1000).clamp(0, 1 << 31),
+      status: status,
+      durationEstimated: seeded,
+      rallySequence: rallies,
+    ));
   }
 
   void _announceScoreChange(int a, int b, String team) {
@@ -428,8 +529,12 @@ class ScoreController extends GetxController {
       teamAScore: gameState.teamAScore + 1,
       history: _appendHistory('${gameState.teamAName} scored'),
     );
+    // Applied here at once and sent to the band as a command. The band's
+    // resulting state overrides this when it arrives, so a lost command
+    // snaps back instead of drifting — and if band->phone is the broken
+    // direction, the phone board still moves.
     if (!_isSyncingFromWatch) {
-      _watchService.sendScoreUpdate(gameState, action: 'score_A');
+      _watchService.sendScoreCommand('point_A');
     }
 
     if (hapticFeedbackEnabled.value) {
@@ -454,8 +559,12 @@ class ScoreController extends GetxController {
       teamBScore: gameState.teamBScore + 1,
       history: _appendHistory('${gameState.teamBName} scored'),
     );
+    // Applied here at once and sent to the band as a command. The band's
+    // resulting state overrides this when it arrives, so a lost command
+    // snaps back instead of drifting — and if band->phone is the broken
+    // direction, the phone board still moves.
     if (!_isSyncingFromWatch) {
-      _watchService.sendScoreUpdate(gameState, action: 'score_B');
+      _watchService.sendScoreCommand('point_B');
     }
 
     if (hapticFeedbackEnabled.value) {
@@ -480,45 +589,55 @@ class ScoreController extends GetxController {
     }
   }
 
+  /// With the band live, -1 is only allowed as an undo of that team's last
+  /// rally — anything else would break the band's rally log.
+  bool _bandMinus(String team) {
+    if (!_bandLive) return false;
+    if (_lastBandRallies.isNotEmpty &&
+        _lastBandRallies[_lastBandRallies.length - 1] == team) {
+      undo();
+    } else {
+      print('⌚ [Controller] -1 $team refused: last rally is not $team');
+      if (hapticFeedbackEnabled.value) HapticFeedback.heavyImpact();
+    }
+    return true;
+  }
+
   void decrementTeamA() {
+    if (_bandMinus('A')) return;
     if (gameState.teamAScore > 0) {
       _pushStateToStack();
       _gameState.value = gameState.copyWith(teamAScore: gameState.teamAScore - 1);
-      if (!_isSyncingFromWatch) {
-        _watchService.sendScoreUpdate(gameState, action: 'score_A');
-      }
     }
   }
 
   void decrementTeamB() {
+    if (_bandMinus('B')) return;
     if (gameState.teamBScore > 0) {
       _pushStateToStack();
       _gameState.value = gameState.copyWith(teamBScore: gameState.teamBScore - 1);
-      if (!_isSyncingFromWatch) {
-        _watchService.sendScoreUpdate(gameState, action: 'score_B');
-      }
     }
   }
 
   void undo() {
+    if (!_isSyncingFromWatch) _watchService.sendScoreCommand('undo');
     if (!gameState.canUndo) return;
     final stack = List<GameState>.from(gameState.stateStack);
     final previousState = stack.removeLast();
     _gameState.value = previousState.copyWith(stateStack: stack);
-    if (!_isSyncingFromWatch) {
-      _watchService.sendScoreUpdate(gameState, action: 'undo');
-    }
     _hypeController.handleUndo();
     // Undo is almost always an immediate misclick correction — stay silent
     // instead of announcing "undo, X Y" (see matching comment above).
     _hypeController.playHype();
   }
 
-  void _checkGameEnd() {
+  void _checkGameEnd({bool fromBand = false}) {
     if (gameState.hasWinner) {
       _gameState.value = gameState.copyWith(isGameActive: false);
       isGameEnded.value = true;
-      _saveMatchToDatabase();
+      // With the band live, the band's own record (pushed with an ack) is
+      // the one that gets saved; saving here too would duplicate it.
+      if (!fromBand && !_bandLive) _saveMatchToDatabase();
       _musicService.stopMusic(fadeOut: true);
       
       if (scoreAnnouncementsEnabled.value) {
@@ -529,9 +648,13 @@ class ScoreController extends GetxController {
       
       _watchService.sendWinnerUpdate(gameState.winner, gameState.teamAScore, gameState.teamBScore);
       _autoResetTimer?.cancel();
-      _autoResetTimer = Timer(Duration(seconds: autoResetDelay.value), () {
-        if (isGameEnded.value) resetGame();
-      });
+      // Never auto-reset while the band is live: it would start a new match
+      // on the band before the user had a chance to undo the winning point.
+      if (!_bandLive) {
+        _autoResetTimer = Timer(Duration(seconds: autoResetDelay.value), () {
+          if (isGameEnded.value) resetGame();
+        });
+      }
     }
   }
 
@@ -604,7 +727,7 @@ class ScoreController extends GetxController {
     _hypeController.playStartOfMatchHype();
     // ForegroundService.updateScores(teamAScore: 0, teamBScore: 0);
     if (!_isSyncingFromWatch) {
-      _watchService.sendScoreUpdate(gameState, action: 'reset');
+      _watchService.sendScoreCommand('new_match');
     }
   }
 

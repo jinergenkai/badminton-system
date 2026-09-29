@@ -42,6 +42,31 @@ class DatabaseService {
     print('💾 [Database] Match saved: ${match.teamAName} vs ${match.teamBName} (${match.teamAScore}-${match.teamBScore})');
   }
 
+  /// Band records are revised after undo, so an id must be updated in place
+  /// instead of appended again on every reconnect/win.
+  static Future<void> upsertMatch(Match match) async {
+    if (_matchesBox == null) throw Exception('Database not initialized. Call initialize() first.');
+    dynamic existingKey;
+    for (final key in _matchesBox!.keys) {
+      if (_matchesBox!.get(key)?.id == match.id) { existingKey = key; break; }
+    }
+    if (existingKey == null) await _matchesBox!.add(match);
+    else await _matchesBox!.put(existingKey, match);
+  }
+
+  /// A band set that was undone out of its winning point is open again, so
+  /// the record saved for it no longer describes a finished set.
+  static Future<void> deleteMatchById(String id) async {
+    if (_matchesBox == null) return;
+    for (final key in _matchesBox!.keys.toList()) {
+      if (_matchesBox!.get(key)?.id == id) {
+        await _matchesBox!.delete(key);
+        print('💾 [Database] Reopened band set removed: $id');
+        return;
+      }
+    }
+  }
+
   /// Get all matches (newest first)
   static List<Match> getAllMatches() {
     if (_matchesBox == null) {

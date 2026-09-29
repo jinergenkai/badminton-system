@@ -80,6 +80,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
                             onDecrement: controller.decrementTeamA,
                             isActive: state.isGameActive,
                             mascotAsset: 'assets/image/dog_smash.png',
+                            isLeftPanel: !swapped,
                           ),
                         );
                         final cardB = Expanded(
@@ -94,6 +95,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
                             onDecrement: controller.decrementTeamB,
                             isActive: state.isGameActive,
                             mascotAsset: 'assets/image/cat_dropshot.png',
+                            isLeftPanel: swapped,
                           ),
                         );
                         return LayoutBuilder(
@@ -483,7 +485,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
             const SizedBox(height: 16),
             _settingsListTile(icon: Icons.rocket_launch, title: 'Launch App on Watch', color: Colors.purpleAccent, onTap: () { Navigator.pop(context); controller.watchService.launchWearApp(); }),
             const SizedBox(height: 16),
-            _settingsListTile(icon: Icons.sync, title: 'Force Sync to Watch', color: Colors.greenAccent, onTap: () { Navigator.pop(context); controller.watchService.sendScoreUpdate(controller.gameState, action: 'manual_sync'); }),
+            _settingsListTile(icon: Icons.sync, title: 'Refresh From Band', color: Colors.greenAccent, onTap: () { Navigator.pop(context); controller.watchService.sendScoreCommand('request_current_state'); }),
             const SizedBox(height: 24),
           ],
         ),

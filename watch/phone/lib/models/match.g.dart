@@ -27,13 +27,16 @@ class MatchAdapter extends TypeAdapter<Match> {
       endTime: fields[7] as DateTime,
       actionHistory: (fields[8] as List).cast<String>(),
       durationSeconds: fields[9] as int,
+      status: fields[10] as String? ?? 'completed',
+      durationEstimated: fields[11] as bool? ?? false,
+      rallySequence: fields[12] as String? ?? '',
     );
   }
 
   @override
   void write(BinaryWriter writer, Match obj) {
     writer
-      ..writeByte(10)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -53,7 +56,13 @@ class MatchAdapter extends TypeAdapter<Match> {
       ..writeByte(8)
       ..write(obj.actionHistory)
       ..writeByte(9)
-      ..write(obj.durationSeconds);
+      ..write(obj.durationSeconds)
+      ..writeByte(10)
+      ..write(obj.status)
+      ..writeByte(11)
+      ..write(obj.durationEstimated)
+      ..writeByte(12)
+      ..write(obj.rallySequence);
   }
 
   @override

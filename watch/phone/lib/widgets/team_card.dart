@@ -17,6 +17,9 @@ class TeamCard extends StatefulWidget {
   final bool isActive;
   final String? mascotAsset;
   final String teamId; // 'A' or 'B'
+  /// Physical panel position on the tablet, independent of team colour/id.
+  /// The service-court stripe must mirror when the scoreboard sides swap.
+  final bool isLeftPanel;
 
   const TeamCard({
     super.key,
@@ -27,6 +30,7 @@ class TeamCard extends StatefulWidget {
     required this.onIncrement,
     required this.onDecrement,
     required this.teamId,
+    required this.isLeftPanel,
     this.isActive = true,
     this.mascotAsset,
   });
@@ -122,7 +126,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
                           builder: (context, child) {
                             return CustomPaint(
                               painter: _ServiceHighlightPainter(
-                                teamId: widget.teamId,
+                                isLeftPanel: widget.isLeftPanel,
                                 streak: streak,
                                 score: widget.score,
                                 pulse: _servicePulseCtrl.value,
@@ -331,7 +335,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
 
 // ── Service Highlight Painter ───────────────────────────────────────
 class _ServiceHighlightPainter extends CustomPainter {
-  final String teamId;
+  final bool isLeftPanel;
   final int streak;
   final int score;
   final double pulse;
@@ -339,7 +343,7 @@ class _ServiceHighlightPainter extends CustomPainter {
   final double intensity;
 
   _ServiceHighlightPainter({
-    required this.teamId,
+    required this.isLeftPanel,
     required this.streak,
     required this.score,
     required this.pulse,
@@ -354,11 +358,11 @@ class _ServiceHighlightPainter extends CustomPainter {
     canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), baseDim);
 
     // 2. Parity Logic
-    // Team A (Left - Red): Lẻ (Odd) = Chéo Trên, Chẵn (Even) = Chéo Dưới
-    // Team B (Right - Blue): Chẵn (Even) = Chéo Trên, Lẻ (Odd) = Chéo Dưới
+    // This is about the tablet's physical left/right panel, not team id.
+    // A/B may move when the umpire swaps scoreboard sides.
     final bool isEven = score % 2 == 0;
     final bool highlightTop;
-    if (teamId == 'A') {
+    if (isLeftPanel) {
       highlightTop = !isEven; // Odd -> Top
     } else {
       highlightTop = isEven;  // Even -> Top

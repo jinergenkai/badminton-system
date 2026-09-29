@@ -410,6 +410,19 @@ class WatchConnectivityService extends GetxService {
     }
   }
 
+  /// Phone controls are requests, never score snapshots. The Band applies the
+  /// operation to its durable match and publishes the authoritative result.
+  Future<void> sendScoreCommand(String action, {Map<String, dynamic>? extra}) async {
+    if (!_isInitialized) return;
+    try {
+      await platform.invokeMethod('sendMessage', {
+        'data': {'action': action, ...?extra},
+      });
+    } catch (e) {
+      print('⌚ [WatchService] Score command failed: $action: $e');
+    }
+  }
+
   /// Send game reset notification to watch
   Future<void> sendGameReset() async {
     if (!_isInitialized) return;

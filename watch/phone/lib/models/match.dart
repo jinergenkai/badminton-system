@@ -34,6 +34,15 @@ class Match extends HiveObject {
   @HiveField(9)
   final int durationSeconds;
 
+  @HiveField(10)
+  final String status;
+
+  @HiveField(11)
+  final bool durationEstimated;
+
+  @HiveField(12)
+  final String rallySequence;
+
   Match({
     required this.id,
     required this.teamAName,
@@ -45,6 +54,9 @@ class Match extends HiveObject {
     required this.endTime,
     required this.actionHistory,
     required this.durationSeconds,
+    this.status = 'completed',
+    this.durationEstimated = false,
+    this.rallySequence = '',
   });
 
   Duration get duration => Duration(seconds: durationSeconds);
