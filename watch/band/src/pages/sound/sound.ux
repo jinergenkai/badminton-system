@@ -1,37 +1,40 @@
 <template>
+  <!-- One screen, no list: a big master control on top, four on/off toggles
+       below. Per-source volumes live on the phone only. -->
   <div class="container">
     <div class="header">
       <text class="title">SOUND</text>
       <text class="conn {{ synced ? 'ok' : 'no' }}">{{ synced ? '●' : '○' }}</text>
     </div>
 
-    <list class="rows">
-      <!-- One row type only, fixed height. See docs/watch-ui-gotchas.md:
-           a list-item with no height renders nothing at all. -->
-      <list-item type="row" for="{{ rows }}" class="row">
-        <div class="row-inner">
-          <div class="row-head">
-            <text class="row-name {{ $item.on ? '' : 'dim' }}">{{ $item.name }}</text>
-            <div class="pill {{ $item.on ? 'pill-on' : 'pill-off' }}" onclick="toggle($idx)">
-              <text class="pill-text">{{ $item.on ? 'ON' : 'OFF' }}</text>
-            </div>
-          </div>
+    <div class="master">
+      <text class="master-num">{{ master }}%</text>
+      <!-- Drag to set. No slider has been used on this band before: if it
+           does not render, the two big buttons below still do the job. -->
+      <slider class="master-slider" min="0" max="100" step="5" value="{{ master }}"
+              onchange="onSlide"></slider>
+      <div class="steps">
+        <div class="step" onclick="bump(-10)"><text class="step-text">–</text></div>
+        <div class="step" onclick="bump(10)"><text class="step-text">+</text></div>
+      </div>
+    </div>
 
-          <div class="vol-row" if="{{ $item.hasVol }}">
-            <div class="step" onclick="bump($idx, -10)">
-              <text class="step-text">–</text>
-            </div>
-            <div class="bar">
-              <div class="bar-fill" style="width: {{ $item.vol }}%"></div>
-            </div>
-            <div class="step" onclick="bump($idx, 10)">
-              <text class="step-text">+</text>
-            </div>
-            <text class="vol-num">{{ $item.vol }}</text>
-          </div>
-        </div>
-      </list-item>
-    </list>
+    <div class="grid">
+      <div class="tog {{ announceOn ? 'on' : 'off' }}" onclick="toggle('announceOn')">
+        <text class="tog-text">SCORE</text>
+      </div>
+      <div class="tog {{ hypeOn ? 'on' : 'off' }}" onclick="toggle('hypeOn')">
+        <text class="tog-text">HYPE</text>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="tog {{ tensionOn ? 'on' : 'off' }}" onclick="toggle('tensionOn')">
+        <text class="tog-text">TENSION</text>
+      </div>
+      <div class="tog {{ winOn ? 'on' : 'off' }}" onclick="toggle('winOn')">
+        <text class="tog-text">WIN</text>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -39,24 +42,19 @@
   import interconnect from '@system.interconnect'
   import prompt from '@system.prompt'
 
-  // Module scope, not a VM property: the framework only keeps private/
-  // protected/public as data, so a bare array on the exported object is
-  // dropped and ROWS comes back undefined — which left the list empty.
-  const ROWS = [
-    { key: 'master', name: 'MASTER', hasVol: true, onKey: null },
-    { key: 'announce', name: 'SCORE', hasVol: true, onKey: 'announceOn', volKey: 'announceVol' },
-    { key: 'hype', name: 'HYPE', hasVol: true, onKey: 'hypeOn', volKey: 'hypeVol' },
-    { key: 'tension', name: 'TENSION', hasVol: true, onKey: 'tensionOn', volKey: 'tensionVol' },
-    { key: 'win', name: 'WIN MUSIC', hasVol: true, onKey: 'winOn', volKey: 'winVol' }
-  ]
-
   export default {
     private: {
       connect: null,
       synced: false,
-      // Rebuilt from every settings_state. The watch deliberately keeps no
-      // authoritative copy — the phone owns the values, this only renders them.
-      rows: []
+      // Rendered from every settings_state. The phone owns the values; the
+      // band only shows them and sends changes.
+      master: 0,
+      announceOn: true,
+      hypeOn: true,
+      tensionOn: true,
+      winOn: true,
+      // Slider drags fire many changes: only the last one is sent.
+      slideTimer: null
     },
 
     diag(msg) {
@@ -73,11 +71,12 @@
       this.diag('onShow')
       this.setupConnect()
       this.render(this.cached())
-      this.request()
+      this.send({ action: 'request_settings' })
     },
 
     onHide() {
       if (this.connect) this.connect.onmessage = null
+      if (this.slideTimer) { clearTimeout(this.slideTimer); this.slideTimer = null }
     },
 
     cached() {
@@ -95,15 +94,12 @@
           const def = this.$app && this.$app.$def
           if (def) def.settings = msg.s
           this.synced = true
-          this.render(msg.s)
+          // Don't yank the value from under a finger that is still dragging.
+          if (!this.slideTimer) this.render(msg.s)
         } catch (e) {
           this.diag('parse error: ' + e.message)
         }
       }
-    },
-
-    request() {
-      this.send({ action: 'request_settings' })
     },
 
     send(payload) {
@@ -120,46 +116,43 @@
     },
 
     render(s) {
-      const src = ROWS
-      const out = []
-      for (let i = 0; i < src.length; i++) {
-        const r = src[i]
-        // MASTER has no on/off of its own — muting it is what 0 volume is for.
-        const on = s ? (r.onKey ? s[r.onKey] === true : true) : true
-        const vol = s ? (r.key === 'master' ? s.master : s[r.volKey]) : 0
-        out.push({
-          name: r.name,
-          on: on,
-          hasVol: r.hasVol && on,
-          vol: typeof vol === 'number' ? vol : 0
-        })
-      }
-      this.rows = out
+      if (!s) return
+      this.master = typeof s.master === 'number' ? s.master : 0
+      this.announceOn = s.announceOn === true
+      this.hypeOn = s.hypeOn === true
+      this.tensionOn = s.tensionOn === true
+      this.winOn = s.winOn === true
     },
 
-    toggle(idx) {
-      const r = ROWS[idx]
-      if (!r || !r.onKey) return
-      const next = !this.rows[idx].on
-      // Optimistic redraw so the tap feels instant; the echo corrects it if the
-      // phone disagrees or never got the message.
-      this.rows[idx].on = next
-      this.rows[idx].hasVol = next
-      this.send({ action: 'set_setting', key: r.onKey, value: next })
+    setMaster(v) {
+      let n = Math.round(v / 5) * 5
+      if (n < 0) n = 0
+      if (n > 100) n = 100
+      this.master = n
+      return n
     },
 
-    bump(idx, delta) {
-      const r = ROWS[idx]
-      if (!r) return
-      let v = this.rows[idx].vol + delta
-      if (v < 0) v = 0
-      if (v > 100) v = 100
-      this.rows[idx].vol = v
-      this.send({
-        action: 'set_setting',
-        key: r.key === 'master' ? 'master' : r.volKey,
-        value: v
-      })
+    bump(delta) {
+      const n = this.setMaster(this.master + delta)
+      this.send({ action: 'set_setting', key: 'master', value: n })
+    },
+
+    onSlide(e) {
+      const v = e && (e.progress !== undefined ? e.progress : e.value)
+      if (typeof v !== 'number') return
+      this.setMaster(v)
+      if (this.slideTimer) clearTimeout(this.slideTimer)
+      this.slideTimer = setTimeout(() => {
+        this.slideTimer = null
+        this.send({ action: 'set_setting', key: 'master', value: this.master })
+      }, 300)
+    },
+
+    toggle(key) {
+      const next = !this[key]
+      // Optimistic: the phone's echo corrects it if it disagrees.
+      this[key] = next
+      this.send({ action: 'set_setting', key: key, value: next })
     }
   }
 </script>
@@ -173,119 +166,82 @@
 
   .header {
     width: 100%;
-    height: 80px;
+    height: 72px;
     padding: 30px 16px 0 16px;
     justify-content: space-between;
     align-items: center;
-    background-color: rgba(255, 255, 255, 0.05);
   }
 
-  .title {
-    font-size: 20px;
-    font-weight: bold;
-    color: #FFFFFF;
-  }
-
+  .title { font-size: 20px; font-weight: bold; color: #FFFFFF; }
   .conn { font-size: 18px; }
   .ok { color: #4ADE80; }
   .no { color: #FF5252; }
 
-  .rows {
+  /* Height budget: header 72 + master 236 + two toggle rows 2 x 84 = 476. */
+  .master {
     width: 100%;
-    height: 424px;
-  }
-
-  /* The list scrolls, so there is no reason to cram: every target here is
-     sized to be hit without looking, mid-session, with a sweaty finger. */
-  .row {
-    width: 100%;
-    height: 132px;
-    padding: 0 10px;
+    height: 228px;
     margin-top: 8px;
-  }
-
-  .row-inner {
+    padding: 10px 10px;
     flex-direction: column;
-    width: 100%;
-    height: 100%;
-    padding: 8px 12px;
+    align-items: center;
     background-color: rgba(255, 255, 255, 0.06);
-    border-radius: 14px;
+    border-radius: 18px;
   }
 
-  .row-head {
+  .master-num {
     width: 100%;
-    height: 52px;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .row-name {
-    font-size: 19px;
+    height: 64px;
+    text-align: center;
+    font-size: 52px;
     font-weight: bold;
-    color: #FFFFFF;
+    color: #FBBF24;
   }
 
-  .dim { color: rgba(255, 255, 255, 0.35); }
-
-  /* Full-height tap targets: the band is small and fingers are not. */
-  .pill {
-    width: 84px;
-    height: 48px;
-    border-radius: 24px;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .pill-on { background-color: #22C55E; }
-  .pill-off { background-color: rgba(255, 255, 255, 0.12); }
-
-  .pill-text {
-    font-size: 17px;
-    font-weight: bold;
-    color: #FFFFFF;
-  }
-
-  .vol-row {
+  .master-slider {
     width: 100%;
     height: 56px;
-    align-items: center;
+    color: rgba(255, 255, 255, 0.18);
+    selected-color: #FBBF24;
+    block-color: #FFFFFF;
+  }
+
+  .steps {
+    width: 100%;
+    height: 78px;
+    flex-direction: row;
+    justify-content: space-between;
   }
 
   .step {
-    width: 56px;
-    height: 50px;
-    background-color: rgba(255, 255, 255, 0.18);
-    border-radius: 12px;
+    width: 48%;
+    height: 78px;
+    background-color: rgba(255, 255, 255, 0.16);
+    border-radius: 16px;
     justify-content: center;
     align-items: center;
   }
 
-  .step-text {
-    font-size: 26px;
-    font-weight: bold;
-    color: #FFFFFF;
+  .step-text { font-size: 40px; font-weight: bold; color: #FFFFFF; }
+
+  .grid {
+    width: 100%;
+    height: 76px;
+    margin-top: 8px;
+    flex-direction: row;
+    justify-content: space-between;
   }
 
-  .bar {
-    flex: 1;
-    height: 10px;
-    margin: 0 8px;
-    background-color: rgba(255, 255, 255, 0.12);
-    border-radius: 4px;
+  .tog {
+    width: 48%;
+    height: 76px;
+    border-radius: 16px;
+    justify-content: center;
+    align-items: center;
   }
 
-  .bar-fill {
-    height: 10px;
-    background-color: #FBBF24;
-    border-radius: 4px;
-  }
+  .on { background-color: #16A34A; }
+  .off { background-color: rgba(255, 255, 255, 0.10); }
 
-  .vol-num {
-    width: 40px;
-    font-size: 16px;
-    font-weight: bold;
-    color: #FBBF24;
-    text-align: right;
-  }
+  .tog-text { font-size: 18px; font-weight: bold; color: #FFFFFF; }
 </style>
