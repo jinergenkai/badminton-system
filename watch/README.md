@@ -104,11 +104,41 @@ ra bản `.debug.` — mà `deploy.ps1` thì push file `.release.`, nên build x
 cd bandcounter-flutter && flutter run --release
 ```
 
-Đẩy RPK sang máy rồi cài qua Notify for Xiaomi:
+### Quy trình dev: đưa bản build mới lên band
+
+**Thứ tự này là bắt buộc.** Notify chỉ cài được khi nó đang giữ kết nối band.
+Nó chỉ lấy được kết nối sau khi Mi Fitness đã sync (tạo auth), và chỉ giữ
+được kết nối khi Mi Fitness đã bị dừng.
+
+1. **Build** band app bản release (`npm run release`).
+2. **Push** file `.rpk` vào `/sdcard/Download/` trên phone.
+3. **Clean**: kill toàn bộ app trên phone.
+4. Mở **Mi Fitness** → **Sync** band cho tới khi kết nối xong.
+5. **Giữ Mi Fitness mở**, mở tiếp **Notify for Xiaomi**, đợi nó nối band.
+6. **Kill Mi Fitness**, rồi trong Notify: cài firmware / app → app bên thứ
+   ba → chọn `Download/com.hung.bandcounter.release.1.0.0.rpk`.
+
+Sau khi cài xong, làm lại nghi thức bắt tay ở §5 trước khi chơi.
+
+Cả 6 bước chạy bằng một lệnh. Script tự làm bước 1–3 và 6; ở bước 4–5 nó tự
+mở app rồi dừng lại chờ bạn bấm Enter:
 
 ```bash
-adb push bandcounter-watch/dist/com.hung.bandcounter.release.1.0.0.rpk /sdcard/Download/
+.\deploy.ps1 -Dev
 ```
+
+Tên gói trên máy dev: Mi Fitness bản mod là `com.xiaomi.wearable`, Notify là
+`com.mc.xiaomi1`. Máy khác mà khác tên gói thì sửa ở đầu `deploy.ps1`.
+
+Các lệnh lẻ khác của `deploy.ps1`:
+
+| Lệnh | Làm gì |
+|---|---|
+| `.\deploy.ps1` | chỉ push `.rpk` |
+| `-Clean` | kill mọi app trên phone (khi máy lag) |
+| `-StopMiFitness` | chỉ dừng Mi Fitness |
+| `-Mem` | xem RAM và tiến trình ăn RAM nhiều nhất |
+| `-Slim` / `-Unslim` | tắt / bật lại Google bloat, giới hạn chạy nền (lâu dài) |
 
 ---
 

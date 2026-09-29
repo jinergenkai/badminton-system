@@ -5,6 +5,7 @@
     <list class="history-list" if="{{ rows.length > 0 }}">
       <list-item type="match" for="{{ rows }}" class="record">
         <div class="line">
+          <text class="num">{{ $item.n }}</text>
           <text class="red">{{ $item.a }}</text>
           <text class="dash">-</text>
           <text class="blue">{{ $item.b }}</text>
@@ -26,7 +27,8 @@
   // Everything the template shows is precomputed here: calling methods
   // from `{{ }}` has no precedent on this band and is exactly the kind of
   // thing that renders as nothing (docs/watch-ui-gotchas.md).
-  function toRow(r) {
+  // Stored newest first, so position 0 is #1 = the most recent set.
+  function toRow(r, i) {
     let when = '--:--'
     if (r.startedAt) {
       const d = new Date(r.startedAt)
@@ -40,6 +42,7 @@
     }
     const synced = r.syncedRev === r.revision ? ' · SYNCED' : ''
     return {
+      n: '#' + (i + 1),
       a: '' + r.scoreA,
       b: '' + r.scoreB,
       status: r.status === 'completed' ? 'DONE' : 'STOP',
@@ -78,6 +81,7 @@
   .history-list { width: 100%; height: 360px; }
   .record { width: 100%; height: 72px; margin-bottom: 8px; padding: 8px 12px; flex-direction: column; background-color: rgba(255,255,255,0.08); border-radius: 12px; }
   .line { width: 100%; height: 30px; flex-direction: row; align-items: center; }
+  .num { color: #FFFFFF; font-size: 18px; font-weight: bold; width: 44px; }
   .red { color: #FF5252; font-size: 22px; font-weight: bold; }
   .dash { color: #94A3B8; font-size: 22px; margin-left: 6px; margin-right: 6px; }
   .blue { color: #448AFF; font-size: 22px; font-weight: bold; }
