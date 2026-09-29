@@ -60,6 +60,17 @@ class ScoreController extends GetxController {
   /// `{action: 'swap_sides'}` and keeps no state of its own.
   final RxBool sidesSwapped = false.obs;
 
+  /// Band "Blank Phone": black overlay + minimum brightness, e.g. while the
+  /// user is off court. Taps on the phone are swallowed until it wakes.
+  final RxBool phoneBlank = false.obs;
+
+  void setPhoneBlank(bool on) {
+    if (phoneBlank.value == on) return;
+    phoneBlank.value = on;
+    _watchService.setWindowBlank(on);
+    print('⌚ [Controller] phone blank = $on');
+  }
+
   TeamConfig? _teamConfig;
   StreamSubscription? _watchCommandSubscription;
   bool _isSyncingFromWatch = false;
@@ -258,6 +269,11 @@ class ScoreController extends GetxController {
 
     // Flip which end of the phone screen each team is drawn on. Scores are
     // untouched, so there is nothing to sync back to the watch.
+    if (action == 'phone_screen') {
+      setPhoneBlank(event['blank'] == true);
+      return;
+    }
+
     if (action == 'swap_sides') {
       toggleSidesSwapped();
       if (hapticFeedbackEnabled.value) {
@@ -365,6 +381,8 @@ class ScoreController extends GetxController {
         _isSyncingFromWatch = false;
 
         final bool isPoint = (action == 'score_A' || action == 'score_B') && isNewRev;
+        // Scoring again on the band means the user is back on court.
+        if (isPoint) setPhoneBlank(false);
         if (isPoint) {
           _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB, manualHype: manualHype);
         }

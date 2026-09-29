@@ -2,6 +2,7 @@ package com.hung.bandcounter
 
 import android.os.Bundle
 import android.util.Log
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -90,6 +91,18 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, WATCH_CHANNEL).setMethodCallHandler { call, result ->
             when (call.method) {
                 "initialize" -> initWearableConnect(result)
+                // Band "Blank Phone": dim this window to the floor. The screen
+                // stays technically on (the score screen's wakelock is kept),
+                // so the app and the fragile band link keep running.
+                "setBlank" -> {
+                    val on = call.argument<Boolean>("on") ?: false
+                    val lp = window.attributes
+                    lp.screenBrightness = if (on) 0.01f
+                        else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    window.attributes = lp
+                    Log.i(DIAG, "setBlank on=$on")
+                    result.success(true)
+                }
                 "sendMessage" -> {
                     val data = call.argument<Map<String, Any>>("data")
                     val nodeId = watchNodeId

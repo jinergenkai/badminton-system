@@ -410,6 +410,15 @@ class WatchConnectivityService extends GetxService {
     }
   }
 
+  /// Dim this window to minimum brightness (or restore the system level).
+  Future<void> setWindowBlank(bool on) async {
+    try {
+      await platform.invokeMethod('setBlank', {'on': on});
+    } catch (e) {
+      print('⌚ [WatchService] setBlank failed: $e');
+    }
+  }
+
   /// Phone controls are requests, never score snapshots. The Band applies the
   /// operation to its durable match and publishes the authoritative result.
   Future<void> sendScoreCommand(String action, {Map<String, dynamic>? extra}) async {

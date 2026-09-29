@@ -139,6 +139,20 @@ class _ScoreScreenState extends State<ScoreScreen> {
                 : 'assets/image/cat_dropshot.png';
             return KillOverlay(key: ValueKey(event.voiceId), event: event, mascotAsset: mascot);
           }),
+
+          // BLANK (from the band). Topmost, opaque, swallows every tap so the
+          // board cannot be scored while the user is away. Long-press is the
+          // escape hatch if the band is out of reach.
+          Obx(() {
+            if (!controller.phoneBlank.value) return const SizedBox.shrink();
+            return Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onLongPress: () => controller.setPhoneBlank(false),
+                child: const ColoredBox(color: Colors.black),
+              ),
+            );
+          }),
         ],
       ),
     );
