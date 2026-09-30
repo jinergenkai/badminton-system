@@ -53,11 +53,16 @@ $Disable = @(
     'com.android.vending'
 )
 
+# Fast on a struggling phone: /proc/meminfo and ps answer at once, where
+# 'dumpsys meminfo' walks every process and can take a minute under memory
+# pressure - which is exactly when -Clean is needed.
 function Show-Mem {
-    Write-Host '== Memory =='
-    adb shell "dumpsys meminfo | grep -E 'Total RAM|Free RAM|Used RAM'"
-    Write-Host '-- biggest processes --'
-    adb shell "dumpsys meminfo | grep -A 15 'by process' | head -17"
+    Write-Host '== Memory (kB) =='
+    adb shell "grep -E 'MemTotal|MemAvailable|SwapTotal|SwapFree' /proc/meminfo"
+    Write-Host '-- biggest processes (RSS kB) --'
+    adb shell "ps -A -o RSS,NAME | sort -rn | head -10"
+    Write-Host '-- CPU now --'
+    adb shell "top -b -n 1 -m 6 | tail -6"
 }
 
 # -Dev runs Clean itself, at the right point in the sequence.
@@ -93,20 +98,16 @@ function Invoke-Clean {
     Show-Mem
 
     Write-Host '== Stopping apps =='
-    foreach ($p in $Hogs) { adb shell am force-stop $p }
-
-    # Every user-installed app too, except the keyboard (killing it just
-    # makes it restart on the next text field).
+    # Every user-installed app and the system hogs, except the keyboard
+    # (killing it just makes it restart on the next text field). One adb
+    # shell for all of it: one connection per app crawled on a lagging phone.
     $ime = ((adb shell settings get secure default_input_method) -replace '/.*', '').Trim()
-    $pkgs = adb shell pm list packages -3 | ForEach-Object { ($_ -replace '^package:', '').Trim() }
-    foreach ($p in $pkgs) {
-        if (-not $p -or $p -eq $ime) { continue }
-        adb shell am force-stop $p
-        Write-Host "  stopped $p"
-    }
-
-    # Last, so it also sweeps whatever the force-stops left cached.
-    adb shell am kill-all
+    $pkgs = @($Hogs) + @(adb shell pm list packages -3 | ForEach-Object { ($_ -replace '^package:', '').Trim() })
+    $pkgs = $pkgs | Where-Object { $_ -and $_ -ne $ime } | Sort-Object -Unique
+    $script = ($pkgs | ForEach-Object { "am force-stop $_" }) -join '; '
+    # kill-all last, so it also sweeps whatever the force-stops left cached.
+    adb shell "$script; am kill-all"
+    Write-Host "  stopped $($pkgs.Count) apps"
 
     Show-Mem
     Write-Host 'Mi Fitness was stopped too: redo the ritual'
