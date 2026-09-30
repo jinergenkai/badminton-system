@@ -1,15 +1,10 @@
 import 'dart:async';
-import 'dart:ui';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/game_state.dart';
 import '../models/match.dart';
 import '../models/lineup.dart';
-import '../models/team_config.dart';
-import '../services/voice_service.dart';
 import '../services/tts_service.dart';
 import '../services/score_announcer_service.dart';
 import '../services/foreground_service.dart';
@@ -23,7 +18,6 @@ import '../services/voice_clip_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
 class ScoreController extends GetxController {
-  final VoiceService _voiceService = VoiceService();
   final TtsService _ttsService = Get.put(TtsService());
   final ScoreAnnouncerService _scoreAnnouncer = Get.put(ScoreAnnouncerService());
   final WatchConnectivityService _watchService = Get.put(WatchConnectivityService());
@@ -33,14 +27,9 @@ class ScoreController extends GetxController {
   final Uuid _uuid = const Uuid();
 
   final Rx<GameState> _gameState = GameState().obs;
-  final RxString lastCommand = ''.obs;
-  final RxBool isVoiceActive = false.obs;
   final RxBool isGameEnded = false.obs;
   final RxBool isWatchConnected = false.obs;
 
-  final RxBool isCooldownActive = false.obs;
-  final RxDouble cooldownProgress = 0.0.obs;
-  Timer? _cooldownTimer;
   Timer? _autoResetTimer;
   Timer? _watchConnectionPoll;
 
@@ -49,8 +38,18 @@ class ScoreController extends GetxController {
 
   // New settings
   final RxBool scoreAnnouncementsEnabled = true.obs;
-  final RxBool hapticFeedbackEnabled = true.obs;
-  final RxDouble cooldownDuration = 1.0.obs;
+
+  /// Phone taps closer together than this are one tap (a finger bounce on
+  /// the card). The band has its own cooldown for its buttons.
+  static const _tapGuard = Duration(milliseconds: 250);
+  DateTime? _lastTap;
+
+  bool _bounced() {
+    final now = DateTime.now();
+    final last = _lastTap;
+    _lastTap = now;
+    return last != null && now.difference(last) < _tapGuard;
+  }
 
   /// Display-only: which end of the screen each team is drawn on.
   ///
@@ -75,7 +74,6 @@ class ScoreController extends GetxController {
     print('⌚ [Controller] phone blank = $on');
   }
 
-  TeamConfig? _teamConfig;
   StreamSubscription? _watchCommandSubscription;
   bool _isSyncingFromWatch = false;
   String? _lastBandMatchId;
@@ -160,16 +158,13 @@ class ScoreController extends GetxController {
   bool get isGameActive => gameState.isGameActive;
   String get winner => gameState.winner;
 
-  Color get teamAColor => _teamConfig?.teamAColor ?? Colors.redAccent;
-  Color get teamBColor => _teamConfig?.teamBColor ?? Colors.blueAccent;
-
   @override
   void onInit() {
     super.onInit();
-    _loadTeamConfig();
     _loadSettings();
-    // _initializeVoiceService(); // DISABLED: Picovoice wake-word
-    _ttsService.initialize();
+    _ttsService.initialize().then((_) => _applyTeamNames(_ttsService.currentLanguage));
+    // Team names are the colours, in the announcement language.
+    _ttsService.currentLanguageRx.listen(_applyTeamNames);
     _scoreAnnouncer.initialize();
     // _initializeForegroundService(); // DISABLED: foreground notification
     _initializeWatchSync();
@@ -194,8 +189,6 @@ class ScoreController extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     autoResetDelay.value = prefs.getInt('auto_reset_delay') ?? 60;
     scoreAnnouncementsEnabled.value = prefs.getBool('score_announcements_enabled') ?? true;
-    hapticFeedbackEnabled.value = prefs.getBool('haptic_feedback_enabled') ?? true;
-    cooldownDuration.value = prefs.getDouble('cooldown_duration') ?? 1.0;
     sidesSwapped.value = prefs.getBool('sides_swapped') ?? false;
   }
 
@@ -217,18 +210,6 @@ class ScoreController extends GetxController {
     scoreAnnouncementsEnabled.value = enabled;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('score_announcements_enabled', enabled);
-  }
-
-  Future<void> setHapticFeedbackEnabled(bool enabled) async {
-    hapticFeedbackEnabled.value = enabled;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('haptic_feedback_enabled', enabled);
-  }
-
-  Future<void> setCooldownDuration(double seconds) async {
-    cooldownDuration.value = seconds;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble('cooldown_duration', seconds);
   }
 
   void _setupAudioChain() {
@@ -366,9 +347,6 @@ class ScoreController extends GetxController {
 
     if (action == 'swap_sides') {
       toggleSidesSwapped();
-      if (hapticFeedbackEnabled.value) {
-        HapticFeedback.mediumImpact();
-      }
       return;
     }
 
@@ -557,23 +535,13 @@ class ScoreController extends GetxController {
     }
   }
 
-  void _loadTeamConfig() {
-    try {
-      _teamConfig = DatabaseService.getTeamConfig();
-      _gameState.value = gameState.copyWith(
-        teamAName: _teamConfig!.teamAName,
-        teamBName: _teamConfig!.teamBName,
-        startTime: DateTime.now(),
-      );
-    } catch (e) {}
-  }
-
-  Future<void> updateTeamConfig(TeamConfig newConfig) async {
-    _teamConfig = newConfig;
-    await DatabaseService.saveTeamConfig(newConfig);
+  /// A is red and B is blue everywhere, so that is what the teams are
+  /// called: on an unnamed card, in history, and in "Đội đỏ thắng".
+  void _applyTeamNames(String lang) {
+    final vi = lang.toLowerCase().startsWith('vi');
     _gameState.value = gameState.copyWith(
-      teamAName: newConfig.teamAName,
-      teamBName: newConfig.teamBName,
+      teamAName: vi ? 'Đội đỏ' : 'Red',
+      teamBName: vi ? 'Đội xanh' : 'Blue',
     );
   }
 
@@ -585,43 +553,6 @@ class ScoreController extends GetxController {
         teamBScore: gameState.teamBScore,
       );
     } catch (e) {}
-  }
-
-  Future<void> _initializeVoiceService() async {
-    try {
-      await _voiceService.initialize(
-        onWakeWord: (wakeWord) => lastCommand.value = wakeWord,
-      );
-      _voiceService.commandStream.listen((command) {
-        lastCommand.value = command;
-        _handleVoiceCommand(command);
-      });
-      _voiceService.listeningStream.listen((listening) {
-        isVoiceActive.value = listening;
-      });
-    } catch (e) {}
-  }
-
-  void _handleVoiceCommand(String command) {
-    final upperCommand = command.toUpperCase();
-    if (isGameEnded.value) {
-      if (upperCommand.contains('A') || upperCommand.contains('B')) {
-        startNewGame();
-        return;
-      }
-    }
-    if (isCooldownActive.value) return;
-    if (upperCommand.contains('UNDO')) {
-      undo();
-      return;
-    }
-    if (upperCommand.contains('A')) {
-      incrementTeamA(fromVoice: true);
-    } else if (upperCommand.contains('B')) {
-      incrementTeamB(fromVoice: true);
-    } else if (upperCommand.contains('RESET')) {
-      resetGame();
-    }
   }
 
   // Bound history to last 50 entries — list copy on every score otherwise grows O(n).
@@ -640,8 +571,8 @@ class ScoreController extends GetxController {
     _gameState.value = gameState.copyWith(stateStack: currentStack);
   }
 
-  void incrementTeamA({bool fromVoice = false}) {
-    if (!gameState.isGameActive) return;
+  void incrementTeamA() {
+    if (!gameState.isGameActive || _bounced()) return;
     final int oldA = gameState.teamAScore;
     final int oldB = gameState.teamBScore;
     _pushStateToStack();
@@ -657,23 +588,17 @@ class ScoreController extends GetxController {
       _watchService.sendScoreCommand('point_A');
     }
 
-    if (hapticFeedbackEnabled.value) {
-      HapticFeedback.lightImpact();
-    }
-
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
     if (_bandLive) _lastBandRallies += 'A';
     if (!gameState.hasWinner) {
       _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'A',
           serverName: _serverFullName(_lastBandRallies));
     }
-    if (fromVoice) _startCooldown();
-    // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
     _checkGameEnd();
   }
 
-  void incrementTeamB({bool fromVoice = false}) {
-    if (!gameState.isGameActive) return;
+  void incrementTeamB() {
+    if (!gameState.isGameActive || _bounced()) return;
     final int oldA = gameState.teamAScore;
     final int oldB = gameState.teamBScore;
     _pushStateToStack();
@@ -689,18 +614,12 @@ class ScoreController extends GetxController {
       _watchService.sendScoreCommand('point_B');
     }
 
-    if (hapticFeedbackEnabled.value) {
-      HapticFeedback.lightImpact();
-    }
-
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
     if (_bandLive) _lastBandRallies += 'B';
     if (!gameState.hasWinner) {
       _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'B',
           serverName: _serverFullName(_lastBandRallies));
     }
-    if (fromVoice) _startCooldown();
-    // ForegroundService.updateScores(teamAScore: gameState.teamAScore, teamBScore: gameState.teamBScore);
     _checkGameEnd();
   }
 
@@ -722,7 +641,6 @@ class ScoreController extends GetxController {
       undo();
     } else {
       print('⌚ [Controller] -1 $team refused: last rally is not $team');
-      if (hapticFeedbackEnabled.value) HapticFeedback.heavyImpact();
     }
     return true;
   }
@@ -805,28 +723,6 @@ class ScoreController extends GetxController {
     } catch (e) {}
   }
 
-  void _startCooldown() {
-    _cooldownTimer?.cancel();
-    isCooldownActive.value = true;
-    cooldownProgress.value = 1.0;
-    const updateIntervalMs = 50;
-    final durationMs = (cooldownDuration.value * 1000).toInt();
-    final steps = durationMs ~/ updateIntervalMs;
-    var currentStep = 0;
-    _cooldownTimer = Timer.periodic(
-      const Duration(milliseconds: updateIntervalMs),
-      (timer) {
-        currentStep++;
-        cooldownProgress.value = 1.0 - (currentStep / steps);
-        if (currentStep >= steps) {
-          timer.cancel();
-          isCooldownActive.value = false;
-          cooldownProgress.value = 0.0;
-        }
-      },
-    );
-  }
-
   void resetGame() {
     final oldState = gameState;
     final teamAName = oldState.teamAName;
@@ -843,12 +739,8 @@ class ScoreController extends GetxController {
       stateStack: newStack,
     );
     
-    lastCommand.value = '';
     isGameEnded.value = false;
-    _cooldownTimer?.cancel();
     _autoResetTimer?.cancel();
-    isCooldownActive.value = false;
-    cooldownProgress.value = 0.0;
     _hypeController.resetState();
     _musicService.stopMusic(fadeOut: true);
     _hypeController.playStartOfMatchHype();
@@ -866,11 +758,9 @@ class ScoreController extends GetxController {
 
   @override
   void onClose() {
-    _cooldownTimer?.cancel();
     _autoResetTimer?.cancel();
     _watchConnectionPoll?.cancel();
     _watchCommandSubscription?.cancel();
-    // _voiceService.dispose(); // DISABLED: Picovoice
     _ttsService.dispose();
     _watchService.dispose();
     // ForegroundService.stop(); // DISABLED: foreground notification

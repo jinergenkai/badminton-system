@@ -21,8 +21,10 @@ import 'wav_gain.dart';
 class VoiceClipService extends GetxService {
   static const _prefBoost = 'voice_boost';
 
-  /// 1.0 = as synthesized, 2.0 = +6 dB. Soft-limited, so it never clips.
+  /// 1.0 = as synthesized, 2.0 = +6 dB. Soft-limited: it never clips hard,
+  /// but far up the bend is saturation, audible as crackle. Allowed anyway.
   final RxDouble boost = 1.6.obs;
+  static const double maxBoost = 4.0;
 
   /// How long the last phrase took to synthesize + boost, for the sound
   /// check readout: this is the number that says whether the tablet keeps up.

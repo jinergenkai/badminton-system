@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:voice_counter/services/music_service.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
@@ -7,7 +6,6 @@ import '../controllers/score_controller.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../widgets/team_card.dart';
 import '../widgets/kill_overlay.dart';
-import '../widgets/cooldown_bar.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
@@ -53,11 +51,6 @@ class _ScoreScreenState extends State<ScoreScreen> {
             child: SafeArea(
               child: Column(
                 children: [
-                  Obx(() => CooldownBar(
-                    isActive: controller.isCooldownActive.value,
-                    progress: controller.cooldownProgress.value,
-                  )),
-
                   _buildModernTopBar(context, controller),
 
                   Expanded(
@@ -168,10 +161,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
     final delay = controller.autoResetDelay.value;
 
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        controller.resetGame();
-      },
+      onTap: controller.resetGame,
       child: Container(
         color: Colors.black.withOpacity(0.92),
         width: double.infinity,
@@ -393,20 +383,6 @@ class _ScoreScreenState extends State<ScoreScreen> {
             ],
           ),
           
-          // Voice Status (Mini)
-          const SizedBox(height: 8),
-          Obx(() {
-            final isListening = controller.isVoiceActive.value;
-            if (!isListening) return const SizedBox.shrink();
-            return Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.mic, color: Colors.greenAccent, size: 12),
-                const SizedBox(width: 4),
-                const Text('VOICE LISTENING', style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold)),
-              ],
-            );
-          }),
         ],
       ),
     );

@@ -1,10 +1,5 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:flex_color_picker/flex_color_picker.dart';
-import '../models/team_config.dart';
-import '../services/database_service.dart';
 import '../services/music_service.dart';
 import '../services/audio_settings.dart';
 import '../services/tts_service.dart';
@@ -14,57 +9,11 @@ import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
-class SettingsScreen extends StatefulWidget {
+/// Phone settings. The band is the remote: anything it can set (mode, the
+/// on/off switches, master) is mirrored here, and everything else lives
+/// only here. Which sounds exist and when they play is the Sound Library.
+class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
-
-  @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
-}
-
-class _SettingsScreenState extends State<SettingsScreen> {
-  late TeamConfig _teamConfig;
-  late TextEditingController _teamAController;
-  late TextEditingController _teamBController;
-  Timer? _debounceTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _teamConfig = DatabaseService.getTeamConfig();
-    _teamAController = TextEditingController(text: _teamConfig.teamAName);
-    _teamBController = TextEditingController(text: _teamConfig.teamBName);
-  }
-
-  @override
-  void dispose() {
-    _teamAController.dispose();
-    _teamBController.dispose();
-    _debounceTimer?.cancel();
-    super.dispose();
-  }
-
-  void _onTeamNameChanged() {
-    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
-    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-      _saveTeamConfig();
-    });
-  }
-
-  Future<void> _saveTeamConfig() async {
-    final newConfig = _teamConfig.copyWith(
-      teamAName: _teamAController.text.trim(),
-      teamBName: _teamBController.text.trim(),
-    );
-
-    await DatabaseService.saveTeamConfig(newConfig);
-
-    try {
-      final controller = Get.find<ScoreController>();
-      await controller.updateTeamConfig(newConfig);
-    } catch (e) {
-      // Controller not found
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,424 +32,62 @@ class _SettingsScreenState extends State<SettingsScreen> {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [
-              Color(0xFF0F172A),
-              Color(0xFF1E1B4B),
-            ],
+            colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
           ),
         ),
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 120, 16, 40),
           children: [
-            _buildSectionHeader('SOUND'),
+            _sectionHeader('SOUND'),
             const SizedBox(height: 16),
             _buildSoundCard().animate().fadeIn(delay: 50.ms),
             const SizedBox(height: 32),
-            _buildSectionHeader('TEAM PROFILES'),
+            _sectionHeader('GAME'),
             const SizedBox(height: 16),
-            _buildCompactTeamCard().animate().fadeIn(delay: 100.ms).slideY(begin: 0.1),
-            const SizedBox(height: 32),
-            _buildSectionHeader('PREFERENCES'),
-            const SizedBox(height: 16),
-            _buildPreferencesCard().animate().fadeIn(delay: 200.ms),
-            const SizedBox(height: 32),
-            _buildSectionHeader('HYPE VOICES'),
-            const SizedBox(height: 16),
-            _buildHypeCard().animate().fadeIn(delay: 300.ms),
-            const SizedBox(height: 32),
-            _buildSectionHeader('MUSIC'),
-            const SizedBox(height: 16),
-            _buildMusicCard().animate().fadeIn(delay: 400.ms),
-            const SizedBox(height: 32),
-            _buildDangerZone().animate().fadeIn(delay: 500.ms),
+            _buildGameCard().animate().fadeIn(delay: 150.ms),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
+  Widget _sectionHeader(String title) {
     return Row(
       children: [
         Container(
           width: 4,
           height: 24,
-          decoration: BoxDecoration(
-            color: Colors.amber,
-            borderRadius: BorderRadius.circular(2),
-          ),
+          decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(2)),
         ),
         const SizedBox(width: 12),
-        Text(
-          title,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w900,
-            color: Colors.white,
-            letterSpacing: 1.5,
-          ),
-        ),
+        Text(title,
+            style: const TextStyle(
+                fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5)),
       ],
     );
   }
 
-  Widget _buildCompactTeamCard() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Column(
-        children: [
-          _buildCompactTeamInput(
-            label: 'TEAM A',
-            controller: _teamAController,
-            color: _teamConfig.teamAColor,
-            onColorTap: _pickColorForTeamA,
-            icon: Icons.shield,
-          ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Divider(color: Colors.white12, height: 1),
-          ),
-          _buildCompactTeamInput(
-            label: 'TEAM B',
-            controller: _teamBController,
-            color: _teamConfig.teamBColor,
-            onColorTap: _pickColorForTeamB,
-            icon: Icons.shield_outlined,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCompactTeamInput({
-    required String label,
-    required TextEditingController controller,
-    required Color color,
-    required VoidCallback onColorTap,
-    required IconData icon,
-  }) {
-    return Row(
-      children: [
-        GestureDetector(
-          onTap: onColorTap,
-          child: Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white38, width: 2),
-              boxShadow: [
-                BoxShadow(color: color.withOpacity(0.3), blurRadius: 8)
-              ],
-            ),
-            child: Icon(icon, color: Colors.white, size: 24),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: TextField(
-            controller: controller,
-            onChanged: (_) => _onTeamNameChanged(),
-            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
-            decoration: InputDecoration(
-              labelText: label,
-              labelStyle: TextStyle(color: Colors.white.withOpacity(0.4), fontSize: 12),
-              enabledBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: Colors.white.withOpacity(0.1)),
-              ),
-              focusedBorder: UnderlineInputBorder(
-                borderSide: BorderSide(color: color),
-              ),
-              contentPadding: const EdgeInsets.symmetric(vertical: 8),
-            ),
-            textCapitalization: TextCapitalization.characters,
-            maxLength: 15,
-            buildCounter: (context, {required currentLength, required isFocused, maxLength}) => null,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPreferencesCard() {
-    final controller = Get.find<ScoreController>();
+  Widget _card(List<Widget> children) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: Colors.white.withOpacity(0.1)),
       ),
-      child: Column(
-        children: [
-          Obx(() => _buildSettingsTile(
-            icon: Icons.notifications_active,
-            title: 'Score Announcements',
-            subtitle: 'Read scores aloud after points',
-            trailing: Switch(
-              value: controller.scoreAnnouncementsEnabled.value,
-              onChanged: (v) => controller.setScoreAnnouncementsEnabled(v),
-              activeColor: Colors.amber,
-            ),
-          )),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          // Mode first: it decides whether anything below it is audible at all.
-          Obx(() {
-            final audio = Get.find<AudioSettings>();
-            final isMusic = audio.isMusicMode;
-            return Column(
-              children: [
-                _buildSettingsTile(
-                  icon: isMusic ? Icons.music_note : Icons.record_voice_over,
-                  title: isMusic ? 'Music Mode' : 'Commentary Mode',
-                  subtitle: isMusic
-                      ? 'Music runs non-stop, nothing talks over it'
-                      : 'Score + hype; music only on tension and win',
-                  trailing: Switch(
-                    value: isMusic,
-                    onChanged: (v) => audio
-                        .setMode(v ? PlayMode.music : PlayMode.commentary),
-                    activeColor: Colors.amber,
-                  ),
-                ),
-              ],
-            );
-          }),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          Obx(() => _buildSettingsTile(
-            icon: Icons.swap_horiz,
-            title: 'Swap Sides',
-            subtitle: controller.sidesSwapped.value
-                ? 'Blue on the left, red on the right'
-                : 'Red on the left, blue on the right',
-            trailing: Switch(
-              value: controller.sidesSwapped.value,
-              onChanged: (v) => controller.setSidesSwapped(v),
-              activeColor: Colors.amber,
-            ),
-          )),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          Obx(() => _buildSettingsTile(
-            icon: Icons.vibration,
-            title: 'Haptic Feedback',
-            subtitle: 'Vibrate on score updates',
-            trailing: Switch(
-              value: controller.hapticFeedbackEnabled.value,
-              onChanged: (v) => controller.setHapticFeedbackEnabled(v),
-              activeColor: Colors.amber,
-            ),
-          )),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          Obx(() => Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.timer, color: Colors.white70, size: 20),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Cooldown Duration',
-                              style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 15)),
-                          Text('Prevent accidental double scoring',
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.5), fontSize: 12)),
-                        ],
-                      ),
-                    ),
-                    Text('${controller.cooldownDuration.value.toStringAsFixed(1)}s',
-                        style: const TextStyle(
-                            color: Colors.amber,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15)),
-                  ],
-                ),
-                Slider(
-                  value: controller.cooldownDuration.value,
-                  min: 0.1,
-                  max: 3.0,
-                  divisions: 29,
-                  activeColor: Colors.amber,
-                  inactiveColor: Colors.white12,
-                  onChanged: (v) => controller.cooldownDuration.value = v,
-                  onChangeEnd: (v) => controller.setCooldownDuration(v),
-                ),
-              ],
-            ),
-          )),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          _buildLanguageRow(),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          Obx(() => Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.replay, color: Colors.white70, size: 20),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Auto-start Next Game',
-                                  style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 15)),
-                              Text('After win screen',
-                                  style: TextStyle(
-                                      color: Colors.white.withOpacity(0.5), fontSize: 12)),
-                            ],
-                          ),
-                        ),
-                        Text('${controller.autoResetDelay.value}s',
-                            style: const TextStyle(
-                                color: Colors.amber,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15)),
-                      ],
-                    ),
-                    Slider(
-                      value: controller.autoResetDelay.value.toDouble(),
-                      min: 10,
-                      max: 120,
-                      divisions: 22,
-                      activeColor: Colors.amber,
-                      inactiveColor: Colors.white12,
-                      onChanged: (v) => controller.autoResetDelay.value = v.round(),
-                      onChangeEnd: (v) => controller.setAutoResetDelay(v.round()),
-                    ),
-                  ],
-                ),
-              )),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
     );
   }
 
-  Widget _buildHypeCard() {
-    final hype = Get.find<HypeVoiceController>();
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Obx(() => _buildSettingsTile(
-            icon: Icons.campaign,
-            title: 'Hype Announcements',
-            subtitle: 'Voice effects for streaks & highlights',
-            trailing: Switch(
-              value: hype.isEnabled.value,
-              onChanged: (v) {
-                hype.isEnabled.value = v;
-                hype.savePreferences();
-              },
-              activeColor: Colors.cyanAccent,
-            ),
-          )),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          Obx(() => _buildSettingsTile(
-            icon: Icons.bolt,
-            title: 'K.O Effect',
-            subtitle: 'Speed lines & overlay on highlights',
-            trailing: Switch(
-              value: hype.koEffectEnabled.value,
-              onChanged: (v) {
-                hype.koEffectEnabled.value = v;
-                hype.savePreferences();
-              },
-              activeColor: Colors.cyanAccent,
-            ),
-          )),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.list, color: Colors.white54, size: 18),
-                    const SizedBox(width: 8),
-                    const Text('Available Effects',
-                        style: TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                    const Spacer(),
-                    Text('${hype.getHypeList().length} sounds',
-                        style: const TextStyle(
-                            color: Colors.white38,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 4,
-                  children: hype.getHypeList()
-                      .map((h) => GestureDetector(
-                        onTap: () => hype.playManualHype(h['id']!),
-                        child: Chip(
-                              label: Text(
-                                h['name']!,
-                                style: const TextStyle(fontSize: 11, color: Colors.white),
-                              ),
-                              backgroundColor: Colors.white10,
-                              padding: EdgeInsets.zero,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              avatar: const Icon(Icons.play_arrow, size: 12, color: Colors.cyanAccent),
-                            ),
-                      ))
-                      .toList(),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _div() => Divider(color: Colors.white.withOpacity(0.05), height: 1);
 
-  Widget _buildSettingsTile({
+  Widget _tile({
     required IconData icon,
     required String title,
     required String subtitle,
     required Widget trailing,
   }) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
       leading: Container(
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
@@ -509,394 +96,281 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         child: Icon(icon, color: Colors.white70, size: 20),
       ),
-      title: Text(
-        title,
-        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
-      ),
-      subtitle: Text(
-        subtitle,
-        style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12),
-      ),
+      title: Text(title,
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+      subtitle: Text(subtitle, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 12)),
       trailing: trailing,
     );
   }
 
-  Widget _buildMusicCard() {
-    final music = Get.find<MusicService>();
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Win Music
-          Obx(() => _buildSettingsTile(
-                icon: Icons.emoji_events,
-                title: 'Win Music',
-                subtitle: 'KPOP after match ends (fade in)',
-                trailing: Switch(
-                  value: music.winMusicEnabled.value,
-                  onChanged: (v) {
-                    music.winMusicEnabled.value = v;
-                    music.savePreferences();
-                  },
-                  activeColor: Colors.pinkAccent,
-                ),
-              )),
-          // Play mode chips
-          Obx(() => music.winMusicEnabled.value
-              ? Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                  child: Row(
-                    children: [
-                      Text('Mode  ',
-                          style: TextStyle(
-                              color: Colors.white.withOpacity(0.6), fontSize: 13)),
-                      _buildModeChip('random', music),
-                      const SizedBox(width: 8),
-                      _buildModeChip('sequential', music),
-                    ],
-                  ),
-                )
-              : const SizedBox.shrink()),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
+  // ── SOUND ─────────────────────────────────────────────────────────────
 
-          // Tension Music
-          Obx(() => _buildSettingsTile(
-                icon: Icons.whatshot,
-                title: 'Tension Music',
-                subtitle: 'Music when both reach ${music.tensionThreshold.value}-${music.tensionThreshold.value}',
-                trailing: Switch(
-                  value: music.tensionMusicEnabled.value,
-                  onChanged: (v) {
-                    music.tensionMusicEnabled.value = v;
-                    music.savePreferences();
-                  },
-                  activeColor: Colors.orangeAccent,
-                ),
-              )),
-          Obx(() => music.tensionMusicEnabled.value
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Threshold',
-                              style: TextStyle(
-                                  color: Colors.white.withOpacity(0.7),
-                                  fontSize: 13)),
-                          Text('${music.tensionThreshold.value} pts each',
-                              style: const TextStyle(
-                                  color: Colors.orangeAccent,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 13)),
-                        ],
-                      ),
-                      Slider(
-                        value: music.tensionThreshold.value.toDouble(),
-                        min: 15,
-                        max: 25,
-                        divisions: 10,
-                        activeColor: Colors.orangeAccent,
-                        inactiveColor: Colors.white12,
-                        onChanged: (v) => music.tensionThreshold.value = v.round(),
-                        onChangeEnd: (_) => music.savePreferences(),
-                      ),
-                    ],
-                  ),
-                )
-              : const SizedBox.shrink()),
-          Divider(color: Colors.white.withOpacity(0.05), height: 1),
-
-          // Music Folder
-          Obx(() {
-            final count = music.playlist.length;
-            final path = music.musicFolderPath;
-            return Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.folder_open, color: Colors.white54, size: 18),
-                      const SizedBox(width: 8),
-                      Text('Music Folder',
-                          style: const TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                      const Spacer(),
-                      Text('$count tracks',
-                          style: TextStyle(
-                              color: count > 0 ? Colors.greenAccent : Colors.white38,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13)),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  GestureDetector(
-                    onTap: () {
-                      Clipboard.setData(ClipboardData(text: path));
-                      Get.snackbar('Copied', 'Folder path copied to clipboard',
-                          snackPosition: SnackPosition.BOTTOM,
-                          backgroundColor: Colors.white12,
-                          colorText: Colors.white,
-                          margin: const EdgeInsets.all(16),
-                          borderRadius: 12,
-                          duration: const Duration(seconds: 2));
-                    },
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.black26,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.white12),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              path,
-                              style: const TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 11,
-                                  fontFamily: 'monospace'),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const Icon(Icons.copy, color: Colors.white38, size: 16),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  count == 0
-                      ? const Text(
-                          'No tracks bundled. Add MP3 files to assets/audio/music/ and rebuild.',
-                          style: TextStyle(
-                              color: Colors.white38, fontSize: 12, fontStyle: FontStyle.italic),
-                        )
-                      : Wrap(
-                          spacing: 6,
-                          runSpacing: 4,
-                          children: music.playlist
-                              .map((p) => Chip(
-                                    label: Text(
-                                      p.split('/').last.replaceAll(RegExp(r'\.(mp3|m4a|aac)$', caseSensitive: false), ''),
-                                      style: const TextStyle(fontSize: 11, color: Colors.white),
-                                    ),
-                                    backgroundColor: Colors.white10,
-                                    padding: EdgeInsets.zero,
-                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  ))
-                              .toList(),
-                        ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        await music.resyncFromAssets();
-                        Get.snackbar(
-                          'Resync Complete',
-                          '${music.playlist.length} track(s) from assets/audio/music/',
-                          snackPosition: SnackPosition.BOTTOM,
-                          backgroundColor: Colors.white12,
-                          colorText: Colors.white,
-                          margin: const EdgeInsets.all(16),
-                          borderRadius: 12,
-                          duration: const Duration(seconds: 2),
-                        );
-                      },
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('Resync Tracks'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: Colors.pinkAccent,
-                        side: const BorderSide(color: Colors.pinkAccent, width: 1),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  /// Every volume in one place, under the button that plays them all.
+  /// Every volume and switch in one place, under the button that plays them all.
   Widget _buildSoundCard() {
     final audio = Get.find<AudioSettings>();
     final tts = Get.find<TtsService>();
     final hype = Get.find<HypeVoiceController>();
     final music = Get.find<MusicService>();
+    final score = Get.find<ScoreController>();
+    final clips = VoiceClipService.maybe;
     final check = Get.isRegistered<SoundCheckService>()
         ? Get.find<SoundCheckService>()
         : Get.put(SoundCheckService());
-    Widget div() => Divider(color: Colors.white.withOpacity(0.05), height: 1);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-            child: Obx(() {
-              final on = check.running.value;
-              return Row(
-                children: [
-                  FilledButton.icon(
-                    onPressed: on ? check.stop : check.start,
-                    icon: Icon(on ? Icons.stop : Icons.play_arrow),
-                    label: Text(on ? 'Stop' : 'Sound check'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: on ? Colors.redAccent : Colors.amber,
-                      foregroundColor: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      on
-                          ? '${check.index.value}/${check.total.value}  ${check.current.value}'
-                          : check.prepareMs.value > 0
-                              ? 'Voice clip: ${check.prepareMs.value} ms each on this device'
-                              : 'Plays every sound once, in turn',
-                      style: TextStyle(color: on ? Colors.white : Colors.white54, fontSize: 13),
-                    ),
-                  ),
-                ],
-              );
-            }),
-          ),
-          div(),
-          _buildVolumeRow('Master', audio.masterVolume, Colors.amber,
-              () => audio.setMaster(audio.masterVolume.value)),
-          _buildVolumeRow('Voice (score, names)', tts.volume, Colors.amber,
-              () => tts.saveVolumePreference()),
-          if (VoiceClipService.maybe != null)
-            _buildVolumeRow('Voice boost (names, winner)', VoiceClipService.maybe!.boost,
-                Colors.amberAccent, () => VoiceClipService.maybe!.setBoost(VoiceClipService.maybe!.boost.value),
-                max: 2.0),
-          _buildVolumeRow('Hype', hype.volume, Colors.cyanAccent, () => hype.savePreferences()),
-          _buildVolumeRow('Tension music', music.tensionVolume, Colors.orangeAccent,
-              () => music.savePreferences()),
-          _buildVolumeRow('Win / playlist music', music.winVolume, Colors.pinkAccent,
-              () => music.savePreferences()),
-          _buildVolumeRow('Music while talking', music.duckLevel, Colors.white70,
-              () => music.savePreferences()),
-          div(),
-          Obx(() => _buildSettingsTile(
-                icon: Icons.short_text,
-                title: 'Short score reading',
-                subtitle: 'Vietnamese: 15 – 13 is read "năm – ba"',
-                trailing: Switch(
-                  value: audio.shortScore.value,
-                  onChanged: audio.setShortScore,
-                  activeColor: Colors.amber,
+    return _card([
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
+        child: Obx(() {
+          final on = check.running.value;
+          return Row(
+            children: [
+              FilledButton.icon(
+                onPressed: on ? check.stop : check.start,
+                icon: Icon(on ? Icons.stop : Icons.play_arrow),
+                label: Text(on ? 'Stop' : 'Sound check'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: on ? Colors.redAccent : Colors.amber,
+                  foregroundColor: Colors.black,
                 ),
-              )),
-        ],
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  on
+                      ? '${check.index.value}/${check.total.value}  ${check.current.value}'
+                      : check.prepareMs.value > 0
+                          ? 'TTS line: ${check.prepareMs.value} ms each on this device'
+                          : 'Plays every sound once, in turn',
+                  style: TextStyle(color: on ? Colors.white : Colors.white54, fontSize: 13),
+                ),
+              ),
+            ],
+          );
+        }),
       ),
+      _div(),
+      // Mode first: it decides whether anything below it is audible at all.
+      Obx(() {
+        final isMusic = audio.isMusicMode;
+        return _tile(
+          icon: isMusic ? Icons.music_note : Icons.record_voice_over,
+          title: isMusic ? 'Music Mode' : 'Commentary Mode',
+          subtitle: isMusic
+              ? 'Music runs non-stop, nothing talks over it'
+              : 'Score + hype; music only on tension and win',
+          trailing: Switch(
+            value: isMusic,
+            onChanged: (v) => audio.setMode(v ? PlayMode.music : PlayMode.commentary),
+            activeColor: Colors.amber,
+          ),
+        );
+      }),
+      _div(),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+        child: Obx(() => Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _toggle('Score', score.scoreAnnouncementsEnabled.value, Colors.amber,
+                    score.setScoreAnnouncementsEnabled),
+                _toggle('Hype', hype.isEnabled.value, Colors.cyanAccent, (v) {
+                  hype.isEnabled.value = v;
+                  hype.savePreferences();
+                }),
+                _toggle('K.O effect', hype.koEffectEnabled.value, Colors.cyanAccent, (v) {
+                  hype.koEffectEnabled.value = v;
+                  hype.savePreferences();
+                }),
+                _toggle('Tension', music.tensionMusicEnabled.value, Colors.orangeAccent, (v) {
+                  music.tensionMusicEnabled.value = v;
+                  music.savePreferences();
+                }),
+                _toggle('Win music', music.winMusicEnabled.value, Colors.pinkAccent, (v) {
+                  music.winMusicEnabled.value = v;
+                  music.savePreferences();
+                }),
+              ],
+            )),
+      ),
+      _div(),
+      const SizedBox(height: 8),
+      _volume('Master', 'Everything below at once — the big slider on the band',
+          audio.masterVolume, Colors.amber, () => audio.setMaster(audio.masterVolume.value)),
+      _volume('Voice (all)', 'Every spoken line: score, names, winner',
+          tts.volume, Colors.amber, tts.saveVolumePreference),
+      if (clips != null)
+        _volume(
+            'Name boost (TTS)',
+            'Extra gain on generated lines (names, winner, custom hype). '
+                'Past 200% it starts to crackle — on purpose',
+            clips.boost,
+            Colors.amberAccent,
+            () => clips.setBoost(clips.boost.value),
+            max: VoiceClipService.maxBoost),
+      _volume('Hype', 'Streak and highlight voices', hype.volume, Colors.cyanAccent,
+          hype.savePreferences),
+      _volume('Tension music', 'When both teams reach the threshold below',
+          music.tensionVolume, Colors.orangeAccent, music.savePreferences),
+      _volume('Win / playlist music', 'After a win, and all of Music mode',
+          music.winVolume, Colors.pinkAccent, music.savePreferences),
+      _volume('Music under voice', 'Music level while anyone talks; back up after',
+          music.duckLevel, Colors.white70, music.savePreferences),
+      _div(),
+      Obx(() => _tile(
+            icon: Icons.short_text,
+            title: 'Short score reading',
+            subtitle: 'Vietnamese: 15 – 13 is read "năm – ba"',
+            trailing: Switch(
+              value: audio.shortScore.value,
+              onChanged: audio.setShortScore,
+              activeColor: Colors.amber,
+            ),
+          )),
+      _div(),
+      Obx(() => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+            child: Row(
+              children: [
+                Text('Tension from', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+                const Spacer(),
+                Text('${music.tensionThreshold.value} – ${music.tensionThreshold.value}',
+                    style: const TextStyle(
+                        color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 13)),
+              ],
+            ),
+          )),
+      Obx(() => Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Slider(
+              value: music.tensionThreshold.value.toDouble(),
+              min: 15,
+              max: 25,
+              divisions: 10,
+              activeColor: Colors.orangeAccent,
+              inactiveColor: Colors.white12,
+              onChanged: (v) => music.tensionThreshold.value = v.round(),
+              onChangeEnd: (_) => music.savePreferences(),
+            ),
+          )),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+        child: Row(
+          children: [
+            Text('Playlist order  ', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
+            _chip('Random', music.playMode, 'random', music.savePreferences),
+            const SizedBox(width: 8),
+            _chip('Sequential', music.playMode, 'sequential', music.savePreferences),
+          ],
+        ),
+      ),
+      _div(),
+      _buildLanguageRow(tts),
+    ]);
+  }
+
+  Widget _toggle(String label, bool on, Color color, ValueChanged<bool> onChanged) {
+    return FilterChip(
+      label: Text(label),
+      selected: on,
+      onSelected: onChanged,
+      showCheckmark: false,
+      avatar: Icon(on ? Icons.volume_up : Icons.volume_off, size: 16, color: on ? color : Colors.white38),
+      labelStyle: TextStyle(
+          color: on ? color : Colors.white54, fontSize: 12, fontWeight: on ? FontWeight.bold : FontWeight.normal),
+      backgroundColor: Colors.white.withOpacity(0.05),
+      selectedColor: color.withOpacity(0.18),
+      side: BorderSide(color: on ? color : Colors.white24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     );
   }
 
-  Widget _buildVolumeRow(String label, RxDouble rxVolume, Color color, VoidCallback? onSave,
-      {double min = 0.0, double max = 1.0}) {
+  /// A level with its name, what it affects, and the value in percent.
+  Widget _volume(String label, String desc, RxDouble rx, Color color, VoidCallback? onSave,
+      {double max = 1.0}) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-      child: Obx(() => Row(
+      padding: const EdgeInsets.fromLTRB(20, 4, 12, 0),
+      child: Obx(() => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.volume_up, color: color.withOpacity(0.7), size: 18),
-              const SizedBox(width: 8),
-              Text(label,
-                  style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13)),
-              const Spacer(),
-              Text('${(rxVolume.value * 100).round()}%',
-                  style: TextStyle(
-                      color: color, fontWeight: FontWeight.bold, fontSize: 13)),
-              Expanded(
-                child: Slider(
-                  value: rxVolume.value.clamp(min, max),
-                  min: min,
-                  max: max,
-                  activeColor: color,
-                  inactiveColor: Colors.white12,
-                  onChanged: (v) => rxVolume.value = v,
-                  onChangeEnd: (_) => onSave?.call(),
-                ),
+              Row(
+                children: [
+                  Icon(Icons.volume_up, color: color.withOpacity(0.7), size: 18),
+                  const SizedBox(width: 8),
+                  Text(label,
+                      style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
+                  const Spacer(),
+                  Text('${(rx.value * 100).round()}%',
+                      style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(width: 8),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(left: 26, top: 2),
+                child: Text(desc, style: TextStyle(color: Colors.white.withOpacity(0.45), fontSize: 11)),
+              ),
+              Slider(
+                value: rx.value.clamp(0.0, max),
+                min: 0.0,
+                max: max,
+                activeColor: color,
+                inactiveColor: Colors.white12,
+                onChanged: (v) => rx.value = v,
+                onChangeEnd: (_) => onSave?.call(),
               ),
             ],
           )),
     );
   }
 
-  Widget _buildLanguageRow() {
-    final tts = Get.find<TtsService>();
+  Widget _chip(String label, RxString rx, String value, VoidCallback onSave) {
+    return Obx(() {
+      final selected = rx.value == value;
+      return GestureDetector(
+        onTap: () {
+          rx.value = value;
+          onSave();
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? Colors.pinkAccent.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: selected ? Colors.pinkAccent : Colors.white24),
+          ),
+          child: Text(label,
+              style: TextStyle(
+                  color: selected ? Colors.pinkAccent : Colors.white54,
+                  fontSize: 12,
+                  fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
+        ),
+      );
+    });
+  }
+
+  Widget _buildLanguageRow(TtsService tts) {
     return Obx(() {
       final isVi = tts.currentLanguageRx.value.startsWith('vi');
       return Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 16),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(Icons.language, color: Colors.white70, size: 20),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Language',
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15)),
-                      const Text('Score & TTS announcement language',
-                          style: TextStyle(
-                              color: Colors.white38, fontSize: 12)),
-                    ],
-                  ),
-                ),
-              ],
+            const Icon(Icons.language, color: Colors.white70, size: 20),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text('Language',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
             ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _buildLangChip('English', !isVi, () => tts.setLanguage('en-US')),
-                const SizedBox(width: 8),
-                _buildLangChip('Tiếng Việt', isVi, () => tts.setLanguage('vi-VN')),
-              ],
-            ),
+            _langChip('English', !isVi, () => tts.setLanguage('en-US')),
+            const SizedBox(width: 8),
+            _langChip('Tiếng Việt', isVi, () => tts.setLanguage('vi-VN')),
           ],
         ),
       );
     });
   }
 
-  Widget _buildLangChip(String label, bool selected, VoidCallback onTap) {
+  Widget _langChip(String label, bool selected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -904,193 +378,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
         decoration: BoxDecoration(
           color: selected ? Colors.amber.withOpacity(0.2) : Colors.white.withOpacity(0.05),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-              color: selected ? Colors.amber : Colors.white24, width: 1),
+          border: Border.all(color: selected ? Colors.amber : Colors.white24),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-              color: selected ? Colors.amber : Colors.white54,
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.bold : FontWeight.normal),
-        ),
+        child: Text(label,
+            style: TextStyle(
+                color: selected ? Colors.amber : Colors.white54,
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.bold : FontWeight.normal)),
       ),
     );
   }
 
-  Widget _buildModeChip(String mode, MusicService music) {
-    return Obx(() {
-      final selected = music.playMode.value == mode;
-      return GestureDetector(
-        onTap: () {
-          music.playMode.value = mode;
-          music.savePreferences();
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? Colors.pinkAccent.withOpacity(0.2) : Colors.white.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-                color: selected ? Colors.pinkAccent : Colors.white24, width: 1),
-          ),
-          child: Text(
-            mode == 'random' ? 'Random' : 'Sequential',
-            style: TextStyle(
-                color: selected ? Colors.pinkAccent : Colors.white54,
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.bold : FontWeight.normal),
-          ),
-        ),
-      );
-    });
-  }
+  // ── GAME ──────────────────────────────────────────────────────────────
 
-  Widget _buildDangerZone() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildSectionHeader('DANGER ZONE'),
-        const SizedBox(height: 16),
-        GestureDetector(
-          onTap: _resetToDefaults,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.redAccent.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.redAccent.withOpacity(0.2)),
+  Widget _buildGameCard() {
+    final controller = Get.find<ScoreController>();
+    return _card([
+      Obx(() => _tile(
+            icon: Icons.swap_horiz,
+            title: 'Swap Sides',
+            subtitle: controller.sidesSwapped.value
+                ? 'Blue on the left, red on the right'
+                : 'Red on the left, blue on the right',
+            trailing: Switch(
+              value: controller.sidesSwapped.value,
+              onChanged: controller.setSidesSwapped,
+              activeColor: Colors.amber,
             ),
-            child: const Row(
+          )),
+      _div(),
+      Obx(() => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+            child: Row(
               children: [
-                Icon(Icons.restore, color: Colors.redAccent),
-                SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Reset to Defaults',
-                      style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    Text(
-                      'Factory reset all configurations',
-                      style: TextStyle(color: Colors.redAccent, fontSize: 12),
-                    ),
-                  ],
+                const Icon(Icons.replay, color: Colors.white70, size: 20),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Auto-start Next Game',
+                          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      Text('Phone only: with the band connected, the band starts the next set',
+                          style: TextStyle(color: Colors.white38, fontSize: 11)),
+                    ],
+                  ),
                 ),
-                Spacer(),
-                Icon(Icons.chevron_right, color: Colors.redAccent),
+                Text('${controller.autoResetDelay.value}s',
+                    style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 15)),
               ],
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Future<void> _resetToDefaults() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E1B4B),
-        title: const Text('Reset to Defaults?', style: TextStyle(color: Colors.white)),
-        content: const Text(
-            'This will reset team names and colors to default values.',
-            style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('CANCEL', style: TextStyle(color: Colors.white60)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('RESET', style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      await DatabaseService.resetTeamConfig();
-      setState(() {
-        _teamConfig = TeamConfig();
-        _teamAController.text = _teamConfig.teamAName;
-        _teamBController.text = _teamConfig.teamBName;
-      });
-
-      try {
-        final controller = Get.find<ScoreController>();
-        await controller.updateTeamConfig(_teamConfig);
-      } catch (e) {}
-
-      Get.snackbar(
-        'Reset Complete',
-        'Configuration reset to defaults',
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    }
-  }
-
-  Future<void> _pickColorForTeamA() async {
-    Color? pickedColor = await showDialog<Color>(
-      context: context,
-      builder: (context) => _buildColorPickerDialog(_teamConfig.teamAColor),
-    );
-
-    if (pickedColor != null) {
-      setState(() {
-        _teamConfig = _teamConfig.copyWith(
-          teamAColorHex: TeamConfig.colorToHex(pickedColor),
-        );
-      });
-      _saveTeamConfig();
-    }
-  }
-
-  Future<void> _pickColorForTeamB() async {
-    Color? pickedColor = await showDialog<Color>(
-      context: context,
-      builder: (context) => _buildColorPickerDialog(_teamConfig.teamBColor),
-    );
-
-    if (pickedColor != null) {
-      setState(() {
-        _teamConfig = _teamConfig.copyWith(
-          teamBColorHex: TeamConfig.colorToHex(pickedColor),
-        );
-      });
-      _saveTeamConfig();
-    }
-  }
-
-  Widget _buildColorPickerDialog(Color initialColor) {
-    Color selectedColor = initialColor;
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1E1B4B),
-      title: const Text('Select Team Color', style: TextStyle(color: Colors.white)),
-      content: SingleChildScrollView(
-        child: ColorPicker(
-          color: initialColor,
-          onColorChanged: (color) => selectedColor = color,
-          pickersEnabled: const {
-            ColorPickerType.both: false,
-            ColorPickerType.primary: true,
-            ColorPickerType.accent: true,
-            ColorPickerType.wheel: true,
-          },
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('CANCEL', style: TextStyle(color: Colors.white60)),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context, selectedColor),
-          child: const Text('SELECT', style: TextStyle(color: Colors.amber)),
-        ),
-      ],
-    );
+          )),
+      Obx(() => Padding(
+            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+            child: Slider(
+              value: controller.autoResetDelay.value.toDouble(),
+              min: 10,
+              max: 120,
+              divisions: 22,
+              activeColor: Colors.amber,
+              inactiveColor: Colors.white12,
+              onChanged: (v) => controller.autoResetDelay.value = v.round(),
+              onChangeEnd: (v) => controller.setAutoResetDelay(v.round()),
+            ),
+          )),
+    ]);
   }
 }

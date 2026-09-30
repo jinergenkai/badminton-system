@@ -12,13 +12,10 @@ dependencies:
 
   cupertino_icons: ^1.0.8
   get: ^4.6.6
-  permission_handler: ^11.3.1
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.0
-  porcupine_flutter: ^4.0.0
   flutter_tts: ^4.2.3
   shared_preferences: ^2.5.3
-  flutter_dotenv: ^6.0.0
   flutter_foreground_task: ^8.11.0
 
   hive: ^2.2.3
@@ -26,11 +23,9 @@ dependencies:
 
   # glassmorphism: ^3.0.0  # REMOVED: not used in code
   shimmer: ^3.0.0
-  confetti: ^0.7.0
   # lottie: ^3.0.0  # REMOVED: not used in code
 
   settings_ui: ^2.0.2
-  flex_color_picker: ^3.4.1
   uuid: ^4.5.1
 
   # Audio Playback for Hype Feature
@@ -51,11 +46,6 @@ flutter:
   uses-material-design: true
 
   assets:
-    - .env
-    - assets/models/red-point_en_android_v4_0_0.ppn
-    - assets/models/blue-point_en_android_v4_0_0.ppn
-    - assets/models/picovoice_android.ppn
-    - assets/models/meow-meow_en_android_v4_0_0.ppn
     - assets/audio/hype/
     - assets/audio/hype/female_pack/
     - assets/audio/music/

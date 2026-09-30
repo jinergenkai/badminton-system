@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:get/get.dart';
@@ -221,10 +220,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          if (widget.isActive) {
-            HapticFeedback.heavyImpact();
-            widget.onIncrement();
-          }
+          if (widget.isActive) widget.onIncrement();
         },
         splashColor: Colors.white.withOpacity(0.2),
         highlightColor: Colors.transparent,
@@ -315,10 +311,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
     required double size,
   }) {
     return GestureDetector(
-      onTap: () {
-        HapticFeedback.mediumImpact();
-        onTap();
-      },
+      onTap: onTap,
       child: Container(
         width: size,
         height: size,

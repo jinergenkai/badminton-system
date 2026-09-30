@@ -5,7 +5,6 @@ import '../models/team_config.dart';
 class DatabaseService {
   static const String matchesBoxName = 'matches';
   static const String configBoxName = 'config';
-  static const String teamConfigKey = 'team_config';
 
   static Box<Match>? _matchesBox;
   static Box? _configBox;
@@ -19,6 +18,8 @@ class DatabaseService {
       Hive.registerAdapter(MatchAdapter());
     }
     if (!Hive.isAdapterRegistered(1)) {
+      // Team profiles are gone, but old installs have one stored in the
+      // config box: the adapter stays so that box still opens.
       Hive.registerAdapter(TeamConfigAdapter());
     }
 
@@ -150,40 +151,6 @@ class DatabaseService {
       'longestMatch': sortedByDuration.last,
       'shortestMatch': sortedByDuration.first,
     };
-  }
-
-  // ==================== TEAM CONFIG OPERATIONS ====================
-
-  /// Get team configuration (or create default if doesn't exist)
-  static TeamConfig getTeamConfig() {
-    if (_configBox == null) {
-      throw Exception('Database not initialized. Call initialize() first.');
-    }
-
-    final config = _configBox!.get(teamConfigKey);
-    if (config == null) {
-      final defaultConfig = TeamConfig();
-      saveTeamConfig(defaultConfig);
-      return defaultConfig;
-    }
-
-    return config as TeamConfig;
-  }
-
-  /// Save team configuration
-  static Future<void> saveTeamConfig(TeamConfig config) async {
-    if (_configBox == null) {
-      throw Exception('Database not initialized. Call initialize() first.');
-    }
-
-    await _configBox!.put(teamConfigKey, config);
-    print('💾 [Database] Team config saved: ${config.teamAName} vs ${config.teamBName}');
-  }
-
-  /// Reset team config to defaults
-  static Future<void> resetTeamConfig() async {
-    await saveTeamConfig(TeamConfig());
-    print('🔄 [Database] Team config reset to defaults');
   }
 
   // ==================== UTILITY OPERATIONS ====================
