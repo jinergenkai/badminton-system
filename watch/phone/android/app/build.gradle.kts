@@ -66,6 +66,32 @@ flutter {
     source = "../.."
 }
 
+// Voice clips added to audio_src/ are levelled into assets/audio/ before the
+// assets are bundled (tools/normalize_voice.py; only new or changed files).
+// Without python/ffmpeg on this machine it warns and the build carries on
+// with the assets as they are.
+val normalizeVoice = tasks.register("normalizeVoice") {
+    doLast {
+        val root = rootProject.projectDir.parentFile
+        try {
+            val p = ProcessBuilder("python", "tools/normalize_voice.py", "--changed")
+                .directory(root)
+                .redirectErrorStream(true)
+                .start()
+            val out = p.inputStream.bufferedReader().readText()
+            if (p.waitFor() == 0) {
+                println("--- [normalizeVoice] " + out.trim().lines().last())
+            } else {
+                logger.warn("normalizeVoice failed, assets used as they are:\n$out")
+            }
+        } catch (e: Exception) {
+            logger.warn("normalizeVoice skipped (python not found): ${e.message}")
+        }
+    }
+}
+tasks.named("preBuild") { dependsOn(normalizeVoice) }
+tasks.matching { it.name.startsWith("compileFlutterBuild") }.configureEach { dependsOn(normalizeVoice) }
+
 dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
     implementation(files("${projectDir}/libs/xms-wearable-lib_1.4_release.aar"))

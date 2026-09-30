@@ -104,7 +104,8 @@ class SoundLibraryService extends GetxService {
   final Map<String, Set<String>> _add = {};
   final Map<String, Set<String>> _remove = {};
   final Set<String> _off = {};
-  final Set<String> _userFiles = {};
+  /// id -> file, for recordings pushed to the phone.
+  final Map<String, String> _userFiles = {};
 
   Directory? _userDir;
 
@@ -212,21 +213,25 @@ class SoundLibraryService extends GetxService {
     _off.addAll(off);
   }
 
-  /// MP3s dropped into the user folder (adb push), by id = path without .mp3.
+  /// Recordings dropped into the user folder (adb push), by id = path
+  /// without the extension. MP3 or WAV; with both, the MP3 wins.
   void rescanFiles() {
     _userFiles.clear();
     final d = _userDir;
     if (d == null || !d.existsSync()) return;
     for (final f in d.listSync(recursive: true).whereType<File>()) {
       final p = f.path.replaceAll('\\', '/');
-      if (!p.toLowerCase().endsWith('.mp3')) continue;
-      _userFiles.add(p.substring(d.path.length + 1, p.length - 4));
+      final low = p.toLowerCase();
+      final mp3 = low.endsWith('.mp3');
+      if (!mp3 && !low.endsWith('.wav')) continue;
+      final id = p.substring(d.path.length + 1, p.length - 4);
+      if (mp3 || !_userFiles.containsKey(id)) _userFiles[id] = f.path;
     }
     revision.value++;
   }
 
   void _validate() {
-    final known = {..._base.keys, ..._custom.keys, ..._userFiles};
+    final known = {..._base.keys, ..._custom.keys, ..._userFiles.keys};
     for (final t in _triggers) {
       final missing = t.pool.where((id) => !known.contains(id)).toList();
       if (missing.isNotEmpty) print('🔔 [Library] ⚠️ ${t.id}: unknown sounds $missing');
@@ -237,7 +242,7 @@ class SoundLibraryService extends GetxService {
     }
     print(
       '🔔 [Library] ${_base.length} sounds, ${_triggers.length} triggers, '
-      '${_bundled.length} bundled MP3s, ${_userFiles.length} on-phone MP3s',
+      '${_bundled.length} bundled MP3s, ${_userFiles.length} on-phone recordings',
     );
   }
 
@@ -248,12 +253,12 @@ class SoundLibraryService extends GetxService {
     for (final id in _baseOrder) _custom[id] ?? _base[id]!,
     for (final d in _custom.values)
       if (!_base.containsKey(d.id)) d,
-    for (final id in _userFiles)
+    for (final id in _userFiles.keys)
       if (!_base.containsKey(id) && !_custom.containsKey(id)) SoundDef.fromFileId(id),
   ];
 
   SoundDef? sound(String id) =>
-      _custom[id] ?? _base[id] ?? (_userFiles.contains(id) ? SoundDef.fromFileId(id) : null);
+      _custom[id] ?? _base[id] ?? (_userFiles.containsKey(id) ? SoundDef.fromFileId(id) : null);
 
   /// Highest priority first.
   List<TriggerDef> get triggers => [..._triggers]..sort((a, b) => b.priority.compareTo(a.priority));
@@ -290,12 +295,12 @@ class SoundLibraryService extends GetxService {
         t.id,
   };
 
-  bool hasUserFile(String id) => _userFiles.contains(id);
+  bool hasUserFile(String id) => _userFiles.containsKey(id);
   bool isBundled(String id) => _bundled.contains(id);
 
   /// Short tag for the library list.
   String sourceLabel(String id) {
-    if (_userFiles.contains(id)) return 'FILE';
+    if (_userFiles.containsKey(id)) return 'FILE';
     if (_bundled.contains(id)) return 'MP3';
     final d = sound(id);
     final clips = VoiceClipService.maybe;
@@ -303,13 +308,24 @@ class SoundLibraryService extends GetxService {
     return 'TTS';
   }
 
+  /// Renders every TTS-only line that can play, in the background, so none
+  /// is spoken live on its first use. Instant for lines already cached.
+  void warmTts() {
+    final clips = VoiceClipService.maybe;
+    if (clips == null) return;
+    final texts = [
+      for (final d in sounds)
+        if (!_bundled.contains(d.id) && !_userFiles.containsKey(d.id) && !_off.contains(d.id) &&
+            triggersOf(d.id).isNotEmpty)
+          d.text,
+    ];
+    if (texts.isNotEmpty) clips.prepareAll(texts);
+  }
+
   /// Where to play [id] from right now. Null only for an unknown id.
   Future<SoundSource?> source(String id) async {
-    final d = _userDir;
-    if (d != null && _userFiles.contains(id)) {
-      final f = File('${d.path}/$id.mp3');
-      if (f.existsSync()) return SoundSource(SoundKind.userFile, f.path);
-    }
+    final user = _userFiles[id];
+    if (user != null && File(user).existsSync()) return SoundSource(SoundKind.userFile, user);
     if (_bundled.contains(id)) return SoundSource(SoundKind.asset, 'audio/hype/$id.mp3');
     final def = sound(id);
     if (def == null) return null;

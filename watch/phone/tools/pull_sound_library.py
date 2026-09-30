@@ -9,8 +9,9 @@ into the code:
       custom      new lines appended; edits of bundled sounds replace their text
       add/remove  applied to the trigger pools
       off         taken out of every pool (the sound stays listed)
-  <id>.mp3           -> audio_src/hype/<id>.mp3 (then run normalize_voice.py
-                        so it lands in assets/audio/hype/ at the right level)
+  <id>.mp3           -> audio_src/hype/<id>.mp3 (the next build levels it into
+                        assets/audio/hype/ via normalize_voice.py --changed)
+  <id>.wav           -> converted to <id>.mp3, likewise
 
 Usage (from bandcounter-flutter/):
   python tools/pull_sound_library.py              merge
@@ -90,10 +91,16 @@ def main():
     mp3s = []
     for root, _, names in os.walk(src):
         for n in names:
-            if n.lower().endswith('.mp3'):
+            if n.lower().endswith(('.mp3', '.wav')):
                 rel = os.path.relpath(os.path.join(root, n), src).replace('\\', '/')
                 mp3s.append(rel)
                 sid = rel[:-4]
+                if rel.lower().endswith('.wav'):
+                    # the build pipeline and the app expect <id>.mp3 in assets
+                    rel_out = rel[:-4] + '.mp3'
+                    subprocess.run([shutil.which('ffmpeg') or 'ffmpeg', '-y', '-loglevel', 'error',
+                                    '-i', os.path.join(src, rel), os.path.join(src, rel_out)], check=True)
+                    mp3s[-1] = rel = rel_out
                 if sid not in sounds:
                     words = sid.split('/')[-1].replace('_', ' ')
                     entry = {'id': sid, 'display': words.upper(), 'text': words}
@@ -120,7 +127,8 @@ def main():
             shutil.copy2(os.path.join(src, rel), dst)
         print(f'\nwrote {LIB}' + (f' and {len(mp3s)} MP3(s) into audio_src/hype/' if mp3s else ''))
         if mp3s:
-            print('next: python tools/normalize_voice.py   (levels them into assets/audio/hype/)')
+            print('they are levelled into assets/audio/hype/ by the next build '
+                  '(or now: python tools/normalize_voice.py --changed)')
         print('then: rebuild + install, and check git diff before committing')
 
     if clear:

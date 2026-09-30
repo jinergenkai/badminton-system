@@ -10,6 +10,7 @@ import '../models/hype_display_event.dart';
 import 'package:voice_counter/services/audio_settings.dart';
 import 'package:voice_counter/services/sound_library_service.dart';
 import 'package:voice_counter/services/voice_clip_service.dart';
+import 'package:voice_counter/services/clip_gain_service.dart';
 
 class HypeVoiceController extends GetxController {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -298,11 +299,16 @@ class HypeVoiceController extends GetxController {
     if (path != null) await _playFile(path);
   }
 
-  Future<void> _play(SoundSource src) => src.kind == SoundKind.asset
-      ? _audioPlayer.play(AssetSource(src.value))
-      : _playFile(src.value);
+  /// Hype past 100% plays a boosted copy of the clip at full volume.
+  Future<void> _play(SoundSource src) async {
+    final boosted = await ClipGainService.maybe?.boosted(src.value, volume.value);
+    if (boosted != null) return _audioPlayer.play(DeviceFileSource(boosted));
+    return src.kind == SoundKind.asset
+        ? _audioPlayer.play(AssetSource(src.value))
+        : _audioPlayer.play(DeviceFileSource(src.value));
+  }
 
-  Future<void> _playFile(String path) => _audioPlayer.play(DeviceFileSource(path));
+  Future<void> _playFile(String path) => _play(SoundSource(SoundKind.ttsClip, path));
 
   Future<void> stopAudio() async {
     _pendingHypeId = null;

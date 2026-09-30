@@ -8,14 +8,21 @@ Per clip:
   1. trim leading/trailing silence (shorter, snappier score calls)
   2. compress (speech has gaps; music does not - density is what reads as loud)
   3. gain to a target mean level, measured on the compressed clip
-  4. limit peaks to -1 dBFS so the gain never clips
+  4. limit peaks to -1.5 dBFS so the gain never clips
 
 Usage:  python tools/normalize_voice.py            (from bandcounter-flutter/)
         python tools/normalize_voice.py --dry-run  (report only)
+        python tools/normalize_voice.py --changed  (only new/changed sources)
+
+--changed is what the Android build runs before bundling assets
+(android/app/build.gradle.kts): a source is redone when its bytes or the
+settings below change, tracked in audio_src/.normalized.json.
 
 Measured before this existed (mean / max dB): score vi -11.7..-13.7 / -1.4,
 score en -17.2, hype -13.9..-19.5, bundled music -10.1..-13.5.
 """
+import hashlib
+import json
 import os
 import re
 import shutil
@@ -61,8 +68,22 @@ def process(src, dst, target):
     return gain
 
 
+STAMP = os.path.join('audio_src', '.normalized.json')
+
+
+def fingerprint(src, target):
+    h = hashlib.sha1(open(src, 'rb').read())
+    h.update(f'{TRIM}|{COMPRESS}|{LIMIT}|{target}|128k'.encode())
+    return h.hexdigest()
+
+
 def main():
     dry = '--dry-run' in sys.argv
+    changed_only = '--changed' in sys.argv
+    stamps = {}
+    if os.path.exists(STAMP):
+        stamps = json.load(open(STAMP, encoding='utf-8'))
+    done = 0
     print(f'{"file":44} {"before":>14} {"gain":>7} {"after":>14}')
     for sub, out_dir, target in SETS:
         src_dir = os.path.join('audio_src', sub)
@@ -74,13 +95,28 @@ def main():
                 continue
             src = os.path.join(src_dir, name)
             dst = os.path.join(out_dir, name)
+            key = dst.replace(os.sep, '/')
+            fp = fingerprint(src, target)
+            if changed_only and os.path.exists(dst) and stamps.get(key) == fp:
+                continue
             b = mean_max(src)
             if dry:
                 print(f'{sub + "/" + name:44} {b[0]:6.1f}/{b[1]:6.1f}')
                 continue
+            os.makedirs(out_dir, exist_ok=True)
             gain = process(src, dst, target)
+            if gain is None:
+                print(f'{sub + "/" + name:44} unreadable, skipped')
+                continue
+            stamps[key] = fp
+            done += 1
             a = mean_max(dst)
             print(f'{sub + "/" + name:44} {b[0]:6.1f}/{b[1]:6.1f} {gain:+6.1f} {a[0]:6.1f}/{a[1]:6.1f}')
+    if not dry:
+        with open(STAMP, 'w', encoding='utf-8', newline='\n') as f:
+            json.dump(stamps, f, indent=1, sort_keys=True)
+            f.write('\n')
+    print(f'{done} file(s) normalized')
 
 
 if __name__ == '__main__':

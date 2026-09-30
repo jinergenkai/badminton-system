@@ -107,9 +107,9 @@ class _HypeTab extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           const Text(
-            'MP3 > TTS: drop <id>.mp3 into the folder below (adb push) to replace any '
-            'sound, or give a TTS line a recorded voice. Edits are saved there too '
-            '(library_user.json).',
+            'A recording beats TTS: push <id>.mp3 (or .wav) into the folder below to '
+            'replace any sound or give a TTS line your own voice, then Rescan. '
+            'Edits are saved there too (library_user.json).',
             style: TextStyle(color: Colors.white54, fontSize: 12),
           ),
           const SizedBox(height: 4),
@@ -292,7 +292,7 @@ class _SoundEditorState extends State<_SoundEditor> {
                 child: Text(
                   hasFile
                       ? 'id ${d.id} · plays its MP3; the text is used only if the file goes missing'
-                      : 'id ${d.id} · spoken by TTS (cached). Recorded voice: push ${d.id}.mp3',
+                      : 'id ${d.id} · spoken by TTS (cached). Your own voice: push ${d.id}.mp3',
                   style: const TextStyle(color: Colors.white38, fontSize: 11),
                 ),
               ),

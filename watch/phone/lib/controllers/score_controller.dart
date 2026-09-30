@@ -15,6 +15,7 @@ import '../services/audio_settings.dart';
 import '../services/player_service.dart';
 import '../services/sound_check_service.dart';
 import '../services/voice_clip_service.dart';
+import '../services/sound_library_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
 class ScoreController extends GetxController {
@@ -38,18 +39,6 @@ class ScoreController extends GetxController {
 
   // New settings
   final RxBool scoreAnnouncementsEnabled = true.obs;
-
-  /// Phone taps closer together than this are one tap (a finger bounce on
-  /// the card). The band has its own cooldown for its buttons.
-  static const _tapGuard = Duration(milliseconds: 250);
-  DateTime? _lastTap;
-
-  bool _bounced() {
-    final now = DateTime.now();
-    final last = _lastTap;
-    _lastTap = now;
-    return last != null && now.difference(last) < _tapGuard;
-  }
 
   /// Display-only: which end of the screen each team is drawn on.
   ///
@@ -162,7 +151,11 @@ class ScoreController extends GetxController {
   void onInit() {
     super.onInit();
     _loadSettings();
-    _ttsService.initialize().then((_) => _applyTeamNames(_ttsService.currentLanguage));
+    _ttsService.initialize().then((_) {
+      _applyTeamNames(_ttsService.currentLanguage);
+      // Custom hype lines rendered before they are needed, not on first play.
+      SoundLibraryService.maybe?.warmTts();
+    });
     // Team names are the colours, in the announcement language.
     _ttsService.currentLanguageRx.listen(_applyTeamNames);
     _scoreAnnouncer.initialize();
@@ -572,7 +565,7 @@ class ScoreController extends GetxController {
   }
 
   void incrementTeamA() {
-    if (!gameState.isGameActive || _bounced()) return;
+    if (!gameState.isGameActive) return;
     final int oldA = gameState.teamAScore;
     final int oldB = gameState.teamBScore;
     _pushStateToStack();
@@ -598,7 +591,7 @@ class ScoreController extends GetxController {
   }
 
   void incrementTeamB() {
-    if (!gameState.isGameActive || _bounced()) return;
+    if (!gameState.isGameActive) return;
     final int oldA = gameState.teamAScore;
     final int oldB = gameState.teamBScore;
     _pushStateToStack();

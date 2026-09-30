@@ -5,6 +5,7 @@ import '../services/audio_settings.dart';
 import '../services/tts_service.dart';
 import '../services/sound_check_service.dart';
 import '../services/voice_clip_service.dart';
+import '../services/clip_gain_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -197,19 +198,20 @@ class SettingsScreen extends StatelessWidget {
       const SizedBox(height: 8),
       _volume('Master', 'Everything below at once — the big slider on the band',
           audio.masterVolume, Colors.amber, () => audio.setMaster(audio.masterVolume.value)),
-      _volume('Voice (all)', 'Every spoken line: score, names, winner',
-          tts.volume, Colors.amber, tts.saveVolumePreference),
+      _volume('Voice (all)', 'Every spoken line: score, names, winner. Past 100% the clips '
+              'themselves are boosted — the top end crackles',
+          tts.volume, Colors.amber, tts.saveVolumePreference, max: ClipGainService.maxLevel),
       if (clips != null)
         _volume(
             'Name boost (TTS)',
-            'Extra gain on generated lines (names, winner, custom hype). '
-                'Past 200% it starts to crackle — on purpose',
+            'TTS lines only (names, winner, custom hype), on top of Voice. '
+                '100% = as loud as the recorded clips; past 200% it crackles',
             clips.boost,
             Colors.amberAccent,
             () => clips.setBoost(clips.boost.value),
             max: VoiceClipService.maxBoost),
-      _volume('Hype', 'Streak and highlight voices', hype.volume, Colors.cyanAccent,
-          hype.savePreferences),
+      _volume('Hype', 'Streak and highlight voices; past 100% boosted like Voice',
+          hype.volume, Colors.cyanAccent, hype.savePreferences, max: ClipGainService.maxLevel),
       _volume('Tension music', 'When both teams reach the threshold below',
           music.tensionVolume, Colors.orangeAccent, music.savePreferences),
       _volume('Win / playlist music', 'After a win, and all of Music mode',
