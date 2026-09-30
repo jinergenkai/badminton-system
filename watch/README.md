@@ -178,8 +178,11 @@ ffmpeg -i audio_src/pack/pack7_viet_hai.mp3 -ss 12.3 -to 14.1 audio_src/hype/u_b
 Sau đó thêm một mục `u_ba_khi` vào `sound_library.json`. Việc chuẩn hóa độ to diễn ra
 khi build.
 
-Voice (all) và Hype chỉnh được tới 300%. Trên 100%, app không tăng âm lượng phát mà làm
-to chính file: giải mã sang PCM một lần (MediaCodec), nhân lên, rồi cache theo mức.
+Độ to của các clip được chỉnh lúc build, không chỉnh lúc chạy. Muốn mọi clip to hơn:
+`python tools/normalize_voice.py --louder 2`. Mức này được lưu trong
+`audio_src/levels.json` nên các lần build sau vẫn giữ; `--louder 0` để quay về. Đo thực
+tế: +2 dB chỉ to thêm khoảng 1 dB, vì các clip đã sát trần. Riêng câu TTS có thêm
+**Name boost** (tới 400%, mỗi bước 10%).
 
 ---
 
