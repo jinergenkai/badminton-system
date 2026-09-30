@@ -59,7 +59,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return GetMaterialApp(
-      title: 'Badminton Voice Counter',
+      title: 'Godminton',
       debugShowCheckedModeBanner: false,
       theme: Ui.theme().copyWith(
         textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),

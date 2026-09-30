@@ -5,9 +5,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
     <application
-        android:label="voice_counter"
+        android:label="Godminton"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
 
         <activity
             android:name="com.hung.bandcounter.MainActivity"
