@@ -140,6 +140,41 @@ Các lệnh lẻ khác của `deploy.ps1`:
 | `-Mem` | xem RAM và tiến trình ăn RAM nhiều nhất |
 | `-Slim` / `-Unslim` | tắt / bật lại Google bloat, giới hạn chạy nền (lâu dài) |
 
+### Âm thanh: Sound Library
+
+Mọi câu hype nằm trong **một** file: `bandcounter-flutter/assets/config/sound_library.json`
+(câu nói, chữ hiện trên màn, màu, nằm trong trigger nào). *Khi nào* một trigger
+bắn là code (`HypeVoiceController._triggerMatches`); *phát câu gì* là dữ liệu.
+
+Một câu phát từ nguồn đầu tiên có được:
+
+1. MP3 thả vào phone: `/sdcard/Android/data/com.hung.bandcounter/files/sounds/<id>.mp3`
+2. MP3 đóng trong app: `assets/audio/hype/<id>.mp3`
+3. TTS đã render sẵn (cache lâu dài, không mất khi thoát app)
+4. TTS đọc trực tiếp, đồng thời render để lần sau dùng cache
+
+Trên phone, màn **Sound Library** (icon 🎵 cạnh History) cho thêm câu TTS mới, sửa chữ,
+chuyển câu giữa các trigger, tắt câu. Mọi chỉnh sửa lưu vào `library_user.json` trong
+cùng thư mục `sounds/`, không cần build lại app.
+
+Muốn chỉnh sửa trên phone thành mặc định trong code:
+
+```bash
+cd bandcounter-flutter && python tools/pull_sound_library.py --dry-run
+```
+
+Bỏ `--dry-run` để ghi thật. MP3 kéo về nằm ở `audio_src/hype/`, sau đó chạy
+`python tools/normalize_voice.py` để chuẩn hóa độ to. Build và cài bản mới xong thì
+chạy thêm `--clear-device` để phone không giữ bản sao cũ.
+
+Cắt một câu từ file MP3 dài (nguồn nằm ở `audio_src/pack/`):
+
+```bash
+ffmpeg -i audio_src/pack/pack7_viet_hai.mp3 -ss 12.3 -to 14.1 audio_src/hype/u_ba_khi.mp3
+```
+
+Sau đó chạy `normalize_voice.py`, và thêm một mục `u_ba_khi` vào `sound_library.json`.
+
 ---
 
 ## 5. Nghi thức bắt tay (thứ tự bắt buộc)
