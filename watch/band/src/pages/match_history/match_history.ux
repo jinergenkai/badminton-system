@@ -1,7 +1,7 @@
 <template>
   <div class="page">
     <div class="header"><text class="title">LAST 20 SETS</text></div>
-    <text class="empty" if="{{ rows.length === 0 }}">NO SETS YET</text>
+    <text class="empty" if="{{ rows.length === 0 }}">{{ emptyText }}</text>
     <list class="history-list" if="{{ rows.length > 0 }}">
       <!-- One type, one structure for every row (no if/else inside list-item:
            no precedent on this band). A set without names gets '' in the
@@ -30,13 +30,15 @@
         </div>
       </list-item>
     </list>
-    <div class="back" onclick="onBack"><text class="back-text">BACK</text></div>
+    <!-- Swipe right goes back, like every page: this button filters instead. -->
+    <div class="filter {{ doneOnly ? 'filter-on' : '' }}" onclick="onToggle">
+      <text class="filter-text {{ doneOnly ? 'filter-text-on' : '' }}">{{ filterText }}</text>
+    </div>
   </div>
 </template>
 
 <script>
   import storage from '@system.storage'
-  import router from '@system.router'
 
   function pad(n) { return n < 10 ? '0' + n : '' + n }
 
@@ -77,12 +79,16 @@
   }
 
   export default {
-    private: { rows: [] },
+    // Finished sets by default, like the phone's history; the choice is kept
+    // for the session in $def. Numbers count within what is shown.
+    private: { rows: [], all: [], doneOnly: true, filterText: 'DONE ONLY', emptyText: 'NO SETS YET' },
 
     onShow() {
       const def = this.$app && this.$app.$def
+      if (def && def.historyDoneOnly === false) this.doneOnly = false
       if (def && def.matchHistory) {
-        this.rows = def.matchHistory.map(toRow)
+        this.all = def.matchHistory
+        this.apply()
         return
       }
       storage.get({
@@ -90,13 +96,26 @@
         success: (raw) => {
           let list = []
           try { list = raw ? JSON.parse(raw) : [] } catch (e) { list = [] }
-          this.rows = list.map(toRow)
+          this.all = list
+          this.apply()
         },
-        fail: () => { this.rows = [] }
+        fail: () => { this.all = []; this.apply() }
       })
     },
 
-    onBack() { router.back() }
+    apply() {
+      const list = this.doneOnly ? this.all.filter((r) => r.status === 'completed') : this.all
+      this.rows = list.map(toRow)
+      this.filterText = this.doneOnly ? 'DONE ONLY' : 'ALL SETS'
+      this.emptyText = this.all.length === 0 ? 'NO SETS YET' : 'NO FINISHED SETS'
+    },
+
+    onToggle() {
+      this.doneOnly = !this.doneOnly
+      const def = this.$app && this.$app.$def
+      if (def) def.historyDoneOnly = this.doneOnly
+      this.apply()
+    }
   }
 </script>
 
@@ -119,6 +138,8 @@
   .vs { width: 10%; height: 24px; color: #94A3B8; font-size: 14px; text-align: center; }
   .nm-blue { width: 45%; height: 24px; color: #7AAEFF; font-size: 17px; font-weight: bold; text-align: right; }
   .empty { width: 100%; height: 360px; color: #64748B; font-size: 15px; text-align: center; }
-  .back { width: 100%; height: 48px; justify-content: center; align-items: center; }
-  .back-text { color: #94A3B8; font-size: 15px; font-weight: bold; }
+  .filter { width: 100%; height: 44px; margin-top: 4px; justify-content: center; align-items: center; border-radius: 22px; border-width: 2px; border-color: #475569; }
+  .filter-on { border-color: #FFC107; background-color: rgba(255,193,7,0.15); }
+  .filter-text { color: #CBD5E1; font-size: 15px; font-weight: bold; }
+  .filter-text-on { color: #FFC107; }
 </style>
