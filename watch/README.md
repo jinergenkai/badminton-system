@@ -199,6 +199,10 @@ Mỗi buổi chơi phải làm đúng thứ tự này, sai là không kết nố
 Nếu ăn: chấm trạng thái trên band app sáng **xanh**, status trên app Flutter báo
 connected, hai chiều chạy bình thường.
 
+**Không dừng Mi Fitness trong buổi chơi.** Đã thử ngày 2026-09-30: sau khi chạy
+`deploy.ps1 -StopMiFitness`, phone vẫn gửi được sang band nhưng **band không gửi được
+sang phone nữa**. Mi Fitness chỉ được dừng lúc cài `.rpk` qua Notify (§4).
+
 ---
 
 ## 6. 🐛 Bug đang mở: kết nối một chiều
