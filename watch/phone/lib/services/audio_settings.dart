@@ -58,6 +58,10 @@ class AudioSettings extends GetxService {
     masterVolume.value = prefs.getDouble('${_pref}master') ?? 1.0;
     mode.value = prefs.getString('${_pref}mode') ?? PlayMode.commentary;
     shortScore.value = prefs.getBool('${_pref}short_score') ?? true;
+    // Left by settings that no longer exist.
+    for (final k in const ['haptic_feedback_enabled', 'hype_ko_enabled', 'voice_boost']) {
+      if (prefs.containsKey(k)) await prefs.remove(k);
+    }
     return this;
   }
 

@@ -104,8 +104,9 @@ class ScoreAnnouncerService extends GetxService {
     return 'en';
   }
 
-  /// [serverName], when the set is named, is read after the score:
-  /// "Năm – Ba, Hùng giao cầu".
+  /// [serverName], when given, is read right after the score:
+  /// "Năm – Ba, Hùng giao cầu". The match itself uses [announceServe]
+  /// instead, after the hype line.
   Future<void> announceScore(
     int teamAScore,
     int teamBScore,
@@ -150,6 +151,21 @@ class ScoreAnnouncerService extends GetxService {
       tail = null;
     }
     await _playSequence(myJob, files, fallback, tail: tail);
+  }
+
+  /// "Hùng giao cầu" on its own — the match reads it after the hype line,
+  /// so the last thing heard before the serve is who serves. Completes
+  /// through the same callbacks as a score announcement.
+  Future<void> announceServe(String serverName) async {
+    final int myJob = ++_currentJob;
+    await _cancelInFlight();
+    if (myJob != _currentJob) return;
+    final text = serveTail(serverName, currentLanguage.value);
+    Future<void> speak() => _fallbackTts(() => Get.find<TtsService>().speak(text));
+    final clip = await _clip(text);
+    if (myJob != _currentJob) return;
+    if (clip == null) return speak();
+    await _playSequence(myJob, [clip], speak);
   }
 
   Future<void> announceUndo(

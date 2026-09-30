@@ -10,22 +10,15 @@ dependencies:
   flutter:
     sdk: flutter
 
-  cupertino_icons: ^1.0.8
   get: ^4.6.6
   google_fonts: ^6.2.1
   flutter_animate: ^4.5.0
   flutter_tts: ^4.2.3
   shared_preferences: ^2.5.3
-  flutter_foreground_task: ^8.11.0
 
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
-  # glassmorphism: ^3.0.0  # REMOVED: not used in code
-  shimmer: ^3.0.0
-  # lottie: ^3.0.0  # REMOVED: not used in code
-
-  settings_ui: ^2.0.2
   uuid: ^4.5.1
 
   # Audio Playback for Hype Feature

@@ -7,7 +7,6 @@ import '../models/match.dart';
 import '../models/lineup.dart';
 import '../services/tts_service.dart';
 import '../services/score_announcer_service.dart';
-import '../services/foreground_service.dart';
 import '../services/database_service.dart';
 import '../services/watch_connectivity_service.dart';
 import '../services/music_service.dart';
@@ -33,6 +32,9 @@ class ScoreController extends GetxController {
 
   Timer? _autoResetTimer;
   Timer? _watchConnectionPoll;
+
+  /// Server to name once the hype after this point is done.
+  String? _pendingServe;
 
   // Configurable delay before auto-starting next game after a win
   final RxInt autoResetDelay = 60.obs;
@@ -159,7 +161,6 @@ class ScoreController extends GetxController {
     // Team names are the colours, in the announcement language.
     _ttsService.currentLanguageRx.listen(_applyTeamNames);
     _scoreAnnouncer.initialize();
-    // _initializeForegroundService(); // DISABLED: foreground notification
     _initializeWatchSync();
     _setupAudioChain();
     _musicService.initialize().then((_) => _applyMode(_audio.mode.value));
@@ -226,7 +227,15 @@ class ScoreController extends GetxController {
     // Tension music is started HERE (not during score update) so it never
     // competes with TTS or hype for AudioFocus.
     _hypeController.onPlaybackCompleted = () {
-      // End of the talking chain (score -> name -> hype): music back up.
+      // Hype done: the server's name closes the chain. Its completion comes
+      // back through playHype (nothing pending) and lands here again.
+      final serve = _pendingServe;
+      _pendingServe = null;
+      if (serve != null && !SoundCheckService.active && !isGameEnded.value) {
+        _scoreAnnouncer.announceServe(serve);
+        return;
+      }
+      // End of the talking chain (score -> hype -> server): music back up.
       _musicService.unduck();
       if (SoundCheckService.active) return;
       if (isGameEnded.value) {
@@ -378,6 +387,7 @@ class ScoreController extends GetxController {
           teamBScore: newScoreB,
           stateStack: stack,
         );
+        _pendingServe = null;
         _hypeController.handleUndo();
         // Undo is almost always an immediate misclick correction — announcing
         // "undo, X Y" out loud right before the real point is noisy and gets
@@ -452,7 +462,6 @@ class ScoreController extends GetxController {
               serverName: _serverFullName(_lastBandRallies));
         }
         // _checkTensionMusic() moved to onPlaybackCompleted — avoids AudioFocus conflict
-        // ForegroundService.updateScores(teamAScore: newScoreA, teamBScore: newScoreB);
         _checkGameEnd(fromBand: fromBand);
       }
     }
@@ -520,7 +529,9 @@ class ScoreController extends GetxController {
     // Music steps aside for the whole chain; onPlaybackCompleted restores it.
     _musicService.duck();
     if (scoreAnnouncementsEnabled.value) {
-      _scoreAnnouncer.announceScore(a, b, team, serverName: serverName);
+      // Score → hype → "<name> giao cầu": who serves is the last thing heard.
+      _pendingServe = serverName == null || serverName.isEmpty ? null : serverName;
+      _scoreAnnouncer.announceScore(a, b, team);
     } else {
       // If score announcement is disabled, we must trigger hype manually
       // so the audio chain continues.
@@ -536,16 +547,6 @@ class ScoreController extends GetxController {
       teamAName: vi ? 'Đội đỏ' : 'Red',
       teamBName: vi ? 'Đội xanh' : 'Blue',
     );
-  }
-
-  Future<void> _initializeForegroundService() async {
-    try {
-      await ForegroundService.initialize();
-      await ForegroundService.start(
-        teamAScore: gameState.teamAScore,
-        teamBScore: gameState.teamBScore,
-      );
-    } catch (e) {}
   }
 
   // Bound history to last 50 entries — list copy on every score otherwise grows O(n).
@@ -663,6 +664,7 @@ class ScoreController extends GetxController {
     final stack = List<GameState>.from(gameState.stateStack);
     final previousState = stack.removeLast();
     _gameState.value = previousState.copyWith(stateStack: stack);
+    _pendingServe = null;
     _hypeController.handleUndo();
     // Undo is almost always an immediate misclick correction — stay silent
     // instead of announcing "undo, X Y" (see matching comment above).
@@ -733,11 +735,11 @@ class ScoreController extends GetxController {
     );
     
     isGameEnded.value = false;
+    _pendingServe = null;
     _autoResetTimer?.cancel();
     _hypeController.resetState();
     _musicService.stopMusic(fadeOut: true);
     _hypeController.playStartOfMatchHype();
-    // ForegroundService.updateScores(teamAScore: 0, teamBScore: 0);
     if (!_isSyncingFromWatch) {
       _watchService.sendScoreCommand('new_match');
     }
@@ -756,7 +758,6 @@ class ScoreController extends GetxController {
     _watchCommandSubscription?.cancel();
     _ttsService.dispose();
     _watchService.dispose();
-    // ForegroundService.stop(); // DISABLED: foreground notification
     super.onClose();
   }
 }

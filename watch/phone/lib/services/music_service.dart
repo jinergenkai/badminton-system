@@ -26,7 +26,7 @@ class MusicService extends GetxController {
   final RxBool tensionMusicEnabled = true.obs;
   // Defaults tuned on the court tablet.
   final RxDouble winVolume = 0.6.obs;
-  final RxDouble tensionVolume = 0.6.obs;
+  final RxDouble tensionVolume = 0.4.obs;
 
   /// Music level while anyone speaks, as a fraction of its normal level.
   final RxDouble duckLevel = 0.3.obs;
@@ -491,7 +491,7 @@ class MusicService extends GetxController {
     winMusicEnabled.value = prefs.getBool('${_pref}win_enabled') ?? true;
     tensionMusicEnabled.value = prefs.getBool('${_pref}tension_enabled') ?? true;
     winVolume.value = prefs.getDouble('${_pref}win_volume') ?? 0.6;
-    tensionVolume.value = prefs.getDouble('${_pref}tension_volume') ?? 0.6;
+    tensionVolume.value = prefs.getDouble('${_pref}tension_volume') ?? 0.4; // tuned on court
     tensionThreshold.value = prefs.getInt('${_pref}tension_threshold') ?? 15;
     duckLevel.value = prefs.getDouble('${_pref}duck_level') ?? 0.3;
     playMode.value = prefs.getString('${_pref}play_mode') ?? 'sequential';

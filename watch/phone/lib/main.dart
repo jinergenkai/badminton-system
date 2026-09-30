@@ -1,4 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'views/score_screen.dart';
@@ -27,6 +33,24 @@ void main() async {
   Get.put(PhoneControlsService());
 
   runApp(const MyApp());
+  unawaited(_dumpSettings());
+  // Again whenever the app goes to the background, i.e. after tuning.
+  AppLifecycleListener(onHide: () => unawaited(_dumpSettings()));
+}
+
+/// Every saved setting, as JSON, where adb can read it on a release build
+/// (run-as needs a debug one) — how court-tuned levels become the defaults:
+///   adb shell cat /sdcard/Android/data/com.hung.bandcounter/files/settings.json
+Future<void> _dumpSettings() async {
+  try {
+    final dir = await getExternalStorageDirectory();
+    if (dir == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final keys = prefs.getKeys().toList()..sort();
+    final map = {for (final k in keys) k: prefs.get(k)};
+    await File('${dir.path}/settings.json')
+        .writeAsString(const JsonEncoder.withIndent('  ').convert(map));
+  } catch (_) {}
 }
 
 class MyApp extends StatelessWidget {
