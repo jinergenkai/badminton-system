@@ -36,12 +36,14 @@ import sys
 
 FFMPEG = os.environ.get('FFMPEG') or shutil.which('ffmpeg') or 'ffmpeg'
 
-# (source dir under audio_src, output dir, target mean dB)
+# (source dir under audio_src, output dir, target mean dB, profile)
+# Score calls get the loud profile: they have to cut through music and are
+# heard a hundred times a match; hype and music stay as they were.
 SETS = [
-    ('score/vi', 'assets/audio/score/vi', -9.0),
-    ('score/en', 'assets/audio/score/en', -9.0),
-    ('hype', 'assets/audio/hype', -10.0),
-    ('hype/female_pack', 'assets/audio/hype/female_pack', -10.0),
+    ('score/vi', 'assets/audio/score/vi', -5.0, 'loud'),
+    ('score/en', 'assets/audio/score/en', -5.0, 'loud'),
+    ('hype', 'assets/audio/hype', -10.0, 'normal'),
+    ('hype/female_pack', 'assets/audio/hype/female_pack', -10.0, 'normal'),
 ]
 
 TRIM = ('silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03,'
@@ -50,6 +52,17 @@ TRIM = ('silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03,
         'areverse')
 COMPRESS = 'acompressor=threshold=-20dB:ratio=3:attack=5:release=60'
 LIMIT = 'alimiter=limit=0.841:level=false'  # 0.841 = -1.5 dBFS: MP3 re-encode overshoots ~1 dB
+
+# (compressor, limiter) per profile.
+# loud: harder compression and a -0.5 dBFS ceiling. Measured on all 33 vi
+# score clips: mean -9.9 -> -7.5 dB (+2.4), highest peak after the MP3
+# re-encode -0.5 dBFS, no clipped samples. More compression than this only
+# flattens the voice without making it louder.
+PROFILES = {
+    'normal': (COMPRESS, LIMIT),
+    'loud': ('acompressor=threshold=-28dB:ratio=6:attack=3:release=60',
+             'alimiter=limit=0.944:level=false'),  # 0.944 = -0.5 dBFS
+}
 
 
 def mean_max(path, pre_filter=''):
@@ -61,13 +74,14 @@ def mean_max(path, pre_filter=''):
     return (float(mean.group(1)) if mean else None, float(peak.group(1)) if peak else None)
 
 
-def process(src, dst, target):
-    base = TRIM + ',' + COMPRESS
+def process(src, dst, target, profile='normal'):
+    compress, limit = PROFILES[profile]
+    base = TRIM + ',' + compress
     m, _ = mean_max(src, base)
     if m is None:
         return None
     gain = target - m
-    chain = f'{base},volume={gain:.1f}dB,{LIMIT}'
+    chain = f'{base},volume={gain:.1f}dB,{limit}'
     subprocess.run([FFMPEG, '-hide_banner', '-loglevel', 'error', '-y', '-i', src,
                     '-af', chain, '-c:a', 'libmp3lame', '-b:a', '128k', dst], check=True)
     return gain
@@ -88,9 +102,9 @@ def louder_db():
     return float(levels.get('louder_db', 0))
 
 
-def fingerprint(src, target):
+def fingerprint(src, target, profile):
     h = hashlib.sha1(open(src, 'rb').read())
-    h.update(f'{TRIM}|{COMPRESS}|{LIMIT}|{target}|128k'.encode())
+    h.update(f'{TRIM}|{PROFILES[profile]}|{target}|128k'.encode())
     return h.hexdigest()
 
 
@@ -106,7 +120,7 @@ def main():
         stamps = json.load(open(STAMP, encoding='utf-8'))
     done = 0
     print(f'{"file":44} {"before":>14} {"gain":>7} {"after":>14}')
-    for sub, out_dir, target in SETS:
+    for sub, out_dir, target, profile in SETS:
         target += louder
         src_dir = os.path.join('audio_src', sub)
         if not os.path.isdir(src_dir):
@@ -118,7 +132,7 @@ def main():
             src = os.path.join(src_dir, name)
             dst = os.path.join(out_dir, name)
             key = dst.replace(os.sep, '/')
-            fp = fingerprint(src, target)
+            fp = fingerprint(src, target, profile)
             if changed_only and os.path.exists(dst) and stamps.get(key) == fp:
                 continue
             b = mean_max(src)
@@ -126,7 +140,7 @@ def main():
                 print(f'{sub + "/" + name:44} {b[0]:6.1f}/{b[1]:6.1f}')
                 continue
             os.makedirs(out_dir, exist_ok=True)
-            gain = process(src, dst, target)
+            gain = process(src, dst, target, profile)
             if gain is None:
                 print(f'{sub + "/" + name:44} unreadable, skipped')
                 continue
