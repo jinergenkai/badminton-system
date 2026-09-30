@@ -163,9 +163,11 @@ Muốn chỉnh sửa trên phone thành mặc định trong code:
 cd bandcounter-flutter && python tools/pull_sound_library.py --dry-run
 ```
 
-Bỏ `--dry-run` để ghi thật. MP3 kéo về nằm ở `audio_src/hype/`, sau đó chạy
-`python tools/normalize_voice.py` để chuẩn hóa độ to. Build và cài bản mới xong thì
-chạy thêm `--clear-device` để phone không giữ bản sao cũ.
+Bỏ `--dry-run` để ghi thật. MP3 kéo về nằm ở `audio_src/hype/`. Lần build Android
+kế tiếp tự chuẩn hóa độ to cho file mới hoặc file đã đổi
+(`normalize_voice.py --changed`, gọi từ Gradle; máy không có python/ffmpeg thì chỉ cảnh
+báo). Build và cài bản mới xong thì chạy thêm `--clear-device` để phone không giữ bản
+sao cũ.
 
 Cắt một câu từ file MP3 dài (nguồn nằm ở `audio_src/pack/`):
 
@@ -173,7 +175,11 @@ Cắt một câu từ file MP3 dài (nguồn nằm ở `audio_src/pack/`):
 ffmpeg -i audio_src/pack/pack7_viet_hai.mp3 -ss 12.3 -to 14.1 audio_src/hype/u_ba_khi.mp3
 ```
 
-Sau đó chạy `normalize_voice.py`, và thêm một mục `u_ba_khi` vào `sound_library.json`.
+Sau đó thêm một mục `u_ba_khi` vào `sound_library.json`. Việc chuẩn hóa độ to diễn ra
+khi build.
+
+Voice (all) và Hype chỉnh được tới 300%. Trên 100%, app không tăng âm lượng phát mà làm
+to chính file: giải mã sang PCM một lần (MediaCodec), nhân lên, rồi cache theo mức.
 
 ---
 
