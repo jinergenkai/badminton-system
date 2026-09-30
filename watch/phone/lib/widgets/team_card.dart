@@ -47,11 +47,35 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
     _servicePulseCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000), // Faster for strobe feel
-    )..repeat(reverse: true);
+    );
+    // A running controller makes Flutter draw every frame (60/s) even when
+    // nothing uses it: measured 40% UI + 30% raster CPU on the tablet at 0-0.
+    // So it only runs while this card is the serving one.
+    final hype = Get.find<HypeVoiceController>();
+    _pulseSubs = [
+      ever(hype.currentStreakTeam, (_) => _syncPulse()),
+      ever(hype.streakCount, (_) => _syncPulse()),
+    ];
+    _syncPulse();
+  }
+
+  late final List<Worker> _pulseSubs;
+
+  void _syncPulse() {
+    if (!mounted) return;
+    final serving = _streak(Get.find<HypeVoiceController>()) > 0;
+    if (serving && !_servicePulseCtrl.isAnimating) {
+      _servicePulseCtrl.repeat(reverse: true);
+    } else if (!serving && _servicePulseCtrl.isAnimating) {
+      _servicePulseCtrl.stop();
+    }
   }
 
   @override
   void dispose() {
+    for (final w in _pulseSubs) {
+      w.dispose();
+    }
     _servicePulseCtrl.dispose();
     super.dispose();
   }
