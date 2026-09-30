@@ -7,6 +7,9 @@
 #   .\deploy.ps1 -Mem            show RAM and the biggest processes
 #   .\deploy.ps1 -StopMiFitness  stop Mi Fitness so Notify can install on the band
 #   .\deploy.ps1 -Dev            the whole dev loop, guided (README section 4)
+#   .\deploy.ps1 -Court          one-time, at home: turn off apps the court
+#                                tablet does not need (kept across reboots)
+#   .\deploy.ps1 -Uncourt        undo -Court
 
 param(
     [switch]$Clean,
@@ -15,7 +18,9 @@ param(
     [switch]$Mem,
     [switch]$StopMiFitness,
     [switch]$Push,
-    [switch]$Dev
+    [switch]$Dev,
+    [switch]$Court,
+    [switch]$Uncourt
 )
 
 $Rpk = 'bandcounter-watch/dist/com.hung.bandcounter.release.1.0.0.rpk'
@@ -67,7 +72,7 @@ function Show-Mem {
 
 # -Dev runs Clean itself, at the right point in the sequence.
 if ($Dev) { $Clean = $false; $Push = $false }
-if (-not ($Clean -or $Slim -or $Unslim -or $Mem -or $StopMiFitness -or $Dev)) { $Push = $true }
+if (-not ($Clean -or $Slim -or $Unslim -or $Mem -or $StopMiFitness -or $Dev -or $Court -or $Uncourt)) { $Push = $true }
 
 if ($Mem) { Show-Mem }
 
@@ -92,6 +97,70 @@ if ($Unslim) {
     }
     adb shell cmd appops set com.android.vending RUN_IN_BACKGROUND allow
     adb shell settings delete global limit_background_processes
+}
+
+# ── Court tablet: run once at home, it lasts across reboots ─────────────
+# Nothing here uninstalls or deletes data: every step is undone by -Uncourt.
+#
+# Off: cannot run at all, icon hidden (pm disable-user). Asked to be removed;
+# uninstalling would also delete their data, so they are only switched off —
+# uninstall them from Settings if they are really not wanted.
+$CourtOff = @(
+    'com.zing.zalo',
+    'com.samsung.android.app.watchmanager',  # Galaxy Wearable: scans Bluetooth
+    'com.openai.chatgpt',
+    'com.chess',
+    'com.englishscore'
+)
+# No background: still open normally, but cannot start or keep running on
+# their own (after boot, for push, sync...).
+$CourtNoBackground = @(
+    'com.ss.android.ugc.trill',              # TikTok
+    'com.wireguard.android',                 # a running VPN costs CPU per packet
+    'com.flyersoft.moonreader',
+    'com.foxit.mobile.pdf.lite',
+    'com.microsoft.office.excel',
+    'com.google.android.apps.docs.editors.sheets',
+    'com.microsoft.rdc.androidx',
+    'com.server.auditor.ssh.client',         # Termius
+    'com.termux',
+    'com.nerversoft.ark.recode',
+    'com.teclast.teclastuserfeedback',
+    'com.watchfun.classearjoy',
+    'com.csdcorp.speech_to_text_example',
+    'com.example.chicki_buddy',
+    'com.example.jar_talk',
+    'bds.guland.com',
+    'bds.guland.vietnam.com',
+    'com.google.android.contactkeys'
+)
+# Never touched: this app, Mi Fitness (carries band -> phone), Notify, the
+# Touch Lock overlay used on court, the keyboard and TTS.
+
+if ($Court) {
+    Write-Host '== Court: off =='
+    $cmd = ($CourtOff | ForEach-Object { "pm disable-user --user 0 $_ >/dev/null 2>&1 && echo '  off  $_'" }) -join '; '
+    adb shell $cmd
+    Write-Host '== Court: no background =='
+    $cmd = ($CourtNoBackground | ForEach-Object {
+        "cmd appops set $_ RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 && " +
+        "cmd appops set $_ RUN_IN_BACKGROUND ignore >/dev/null 2>&1; " +
+        "am set-standby-bucket $_ restricted >/dev/null 2>&1; am force-stop $_; echo '  bg   $_'"
+    }) -join '; '
+    adb shell $cmd
+    Write-Host 'Done. Lasts across reboots; .\deploy.ps1 -Uncourt undoes it.'
+}
+
+if ($Uncourt) {
+    Write-Host '== Uncourt =='
+    $cmd = ($CourtOff | ForEach-Object { "pm enable $_ >/dev/null 2>&1 && echo '  on   $_'" }) -join '; '
+    adb shell $cmd
+    $cmd = ($CourtNoBackground | ForEach-Object {
+        "cmd appops set $_ RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1; " +
+        "cmd appops set $_ RUN_IN_BACKGROUND allow >/dev/null 2>&1; " +
+        "am set-standby-bucket $_ active >/dev/null 2>&1; echo '  bg ok $_'"
+    }) -join '; '
+    adb shell $cmd
 }
 
 function Invoke-Clean {

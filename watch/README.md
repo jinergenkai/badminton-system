@@ -139,6 +139,7 @@ Các lệnh lẻ khác của `deploy.ps1`:
 | `-StopMiFitness` | chỉ dừng Mi Fitness |
 | `-Mem` | xem RAM và tiến trình ăn RAM nhiều nhất |
 | `-Slim` / `-Unslim` | tắt / bật lại Google bloat, giới hạn chạy nền (lâu dài) |
+| `-Court` / `-Uncourt` | chạy **một lần ở nhà**: tắt hẳn Zalo, Galaxy Wearable, ChatGPT, Chess, EnglishScore; chặn chạy ngầm TikTok, WireGuard và các app không dùng ở sân (vẫn mở được bình thường). Giữ nguyên sau khi khởi động lại |
 
 ### Âm thanh: Sound Library
 
