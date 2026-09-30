@@ -11,6 +11,7 @@ import 'history_screen.dart';
 import 'settings_screen.dart';
 import 'players_screen.dart';
 import 'sound_library_screen.dart';
+import '../services/phone_volume_service.dart';
 
 class ScoreScreen extends StatefulWidget {
   const ScoreScreen({super.key});
@@ -248,6 +249,36 @@ class _ScoreScreenState extends State<ScoreScreen> {
           }),
           Row(
             children: [
+              // Only while the phone's media volume is below max: the app's own
+              // Master (on the band) is the knob to use, the phone should sit at max.
+              if (PhoneVolumeService.maybe != null) Obx(() {
+                final vol = PhoneVolumeService.maybe!;
+                if (vol.atMax) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: InkWell(
+                    onTap: vol.setMax,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.orangeAccent),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.volume_down, color: Colors.orangeAccent, size: 22),
+                          const SizedBox(width: 4),
+                          Text('${vol.cur.value}/${vol.max.value}',
+                              style: const TextStyle(
+                                  color: Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
               _buildTopIconButton(icon: Icons.groups, onPressed: () => Get.to(() => const PlayersScreen())),
               const SizedBox(width: 12),
               _buildTopIconButton(icon: Icons.library_music, onPressed: () => Get.to(() => const SoundLibraryScreen())),

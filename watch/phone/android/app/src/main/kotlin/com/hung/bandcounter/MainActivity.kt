@@ -1,5 +1,7 @@
 package com.hung.bandcounter
 
+import android.content.Context
+import android.media.AudioManager
 import android.os.Bundle
 import android.util.Log
 import android.view.WindowManager
@@ -160,6 +162,23 @@ class MainActivity : FlutterActivity() {
                 }
                 "getDiagnostics" -> result.success(lastReport)
                 "isWatchConnected" -> result.success(watchNodeId != null)
+                else -> result.notImplemented()
+            }
+        }
+
+        // Phone media volume, for the "volume not at max" warning on the board.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.voice_counter/volume").setMethodCallHandler { call, result ->
+            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+            when (call.method) {
+                "get" -> result.success(mapOf("cur" to am.getStreamVolume(AudioManager.STREAM_MUSIC), "max" to max))
+                "setMax" -> {
+                    try {
+                        // FLAG_SHOW_UI: the system slider shows, so it is clear what changed.
+                        am.setStreamVolume(AudioManager.STREAM_MUSIC, max, AudioManager.FLAG_SHOW_UI)
+                    } catch (e: Exception) { Log.w(TAG, "setMax volume: ${e.message}") }
+                    result.success(mapOf("cur" to am.getStreamVolume(AudioManager.STREAM_MUSIC), "max" to max))
+                }
                 else -> result.notImplemented()
             }
         }
