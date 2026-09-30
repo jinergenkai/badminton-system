@@ -5,6 +5,7 @@ import '../services/audio_settings.dart';
 import '../services/tts_service.dart';
 import '../services/sound_check_service.dart';
 import '../services/voice_clip_service.dart';
+import '../services/display_settings.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -42,7 +43,7 @@ class SettingsScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _buildSoundCard().animate().fadeIn(delay: 50.ms),
             const SizedBox(height: 32),
-            _sectionHeader('GAME'),
+            _sectionHeader('GAME & DISPLAY'),
             const SizedBox(height: 16),
             _buildGameCard().animate().fadeIn(delay: 150.ms),
           ],
@@ -176,10 +177,6 @@ class SettingsScreen extends StatelessWidget {
                     score.setScoreAnnouncementsEnabled),
                 _toggle('Hype', hype.isEnabled.value, Colors.cyanAccent, (v) {
                   hype.isEnabled.value = v;
-                  hype.savePreferences();
-                }),
-                _toggle('K.O effect', hype.koEffectEnabled.value, Colors.cyanAccent, (v) {
-                  hype.koEffectEnabled.value = v;
                   hype.savePreferences();
                 }),
                 _toggle('Tension', music.tensionMusicEnabled.value, Colors.orangeAccent, (v) {
@@ -396,7 +393,34 @@ class SettingsScreen extends StatelessWidget {
 
   Widget _buildGameCard() {
     final controller = Get.find<ScoreController>();
+    final fx = Get.find<DisplaySettings>();
     return _card([
+      Obx(() {
+        final high = fx.isHigh;
+        return _tile(
+          icon: Icons.auto_awesome,
+          title: 'Graphics',
+          subtitle: high
+              ? 'High: glow, fire, balloons, full K.O — 30 fps'
+              : 'Low: line + dim side + slow blink, light K.O — 10 fps, saves battery',
+          trailing: SegmentedButton<String>(
+            showSelectedIcon: false,
+            style: SegmentedButton.styleFrom(
+              selectedBackgroundColor: Colors.amber.withOpacity(0.25),
+              selectedForegroundColor: Colors.amber,
+              foregroundColor: Colors.white54,
+              visualDensity: VisualDensity.compact,
+            ),
+            segments: const [
+              ButtonSegment(value: DisplaySettings.low, label: Text('Low')),
+              ButtonSegment(value: DisplaySettings.high, label: Text('High')),
+            ],
+            selected: {fx.level.value},
+            onSelectionChanged: (v) => fx.setLevel(v.first),
+          ),
+        );
+      }),
+      _div(),
       Obx(() => _tile(
             icon: Icons.swap_horiz,
             title: 'Swap Sides',

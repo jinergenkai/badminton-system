@@ -8,6 +8,7 @@ import 'services/player_service.dart';
 import 'services/voice_clip_service.dart';
 import 'services/sound_library_service.dart';
 import 'services/phone_controls_service.dart';
+import 'services/display_settings.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,7 @@ void main() async {
   // Registered before any player: every service multiplies its own level by
   // the master volume held here.
   await Get.putAsync(() => AudioSettings().init());
+  await Get.putAsync(() => DisplaySettings().init());
   await Get.putAsync(() => PlayerService().init());
   await Get.putAsync(() => VoiceClipService().init());
   await Get.putAsync(() => SoundLibraryService().init());

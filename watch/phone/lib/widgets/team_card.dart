@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import '../services/display_settings.dart';
+import 'frame_clock.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -38,35 +40,41 @@ class TeamCard extends StatefulWidget {
   State<TeamCard> createState() => _TeamCardState();
 }
 
-class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin {
-  late AnimationController _servicePulseCtrl;
+class _TeamCardState extends State<TeamCard> {
+  late final FrameClock _servicePulseCtrl;
 
   @override
   void initState() {
     super.initState();
-    _servicePulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000), // Faster for strobe feel
-    );
-    // A running controller makes Flutter draw every frame (60/s) even when
-    // nothing uses it: measured 40% UI + 30% raster CPU on the tablet at 0-0.
-    // So it only runs while this card is the serving one.
+    // Throttled (30 fps high / 10 fps low) and only running while this card
+    // is the serving one: a repeating AnimationController drew 60 frames a
+    // second even at 0-0 — measured 40% UI + 30% raster CPU on the tablet.
+    _servicePulseCtrl = FrameClock(period: _strobePeriod, fps: _fx.fps, reverse: true);
     final hype = Get.find<HypeVoiceController>();
     _pulseSubs = [
       ever(hype.currentStreakTeam, (_) => _syncPulse()),
       ever(hype.streakCount, (_) => _syncPulse()),
+      ever(_fx.level, (_) {
+        _servicePulseCtrl.configure(period: _strobePeriod, fps: _fx.fps);
+        if (mounted) setState(() {});
+      }),
     ];
     _syncPulse();
   }
+
+  DisplaySettings get _fx => DisplaySettings.maybe ?? (DisplaySettings()..level.value = DisplaySettings.low);
+
+  /// One full bright→dim→bright cycle; low blinks slowly.
+  Duration get _strobePeriod => Duration(milliseconds: _fx.isHigh ? 2000 : 4000);
 
   late final List<Worker> _pulseSubs;
 
   void _syncPulse() {
     if (!mounted) return;
     final serving = _streak(Get.find<HypeVoiceController>()) > 0;
-    if (serving && !_servicePulseCtrl.isAnimating) {
-      _servicePulseCtrl.repeat(reverse: true);
-    } else if (!serving && _servicePulseCtrl.isAnimating) {
+    if (serving) {
+      _servicePulseCtrl.start();
+    } else {
       _servicePulseCtrl.stop();
     }
   }
@@ -105,6 +113,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
           final intensity = _intensity(streak);
           final bool onStreak = streak >= 2;
           final bool isServing = streak > 0;
+          final bool fxHigh = _fx.level.value == DisplaySettings.high;
 
           return AnimatedContainer(
             duration: const Duration(milliseconds: 500),
@@ -155,6 +164,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
                                 pulse: _servicePulseCtrl.value,
                                 color: widget.primaryColor,
                                 intensity: intensity,
+                                glow: fxHigh,
                               ),
                             );
                           },
@@ -162,7 +172,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
                       ),
 
                     // ── Original fire effect (streak >= 2) ────────────────
-                    if (onStreak)
+                    if (onStreak && fxHigh)
                       Positioned.fill(
                         child: _ModernFireEffect(
                           color: widget.primaryColor.withOpacity(0.35 + intensity * 0.25),
@@ -170,7 +180,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
                       ),
 
                     // ── Balloon celebration (streak >= 3) ─────────────────
-                    if (streak >= 3)
+                    if (streak >= 3 && fxHigh)
                       Positioned.fill(
                         child: _BalloonEffect(
                           color: widget.accentColor.withOpacity(0.20 + intensity * 0.20),
@@ -180,7 +190,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
                     if (widget.mascotAsset != null)
                       _buildWatermark(widget.mascotAsset!, width, height, intensity),
 
-                    _buildScoreArea(width, height, isTablet, streak, intensity),
+                    _buildScoreArea(width, height, isTablet, streak, intensity, fxHigh),
 
                     Positioned(
                       top: 10,
@@ -221,7 +231,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
   }
 
   Widget _buildScoreArea(
-      double w, double h, bool isTablet, int streak, double intensity) {
+      double w, double h, bool isTablet, int streak, double intensity, bool fxHigh) {
     double fontSize = isTablet
         ? (h * 0.75).clamp(150, 500)
         : (h * 0.7).clamp(100, 250);
@@ -294,6 +304,7 @@ class _TeamCardState extends State<TeamCard> with SingleTickerProviderStateMixin
                 accentColor: widget.accentColor,
                 scaleBegin: scaleBegin,
                 scaleDurationMs: scaleDurationMs,
+                fxHigh: fxHigh,
               ),
 
               const Spacer(flex: 2),
@@ -359,6 +370,10 @@ class _ServiceHighlightPainter extends CustomPainter {
   final Color color;
   final double intensity;
 
+  /// The soft halo around the dividing line: a blur, the costly part of this
+  /// painter on a weak GPU. Low graphics draws a flat wide band instead.
+  final bool glow;
+
   _ServiceHighlightPainter({
     required this.isLeftPanel,
     required this.streak,
@@ -366,6 +381,7 @@ class _ServiceHighlightPainter extends CustomPainter {
     required this.pulse,
     required this.color,
     required this.intensity,
+    this.glow = true,
   });
 
   @override
@@ -440,10 +456,10 @@ class _ServiceHighlightPainter extends CustomPainter {
     
     // Outer Glow (Wide)
     final outerGlow = Paint()
-      ..color = color.withOpacity(0.2 + intensity * 0.5)
-      ..strokeWidth = 15.0 + intensity * 25.0
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12)
+      ..color = color.withOpacity((0.2 + intensity * 0.5) * (glow ? 1 : 0.5))
+      ..strokeWidth = glow ? 15.0 + intensity * 25.0 : 8.0
       ..style = PaintingStyle.stroke;
+    if (glow) outerGlow.maskFilter = const MaskFilter.blur(BlurStyle.normal, 12);
     canvas.drawLine(pLeft, pRight, outerGlow);
 
     // Inner Line (Solid White Strobe)
@@ -459,7 +475,8 @@ class _ServiceHighlightPainter extends CustomPainter {
       oldDelegate.pulse != pulse || 
       oldDelegate.streak != streak || 
       oldDelegate.score != score || 
-      oldDelegate.intensity != intensity;
+      oldDelegate.intensity != intensity ||
+      oldDelegate.glow != glow;
 }
 
 // ── Pulsing score: continuous breathe loop + pop on score change ─────
@@ -473,6 +490,10 @@ class _PulsingScore extends StatefulWidget {
   final double scaleBegin;
   final int scaleDurationMs;
 
+  /// Low graphics: the pop on a new score stays, the breathing and the
+  /// shimmer go.
+  final bool fxHigh;
+
   const _PulsingScore({
     required this.score,
     required this.streak,
@@ -482,15 +503,17 @@ class _PulsingScore extends StatefulWidget {
     required this.accentColor,
     required this.scaleBegin,
     required this.scaleDurationMs,
+    this.fxHigh = true,
   });
 
   @override
   State<_PulsingScore> createState() => _PulsingScoreState();
 }
 
-class _PulsingScoreState extends State<_PulsingScore>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
+class _PulsingScoreState extends State<_PulsingScore> {
+  late final FrameClock _ctrl;
+
+  bool get _breathing => widget.streak >= 2 && widget.fxHigh;
 
   // Pulse amplitude grows with streak: 0 → 3% → 6% → 9% → 12%
   double get _amplitude {
@@ -504,21 +527,17 @@ class _PulsingScoreState extends State<_PulsingScore>
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    if (widget.streak >= 2) _ctrl.repeat();
+    _ctrl = FrameClock(period: const Duration(milliseconds: 600), fps: 30);
+    if (_breathing) _ctrl.start();
   }
 
   @override
   void didUpdateWidget(covariant _PulsingScore old) {
     super.didUpdateWidget(old);
-    final bool wasActive = old.streak >= 2;
-    final bool isActive = widget.streak >= 2;
-    if (isActive && !wasActive) {
-      _ctrl.repeat();
-    } else if (!isActive && wasActive) {
+    final bool wasActive = old.streak >= 2 && old.fxHigh;
+    if (_breathing && !wasActive) {
+      _ctrl.start();
+    } else if (!_breathing && wasActive) {
       _ctrl.stop();
       _ctrl.value = 0; // reset so Transform.scale returns 1.0
     }
@@ -532,9 +551,7 @@ class _PulsingScoreState extends State<_PulsingScore>
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _ctrl,
-      child: Text(
+    final text = Text(
         '${widget.score}',
         key: ValueKey(widget.score),
         style: GoogleFonts.orbitron(
@@ -559,23 +576,24 @@ class _PulsingScoreState extends State<_PulsingScore>
             ),
           ],
         ),
-      )
-          .animate(key: ValueKey(widget.score))
-          .scale(
-            duration: Duration(milliseconds: widget.scaleDurationMs),
-            curve: Curves.easeOutBack,
-            begin: Offset(widget.scaleBegin, widget.scaleBegin),
-            end: const Offset(1.0, 1.0),
-          )
-          .shimmer(
-            duration:
-                Duration(milliseconds: widget.streak >= 4 ? 480 : 1200),
-            color: Colors.white.withOpacity(0.20 + widget.intensity * 0.55),
-          ),
+      );
+    var popped = text.animate(key: ValueKey(widget.score)).scale(
+          duration: Duration(milliseconds: widget.scaleDurationMs),
+          curve: Curves.easeOutBack,
+          begin: Offset(widget.scaleBegin, widget.scaleBegin),
+          end: const Offset(1.0, 1.0),
+        );
+    if (widget.fxHigh) {
+      popped = popped.shimmer(
+        duration: Duration(milliseconds: widget.streak >= 4 ? 480 : 1200),
+        color: Colors.white.withOpacity(0.20 + widget.intensity * 0.55),
+      );
+    }
+    return AnimatedBuilder(
+      animation: _ctrl,
+      child: popped,
       builder: (_, child) {
-        final pulse = widget.streak >= 2
-            ? 1.0 + math.sin(_ctrl.value * 2 * math.pi) * _amplitude
-            : 1.0;
+        final pulse = _breathing ? 1.0 + math.sin(_ctrl.value * 2 * math.pi) * _amplitude : 1.0;
         return Transform.scale(scale: pulse, child: child);
       },
     );
@@ -600,18 +618,15 @@ class _ModernFireEffect extends StatefulWidget {
   State<_ModernFireEffect> createState() => _ModernFireEffectState();
 }
 
-class _ModernFireEffectState extends State<_ModernFireEffect>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+class _ModernFireEffectState extends State<_ModernFireEffect> {
+  late final FrameClock _controller;
   late final List<_FireStreak> _streaks;
   @override
   void initState() {
     super.initState();
     final r = math.Random(42);
     _streaks = List.generate(25, (_) => _FireStreak(r));
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 1))
-          ..repeat();
+    _controller = FrameClock(period: const Duration(seconds: 1), fps: 30)..start();
   }
   @override
   void dispose() {
@@ -678,17 +693,14 @@ class _BalloonEffect extends StatefulWidget {
   State<_BalloonEffect> createState() => _BalloonEffectState();
 }
 
-class _BalloonEffectState extends State<_BalloonEffect>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+class _BalloonEffectState extends State<_BalloonEffect> {
+  late final FrameClock _controller;
   final List<_Balloon> _balloons =
       List.generate(12, (index) => _Balloon());
   @override
   void initState() {
     super.initState();
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(seconds: 3))
-          ..repeat();
+    _controller = FrameClock(period: const Duration(seconds: 3), fps: 30)..start();
   }
   @override
   void dispose() {

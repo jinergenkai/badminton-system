@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../features/hype_voice/models/hype_display_event.dart';
+import '../services/display_settings.dart';
 
 class KillOverlay extends StatefulWidget {
   final HypeDisplayEvent event;
@@ -36,6 +37,7 @@ class _KillOverlayState extends State<KillOverlay> {
     final size = MediaQuery.of(context).size;
     final mascotSize = (size.width * 0.72).clamp(180.0, 380.0);
     final fontSize = _fontSize(widget.event.displayText);
+    if (!(DisplaySettings.maybe?.isHigh ?? true)) return _light(size, mascotSize, fontSize);
 
     // AnimatedOpacity handles the smooth fade — even if system disables animation
     // (300ms becomes instant), the 1200ms visible window is always guaranteed by Timer.
@@ -150,6 +152,42 @@ class _KillOverlayState extends State<KillOverlay> {
                         .shake(duration: 2000.ms, hz: 2, offset: const Offset(2, 0)),
                   ],
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Low graphics: the mascot and the text pop in and fade — no rays, speed
+  /// lines, particles, blur or loops.
+  Widget _light(Size size, double mascotSize, double fontSize) {
+    return AnimatedOpacity(
+      opacity: _opacity,
+      duration: const Duration(milliseconds: 300),
+      child: IgnorePointer(
+        child: SizedBox.expand(
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned.fill(child: ColoredBox(color: Colors.black.withOpacity(0.45))),
+              Image.asset(widget.mascotAsset, width: mascotSize, height: mascotSize, fit: BoxFit.contain)
+                  .animate()
+                  .scale(begin: const Offset(0.4, 0.4), end: const Offset(1.0, 1.0), duration: 350.ms, curve: Curves.easeOutBack),
+              Positioned(
+                bottom: size.height * 0.15,
+                child: Text(
+                  widget.event.displayText,
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.orbitron(
+                    fontSize: fontSize,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    letterSpacing: 2,
+                    shadows: [Shadow(color: widget.event.glowColor, blurRadius: 12)],
+                  ),
+                ).animate().scale(begin: const Offset(2, 2), end: const Offset(1, 1), duration: 300.ms, curve: Curves.easeOut),
               ),
             ],
           ),

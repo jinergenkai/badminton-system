@@ -17,7 +17,6 @@ class HypeVoiceController extends GetxController {
 
   final RxBool isEnabled = true.obs;
   final RxDouble volume = 0.2.obs;
-  final RxBool koEffectEnabled = true.obs;
 
   final RxString currentStreakTeam = ''.obs;
   final RxInt streakCount = 0.obs;
@@ -102,14 +101,12 @@ class HypeVoiceController extends GetxController {
     isEnabled.value = prefs.getBool('${_prefPrefix}enabled') ?? true;
     // Clamped: a level above 100% may be saved from a build that allowed it.
     volume.value = (prefs.getDouble('${_prefPrefix}volume') ?? 0.2).clamp(0.0, 1.0);
-    koEffectEnabled.value = prefs.getBool('${_prefPrefix}ko_enabled') ?? true;
   }
 
   Future<void> savePreferences() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('${_prefPrefix}enabled', isEnabled.value);
     await prefs.setDouble('${_prefPrefix}volume', volume.value);
-    await prefs.setBool('${_prefPrefix}ko_enabled', koEffectEnabled.value);
   }
 
   void _setupAudio() {
@@ -211,19 +208,18 @@ class HypeVoiceController extends GetxController {
     _pendingHypeId = voiceId;
 
     // Trigger display overlay immediately
-    if (koEffectEnabled.value) {
-      displayEvent.value = HypeDisplayEvent(
-        voiceId: voiceId,
-        displayText: _getDisplayText(voiceId),
-        team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
-        glowColor: _glowColor(voiceId),
-      );
-      Future.delayed(const Duration(milliseconds: 1800), () {
-        if (displayEvent.value?.voiceId == voiceId) {
-          displayEvent.value = null;
-        }
-      });
-    }
+    // How much of the K.O overlay shows is the graphics level (Settings).
+    displayEvent.value = HypeDisplayEvent(
+      voiceId: voiceId,
+      displayText: _getDisplayText(voiceId),
+      team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
+      glowColor: _glowColor(voiceId),
+    );
+    Future.delayed(const Duration(milliseconds: 1800), () {
+      if (displayEvent.value?.voiceId == voiceId) {
+        displayEvent.value = null;
+      }
+    });
     print('🔥 [Hype] Manual trigger via score update: $voiceId');
   }
 
@@ -232,19 +228,18 @@ class HypeVoiceController extends GetxController {
     _pendingHypeId = voiceId;
 
     // 2. Trigger display overlay immediately
-    if (koEffectEnabled.value) {
-      displayEvent.value = HypeDisplayEvent(
-        voiceId: voiceId,
-        displayText: _getDisplayText(voiceId),
-        team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
-        glowColor: _glowColor(voiceId),
-      );
-      Future.delayed(const Duration(milliseconds: 1800), () {
-        if (displayEvent.value?.voiceId == voiceId) {
-          displayEvent.value = null;
-        }
-      });
-    }
+    // How much of the K.O overlay shows is the graphics level (Settings).
+    displayEvent.value = HypeDisplayEvent(
+      voiceId: voiceId,
+      displayText: _getDisplayText(voiceId),
+      team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
+      glowColor: _glowColor(voiceId),
+    );
+    Future.delayed(const Duration(milliseconds: 1800), () {
+      if (displayEvent.value?.voiceId == voiceId) {
+        displayEvent.value = null;
+      }
+    });
 
     // 3. Play logic:
     // If TTS is active, we do nothing. ScoreController.onSpeechCompleted will
@@ -422,30 +417,29 @@ class HypeVoiceController extends GetxController {
     print('🔥 [Hype] Triggers: $triggerIds → pending: $chosen');
 
     // Emit display event for full-screen overlay
-    if (koEffectEnabled.value) {
-      // Allow interruption if the previous event has been showing for a while (2.5s+)
-      final now = DateTime.now();
-      if (displayEvent.value != null && _lastEventTime != null) {
-        if (now.difference(_lastEventTime!).inMilliseconds < 1500) {
-          print('🔥 [Hype] Overlay too recent, skipping: $chosen');
-          return;
-        }
+    // How much of the K.O overlay shows is the graphics level (Settings).
+    // Allow interruption if the previous event has been showing for a while (2.5s+)
+    final now = DateTime.now();
+    if (displayEvent.value != null && _lastEventTime != null) {
+      if (now.difference(_lastEventTime!).inMilliseconds < 1500) {
+        print('🔥 [Hype] Overlay too recent, skipping: $chosen');
+        return;
       }
-
-      _lastEventTime = now;
-      displayEvent.value = HypeDisplayEvent(
-        voiceId: chosen,
-        displayText: _getDisplayText(chosen),
-        team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
-        glowColor: _glowColor(chosen),
-      );
-      // Auto-clear after overlay animation completes (~1.5s)
-      Future.delayed(const Duration(milliseconds: 1800), () {
-        if (displayEvent.value?.voiceId == chosen) {
-          displayEvent.value = null;
-        }
-      });
     }
+
+    _lastEventTime = now;
+    displayEvent.value = HypeDisplayEvent(
+      voiceId: chosen,
+      displayText: _getDisplayText(chosen),
+      team: currentStreakTeam.value.isEmpty ? 'A' : currentStreakTeam.value,
+      glowColor: _glowColor(chosen),
+    );
+    // Auto-clear after overlay animation completes (~1.5s)
+    Future.delayed(const Duration(milliseconds: 1800), () {
+      if (displayEvent.value?.voiceId == chosen) {
+        displayEvent.value = null;
+      }
+    });
   }
 
   /// Least-played random over GLOBAL per-file counts: pick uniformly among
