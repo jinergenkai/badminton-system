@@ -56,10 +56,12 @@ class AudioSettings extends GetxService {
   Future<AudioSettings> init() async {
     final prefs = await SharedPreferences.getInstance();
     masterVolume.value = prefs.getDouble('${_pref}master') ?? 1.0;
-    mode.value = prefs.getString('${_pref}mode') ?? PlayMode.commentary;
+    // Every launch starts in commentary — the mode people know. Music is
+    // switched on per session (phone or band) and not remembered.
+    mode.value = PlayMode.commentary;
     shortScore.value = prefs.getBool('${_pref}short_score') ?? true;
     // Left by settings that no longer exist.
-    for (final k in const ['haptic_feedback_enabled', 'hype_ko_enabled', 'voice_boost']) {
+    for (final k in const ['haptic_feedback_enabled', 'hype_ko_enabled', 'voice_boost', '${_pref}mode']) {
       if (prefs.containsKey(k)) await prefs.remove(k);
     }
     return this;
@@ -80,8 +82,6 @@ class AudioSettings extends GetxService {
   Future<void> setMode(String m) async {
     if (m != PlayMode.commentary && m != PlayMode.music) return;
     mode.value = m;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('${_pref}mode', m);
   }
 
   /// Convenience for callers that only have a Get context.
