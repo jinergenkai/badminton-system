@@ -16,7 +16,7 @@ class HypeVoiceController extends GetxController {
   final List<HypeStateSnapshot> _historyStack = [];
 
   final RxBool isEnabled = true.obs;
-  final RxDouble volume = 0.2.obs;
+  final RxDouble volume = 0.55.obs; // default tuned on court
 
   final RxString currentStreakTeam = ''.obs;
   final RxInt streakCount = 0.obs;
@@ -100,7 +100,7 @@ class HypeVoiceController extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     isEnabled.value = prefs.getBool('${_prefPrefix}enabled') ?? true;
     // Clamped: a level above 100% may be saved from a build that allowed it.
-    volume.value = (prefs.getDouble('${_prefPrefix}volume') ?? 0.2).clamp(0.0, 1.0);
+    volume.value = (prefs.getDouble('${_prefPrefix}volume') ?? 0.55).clamp(0.0, 1.0);
   }
 
   Future<void> savePreferences() async {

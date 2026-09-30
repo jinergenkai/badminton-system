@@ -6,7 +6,7 @@ import 'package:get/get.dart';
 class TtsService extends GetxService {
   final FlutterTts _flutterTts = FlutterTts();
   bool _isInitialized = false;
-  final RxString _currentLanguage = 'en-US'.obs;
+  final RxString _currentLanguage = 'vi-VN'.obs;
   final RxBool isSpeaking = false.obs;
   final RxDouble volume = 1.0.obs;
 
@@ -38,7 +38,7 @@ class TtsService extends GetxService {
         isSpeaking.value = false;
       });
       final prefs = await SharedPreferences.getInstance();
-      _currentLanguage.value = prefs.getString('tts_language') ?? 'en-US';
+      _currentLanguage.value = prefs.getString('tts_language') ?? 'vi-VN';
       // Clamped: a level above 100% may be saved from a build that allowed it.
       volume.value = (prefs.getDouble('tts_volume') ?? 1.0).clamp(0.0, 1.0);
 

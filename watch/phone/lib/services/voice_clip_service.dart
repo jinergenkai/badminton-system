@@ -33,7 +33,7 @@ class VoiceClipService extends GetxService {
   static const _maxBytes = 40 * 1024 * 1024;
 
   /// Extra gain after level-matching. 1.0 = as loud as the score MP3s.
-  final RxDouble boost = 1.0.obs;
+  final RxDouble boost = 1.4.obs; // default tuned on court
   static const double maxBoost = 4.0;
 
   /// ms the last real synthesis took (0 while everything came from disk):
@@ -51,7 +51,7 @@ class VoiceClipService extends GetxService {
 
   Future<VoiceClipService> init() async {
     final prefs = await SharedPreferences.getInstance();
-    boost.value = (((prefs.getDouble(_prefBoost) ?? 1.0) * 10).round() / 10).clamp(0.0, maxBoost);
+    boost.value = (((prefs.getDouble(_prefBoost) ?? 1.4) * 10).round() / 10).clamp(0.0, maxBoost);
     final base = await getApplicationSupportDirectory();
     _raw = Directory('${base.path}/tts_cache/raw')..createSync(recursive: true);
     _out = Directory('${base.path}/tts_cache/out')..createSync(recursive: true);

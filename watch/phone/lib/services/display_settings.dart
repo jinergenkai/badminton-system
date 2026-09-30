@@ -15,7 +15,7 @@ class DisplaySettings extends GetxService {
   static const low = 'low';
   static const _pref = 'graphics_level';
 
-  final RxString level = high.obs;
+  final RxString level = low.obs;
 
   bool get isHigh => level.value == high;
 
@@ -25,11 +25,10 @@ class DisplaySettings extends GetxService {
   static DisplaySettings? get maybe =>
       Get.isRegistered<DisplaySettings>() ? Get.find<DisplaySettings>() : null;
 
-  /// Default high; an install that had the K.O effect switched off starts low.
+  /// Default low: the court tablet is a cheap one.
   Future<DisplaySettings> init() async {
     final prefs = await SharedPreferences.getInstance();
-    final saved = prefs.getString(_pref);
-    level.value = saved ?? ((prefs.getBool('hype_ko_enabled') ?? true) ? high : low);
+    level.value = prefs.getString(_pref) ?? low;
     return this;
   }
 

@@ -73,7 +73,7 @@ class ScoreAnnouncerService extends GetxService {
     });
 
     final prefs = await SharedPreferences.getInstance();
-    currentLanguage.value = _normalize(prefs.getString('tts_language'));
+    currentLanguage.value = _normalize(prefs.getString('tts_language') ?? 'vi-VN');
     final savedVolume = prefs.getDouble('tts_volume') ?? 1.0;
     _ownVolume = savedVolume;
     await _player.setVolume(_scaled(savedVolume));

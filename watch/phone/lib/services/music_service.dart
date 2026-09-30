@@ -24,13 +24,14 @@ class MusicService extends GetxController {
   // Settings
   final RxBool winMusicEnabled = true.obs;
   final RxBool tensionMusicEnabled = true.obs;
-  final RxDouble winVolume = 1.0.obs;
-  final RxDouble tensionVolume = 0.45.obs;
+  // Defaults tuned on the court tablet.
+  final RxDouble winVolume = 0.6.obs;
+  final RxDouble tensionVolume = 0.6.obs;
 
   /// Music level while anyone speaks, as a fraction of its normal level.
-  final RxDouble duckLevel = 0.25.obs;
+  final RxDouble duckLevel = 0.3.obs;
   final RxInt tensionThreshold = 15.obs;
-  final RxString playMode = 'random'.obs; // 'random' | 'sequential'
+  final RxString playMode = 'sequential'.obs; // 'random' | 'sequential'
 
   int _sequentialIndex = 0;
   double _currentVolume = 0.0;
@@ -489,12 +490,12 @@ class MusicService extends GetxController {
     final prefs = await SharedPreferences.getInstance();
     winMusicEnabled.value = prefs.getBool('${_pref}win_enabled') ?? true;
     tensionMusicEnabled.value = prefs.getBool('${_pref}tension_enabled') ?? true;
-    winVolume.value = prefs.getDouble('${_pref}win_volume') ?? 1.0;
-    tensionVolume.value = prefs.getDouble('${_pref}tension_volume') ?? 0.45;
+    winVolume.value = prefs.getDouble('${_pref}win_volume') ?? 0.6;
+    tensionVolume.value = prefs.getDouble('${_pref}tension_volume') ?? 0.6;
     tensionThreshold.value = prefs.getInt('${_pref}tension_threshold') ?? 15;
-    duckLevel.value = prefs.getDouble('${_pref}duck_level') ?? 0.25;
-    playMode.value = prefs.getString('${_pref}play_mode') ?? 'random';
-    isNonStop.value = prefs.getBool('${_pref}non_stop') ?? false;
+    duckLevel.value = prefs.getDouble('${_pref}duck_level') ?? 0.3;
+    playMode.value = prefs.getString('${_pref}play_mode') ?? 'sequential';
+    isNonStop.value = prefs.getBool('${_pref}non_stop') ?? true;
   }
 
   Future<void> savePreferences() async {

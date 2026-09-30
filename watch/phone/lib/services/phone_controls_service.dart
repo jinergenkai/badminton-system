@@ -39,7 +39,7 @@ class PhoneControlsService extends GetxService {
 
   Future<void> _restore() async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_prefBright) ?? false) {
+    if (prefs.getBool(_prefBright) ?? true) {
       await _apply(_channel.invokeMethod('setBrightnessMax', {'on': true}));
     } else {
       await refresh();
