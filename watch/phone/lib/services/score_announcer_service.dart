@@ -143,7 +143,8 @@ class ScoreAnnouncerService extends GetxService {
     String? tail = serverName == null || serverName.isEmpty ? null : serveTail(serverName, lang);
     // Boosted clip ready: it simply joins the file sequence. Otherwise the
     // tail is spoken live by TTS after the files.
-    final clip = tail == null ? null : _clip(tail);
+    final clip = tail == null ? null : await _clip(tail);
+    if (myJob != _currentJob) return;
     if (clip != null) {
       files.add(clip);
       tail = null;
@@ -205,7 +206,8 @@ class ScoreAnnouncerService extends GetxService {
 
     // Boosted clip + bundled number clips when ready; plain TTS otherwise.
     final lang = currentLanguage.value;
-    final clip = _clip(winnerLine(winnerName, lang));
+    final clip = await _clip(winnerLine(winnerName, lang));
+    if (myJob != _currentJob) return;
     if (clip != null && _inRange(teamAScore) && _inRange(teamBScore)) {
       await _playSequence(
         myJob,
@@ -229,15 +231,9 @@ class ScoreAnnouncerService extends GetxService {
   static String winnerLine(String winnerName, String lang) =>
       lang.startsWith('vi') ? '$winnerName thắng' : '$winnerName wins';
 
-  /// A boosted clip for [text] if one is ready; otherwise null, and one is
-  /// prepared in the background for next time.
-  String? _clip(String text) {
-    final v = VoiceClipService.maybe;
-    if (v == null) return null;
-    final p = v.ready(text);
-    if (p == null) v.prepare(text);
-    return p;
-  }
+  /// The cached clip for [text] (level-matched and boosted); null when it
+  /// was never rendered — it is then rendered in the background for next time.
+  Future<String?> _clip(String text) async => VoiceClipService.maybe?.resolve(text);
 
   /// Plays `files` sequentially with cancel awareness. On any missing asset
   /// or playback error, delegates to `onFallback` (which speaks via TTS).

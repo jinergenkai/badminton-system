@@ -1,8 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -10,6 +8,8 @@ import 'package:voice_counter/services/tts_service.dart';
 import '../models/hype_state_snapshot.dart';
 import '../models/hype_display_event.dart';
 import 'package:voice_counter/services/audio_settings.dart';
+import 'package:voice_counter/services/sound_library_service.dart';
+import 'package:voice_counter/services/voice_clip_service.dart';
 
 class HypeVoiceController extends GetxController {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -39,164 +39,60 @@ class HypeVoiceController extends GetxController {
   static const int _setPoint = 21;
   static const int _comebackDeficitThreshold = 4;
 
-  final List<String> _bundledFiles = [];
-
-  static const Map<String, String> _displayTexts = {
-    'double_kill': 'DOUBLE KILL',
-    'double_shot': 'DOUBLE SHOT',
-    'nice_pair': 'NICE PAIR',
-    'triple_kill': 'TRIPLE KILL',
-    'triple_shot': 'TRIPLE SHOT',
-    'hat_trick': 'HAT TRICK',
-    'quadra_kill': 'QUADRA KILL',
-    'quadra_shot': 'QUADRA SHOT',
-    'dominating': 'DOMINATING',
-    'penta_shot': 'PENTA SHOT',
-    'unstoppable': 'UNSTOPPABLE',
-    'badminton_slayer': 'BADMINTON\nSLAYER',
-    'rampage': 'RAMPAGE',
-    'did_you_see_that': 'DID YOU\nSEE THAT?',
-    'godlike': 'GODLIKE',
-    'legendary': 'LEGENDARY',
-    'to_the_moon': 'TO THE MOON',
-    'the_chosen_one': 'THE CHOSEN ONE',
-    'mom_are_you_watching': 'MOM, ARE YOU\nWATCHING?',
-    'shutdown': 'SHUTDOWN!',
-    'comeback_king': 'COMEBACK\nKING',
-    'unbelievable': 'UNBELIEVABLE',
-    'written_in_history': 'WRITTEN IN\nHISTORY',
-    'game_on': 'GAME ON',
-    'lets_dance': "LET'S DANCE",
-    'here_we_go': 'HERE WE GO',
-    // Vietnamese female pack
-    'dinh_noc_kich_tran': 'ĐỈNH NÓC\nKÍCH TRẦN',
-    'cu_danh_dep': 'CÚ ĐÁNH ĐẸP',
-    'cu_danh_sam_set': 'CÚ ĐÁNH\nSẤM SÉT',
-    'man_nhan': 'MÃN NHÃN',
-    'dinh_cua_chop': 'ĐỈNH CỦA CHÓP',
-    'cu_nay_khet': 'CÚ NÀY KHÉT',
-    'khet_let': 'KHÉT LẸT',
-    'phong_do_dinh_cao': 'PHONG ĐỘ\nĐỈNH CAO',
-    'dinh_cao_phong_do': 'ĐỈNH CAO\nPHONG ĐỘ',
-    'ai_can_noi': 'AI CẢN NỔI',
-    'nhu_tron_khong_nguoi': 'NHƯ TRỐNG\nKHÔNG NGƯỜI',
-    'quay_xe_cuc_gat': 'QUAY XE\nCỰC GẮT',
-    'lat_keo': 'LẬT KÈO',
-    'dinh_the_nho': 'ĐỈNH THẾ NHỜ',
-    'cham_dut': 'CHẤM DỨT',
-    'khong_the_tin_duoc': 'KHÔNG THỂ\nTIN ĐƯỢC',
-    'sam_set_giua_troi_quang': 'SẤM SÉT\nGIỮA TRỜI QUANG',
-    'thuc_tinh_he_thong': 'THỨC TỈNH\nHỆ THỐNG',
-    'vo_dich_thien_ha': 'VÔ ĐỊCH\nTHIÊN HẠ',
-    'cao_thu_cao_thu': 'CAO THỦ\nCAO THỦ',
-    'mot_phat_chet_tuoi': 'MỘT PHÁT\nCHẾT TƯƠI',
-    'dep_nhu_mo': 'ĐẸP NHƯ MƠ',
-    'co_may_ghi_diem': 'CỖ MÁY\nGHI ĐIỂM',
-    'de_bep': 'DẸP BẸP',
-    'manh_ho_xuat_son': 'MÃNH HỔ\nXUẤT SƠN',
-    'khong_ngung_bo_cuoc': 'KHÔNG NGỪNG\nBỎ CUỘC',
-    'xuat_quy_nhap_than': 'XUẤT QUỶ\nNHẬP THẦN',
-    'sao_ma_hay_vay_troi': 'SAO MÀ HAY\nVẬY TRỜI',
-    'sao_bang_xe_troi': 'SAO BĂNG\nXẸT TRỜI',
-    'mua_rao_giua_ha': 'MƯA RÀO\nGIỮA HẠ',
-    'manh_ho_vo_moi': 'MÃNH HỔ\nVÔ MỒI',
-    'cu_dap_ca_map': 'CÚ ĐẬP\nCÁ MẬP',
-    'tro_lai_tu_dong_tro_tan': 'TRỞ LẠI TỪ\nĐỐNG TRO TÀN',
-    'can_loi_can_y': 'CẢN LỜI\nCẢN Ý',
-    'khoi_can_ban_cao_nhan_an_the': 'CAO NHÂN\nẨN THẾ',
-    'chan_buoc_di_dau_khong_quay_lai': 'CHÂN BƯỚC\nKHÔNG QUAY LẠI',
-    'chay_the_nho': 'CHẠY THẾ NHỚ',
-    'xinh_trai_co_gi_sai': 'XINH TRAI\nCÓ GÌ SAI',
-    'qua_tang_mien_phi': 'QUÀ TẶNG\nMIỄN PHÍ',
-    'an_sung_troi_ban': 'ĂN SÚNG\nTRỜI BAN',
-    'nhu_dieu_dut_day': 'NHƯ DIỀU\nĐỨT DÂY',
-    'duong_cau_lam_tho': 'ĐƯỜNG CẦU\nLÀM THƠ',
-    'con_mua_ban_thang': 'CƠN MƯA\nBÀN THẮNG',
-    'toi_cong_chuyen': 'TÔI CÔNG\nCHUYÊN',
+  /// When each trigger fires — the conditions are code, in
+  /// [_triggerMatches]; what they play is the Sound Library. A trigger in
+  /// sound_library.json that is not listed here never fires.
+  static const Map<String, String> triggerLabels = {
+    'manual_trigger': 'Band: long-press a score button',
+    'match_end': 'Set won',
+    'crucial_moment': 'Set point / 20-all and up',
+    'shutdown': 'Ends an opponent streak of 5+',
+    'comeback': 'Back level after trailing by 4+',
+    'streak_5_plus': 'Streak of 5 or more',
+    'streak_4': 'Streak of exactly 4',
+    'streak_high': 'Streak of 4 or more',
+    'streak_3': 'Streak of exactly 3',
+    'streak_2': 'Streak of exactly 2',
+    'streak_low': 'Streak of 2 or 3',
+    'random_meme': 'Any streak of 2+ (mixed in)',
+    'first_point_of_match': 'New set starts',
   };
 
-  String _getDisplayText(String id) {
-    // Strip subfolder prefix (e.g. female_pack/cham_dut_f -> cham_dut_f)
-    final fileName = id.contains('/') ? id.split('/').last : id;
-    // Strip _f suffix (female pack) and numeric suffix (e.g. _1, _2)
-    final baseId = fileName
-        .replaceAll(RegExp(r'_f$'), '')
-        .replaceAll(RegExp(r'_\d+$'), '');
-    return _displayTexts[baseId] ?? baseId.toUpperCase().replaceAll('_', ' ');
-  }
+  SoundLibraryService? get _lib => SoundLibraryService.maybe;
 
-  static Color _glowColor(String id) {
-    // Strip subfolder prefix and _f / numeric suffixes for color lookup
-    final fileName = id.contains('/') ? id.split('/').last : id;
-    final baseId = fileName
-        .replaceAll(RegExp(r'_f$'), '')
-        .replaceAll(RegExp(r'_\d+$'), '');
-    const legendary = {
-      'godlike', 'legendary', 'to_the_moon', 'the_chosen_one',
-      'mom_are_you_watching', 'comeback_king', 'written_in_history',
-      'unbelievable',
-    };
-    const fire = {
-      'penta_shot', 'unstoppable', 'badminton_slayer', 'rampage',
-      'did_you_see_that', 'streak_7_plus',
-    };
-    const danger = {'shutdown'};
+  String _getDisplayText(String id) =>
+      (_lib?.sound(id) ?? SoundDef.fromFileId(id)).display;
 
-    if (legendary.contains(baseId)) return Colors.amberAccent;
-    if (fire.contains(baseId)) return Colors.deepOrangeAccent;
-    if (danger.contains(baseId)) return Colors.redAccent;
+  Color _glowColor(String id) {
+    switch (_lib?.sound(id)?.glow) {
+      case 'legendary':
+        return Colors.amberAccent;
+      case 'fire':
+        return Colors.deepOrangeAccent;
+      case 'danger':
+        return Colors.redAccent;
+    }
     return Colors.cyanAccent; // default streaks
   }
 
   // Called after hype audio finishes (or immediately if no hype queued)
   Function? onPlaybackCompleted;
 
-  // Called when MP3 is missing — ScoreController injects this to speak via TTS
+  // Called when a sound has no file and no rendered clip yet — ScoreController
+  // injects this to speak it via TTS (the clip is rendered for next time).
   Function(String text)? onTtsFallback;
 
   int _lastOpponentStreak = 0;
   int _maxDeficitTeamA = 0;
   int _maxDeficitTeamB = 0;
 
-  List<dynamic> _triggers = [];
   String? _pendingHypeId;
-
-  // TTS fallback texts when MP3 file is missing
-  static const Map<String, String> _ttsFallback = {
-    'double_kill': 'Double kill!',
-    'double_shot': 'Double shot!',
-    'nice_pair': 'Nice pair!',
-    'triple_kill': 'Triple kill!',
-    'triple_shot': 'Triple shot!',
-    'hat_trick': 'Hat trick!',
-    'quadra_kill': 'Quadra kill!',
-    'quadra_shot': 'Quadra shot!',
-    'dominating': 'Dominating!',
-    'penta_shot': 'Penta shot!',
-    'unstoppable': 'Unstoppable!',
-    'badminton_slayer': 'Badminton slayer!',
-    'rampage': 'Rampage!',
-    'did_you_see_that': 'Did you see that?',
-    'godlike': 'Godlike!',
-    'legendary': 'Legendary!',
-    'to_the_moon': 'To the moon!',
-    'the_chosen_one': 'The chosen one!',
-    'mom_are_you_watching': 'Mom, are you watching?',
-    'shutdown': 'Shutdown!',
-    'comeback_king': 'Comeback king!',
-    'unbelievable': 'Unbelievable!',
-    'written_in_history': 'Written in history!',
-    'game_on': 'Game on!',
-    'lets_dance': "Let's dance!",
-    'here_we_go': 'Here we go!',
-  };
 
   static const String _prefPrefix = 'hype_';
 
   @override
   void onInit() {
     super.onInit();
-    _loadConfig();
     _loadPreferences();
     _setupAudio();
   }
@@ -213,78 +109,6 @@ class HypeVoiceController extends GetxController {
     await prefs.setBool('${_prefPrefix}enabled', isEnabled.value);
     await prefs.setDouble('${_prefPrefix}volume', volume.value);
     await prefs.setBool('${_prefPrefix}ko_enabled', koEffectEnabled.value);
-  }
-
-  Future<void> _loadConfig() async {
-    try {
-      final String response =
-          await rootBundle.loadString('assets/config/hype_voice_config.json');
-      final data = json.decode(response);
-      _triggers = data['triggers'];
-      print('🔥 [Hype] Config loaded: ${_triggers.length} triggers');
-      await _validateConfigAgainstAssets();
-    } catch (e) {
-      print('🔥 [Hype] Config load error: $e');
-    }
-  }
-
-  /// Cross-checks the config pools against bundled mp3 files. Purely
-  /// informational — logs warnings, never throws. Helps catch:
-  ///   • files dropped into assets/audio/hype/ but forgotten in config
-  ///   • files referenced in config but missing on disk (rename/typo)
-  Future<void> _validateConfigAgainstAssets() async {
-    try {
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-      const String dir = 'assets/audio/hype/';
-      const String ext = '.mp3';
-      final bundled = <String>{
-        for (final p in manifest.listAssets())
-          if (p.startsWith(dir) && p.endsWith(ext))
-            p.substring(dir.length, p.length - ext.length),
-      };
-
-      _bundledFiles.clear();
-      _bundledFiles.addAll(bundled.toList()..sort());
-
-      final referenced = <String>{};
-      for (final t in _triggers) {
-        final pool = t['pool'];
-        if (pool is List) {
-          for (final f in pool) {
-            referenced.add(f.toString());
-          }
-        }
-      }
-
-      final unreferenced = bundled.difference(referenced).toList()..sort();
-      final missing = referenced.difference(bundled).toList()..sort();
-
-      if (unreferenced.isEmpty && missing.isEmpty) {
-        print('🔥 [Hype] ✓ Config valid: ${bundled.length} files wired up');
-        return;
-      }
-      if (unreferenced.isNotEmpty) {
-        print('🔥 [Hype] ⚠️  Unreferenced mp3 files (drop them into a pool in hype_voice_config.json):');
-        for (final f in unreferenced) {
-          print('🔥 [Hype]    • $f');
-        }
-      }
-      if (missing.isNotEmpty) {
-        print('🔥 [Hype] ⚠️  Missing mp3 files (referenced in config but not bundled):');
-        for (final f in missing) {
-          final users = _triggers
-              .where((t) {
-                final pool = t['pool'];
-                return pool is List && pool.contains(f);
-              })
-              .map((t) => t['id'])
-              .join(', ');
-          print('🔥 [Hype]    • $f (used by: $users)');
-        }
-      }
-    } catch (e) {
-      print('🔥 [Hype] Validator skipped (manifest load failed): $e');
-    }
   }
 
   void _setupAudio() {
@@ -354,7 +178,7 @@ class HypeVoiceController extends GetxController {
 
       if (manualHype != null) {
         // Check if manualHype is a trigger ID (for randomization from pool)
-        final bool isTrigger = _triggers.any((t) => t['id'] == manualHype);
+        final bool isTrigger = _lib?.trigger(manualHype) != null;
         if (isTrigger) {
           print('🔥 [Hype] Manual trigger group: $manualHype');
           _prepareHype([manualHype]);
@@ -402,24 +226,6 @@ class HypeVoiceController extends GetxController {
     print('🔥 [Hype] Manual trigger via score update: $voiceId');
   }
 
-  List<Map<String, String>> getHypeList() {
-    if (_bundledFiles.isEmpty) {
-      // Fallback if manifest not loaded yet
-      return _ttsFallback.keys.map((id) {
-        return {
-          'id': id,
-          'name': _getDisplayText(id),
-        };
-      }).toList();
-    }
-    return _bundledFiles.map((id) {
-      return {
-        'id': id,
-        'name': _getDisplayText(id),
-      };
-    }).toList();
-  }
-
   Future<void> playManualHype(String voiceId) async {
     // 1. Set as pending (overwrites auto-hype for the next playback slot)
     _pendingHypeId = voiceId;
@@ -457,16 +263,46 @@ class HypeVoiceController extends GetxController {
   /// Sound check: one hype clip at the current hype volume, bypassing the
   /// triggers and the on/off switch.
   Future<void> preview() async {
-    for (final id in const ['double_kill_1', 'triple_kill_1', 'godlike_1', 'game_on_1']) {
-      try {
-        await rootBundle.load('assets/audio/hype/$id.mp3');
-      } catch (_) {
-        continue;
-      }
-      await _audioPlayer.play(AssetSource('audio/hype/$id.mp3'));
-      return;
+    final lib = _lib;
+    if (lib == null) return;
+    for (final t in const ['streak_2', 'streak_3', 'streak_5_plus', 'first_point_of_match']) {
+      final pool = lib.pool(t).where((id) => lib.isBundled(id) || lib.hasUserFile(id));
+      if (pool.isNotEmpty) return previewSound(pool.first);
     }
   }
+
+  /// Plays [id] now, the way a match would (same player, same volume),
+  /// ignoring the on/off switches. A line never rendered is rendered first,
+  /// so a preview always sounds like the real thing.
+  Future<void> previewSound(String id) async {
+    final src = await _lib?.source(id);
+    if (src == null) return;
+    if (src.kind == SoundKind.ttsLive) {
+      final path = await VoiceClipService.maybe?.prepare(src.value);
+      if (path == null) return;
+      return _playFile(path);
+    }
+    await _play(src);
+  }
+
+  /// Sound check: a TTS hype line — the first custom one, or a sample.
+  Future<void> previewTtsLine() {
+    final custom = _lib?.sounds.where((d) => d.custom && !(_lib?.hasUserFile(d.id) ?? false));
+    return previewText((custom == null || custom.isEmpty) ? 'Đỉnh nóc kịch trần!' : custom.first.text);
+  }
+
+  /// Any text as a hype line would sound (rendered + cached first).
+  Future<void> previewText(String text) async {
+    if (text.trim().isEmpty) return;
+    final path = await VoiceClipService.maybe?.prepare(text.trim());
+    if (path != null) await _playFile(path);
+  }
+
+  Future<void> _play(SoundSource src) => src.kind == SoundKind.asset
+      ? _audioPlayer.play(AssetSource(src.value))
+      : _playFile(src.value);
+
+  Future<void> _playFile(String path) => _audioPlayer.play(DeviceFileSource(path));
 
   Future<void> stopAudio() async {
     _pendingHypeId = null;
@@ -483,9 +319,9 @@ class HypeVoiceController extends GetxController {
     int highestPriority = -1;
     final List<String> winners = [];
 
-    for (final trigger in _triggers) {
-      final String id = trigger['id'];
-      final int priority = trigger['priority'];
+    for (final trigger in _lib?.triggers ?? const <TriggerDef>[]) {
+      final String id = trigger.id;
+      final int priority = trigger.priority;
 
       if (!_triggerMatches(id, newA, newB, scoringTeam)) continue;
       if (priority > highestPriority) {
@@ -570,16 +406,8 @@ class HypeVoiceController extends GetxController {
     final List<String> mergedPool = [];
     final Set<String> seen = {};
     for (final id in triggerIds) {
-      final trigger = _triggers.firstWhere(
-        (t) => t['id'] == id,
-        orElse: () => null,
-      );
-      if (trigger == null) continue;
-      final pool = trigger['pool'];
-      if (pool is! List) continue;
-      for (final f in pool) {
-        final s = f.toString();
-        if (seen.add(s)) mergedPool.add(s);
+      for (final f in _lib?.pool(id) ?? const <String>[]) {
+        if (seen.add(f)) mergedPool.add(f);
       }
     }
     if (mergedPool.isEmpty) {
@@ -652,30 +480,30 @@ class HypeVoiceController extends GetxController {
 
     final String id = _pendingHypeId!;
     _pendingHypeId = null;
-    final String assetPath = 'audio/hype/$id.mp3';
 
-    // Pre-check: verify asset is actually bundled before handing to AudioPlayer
-    try {
-      await rootBundle.load('assets/$assetPath');
-    } catch (_) {
-      print('🔥 [Hype] Asset not bundled: $assetPath — needs rebuild');
-      _doTtsFallback(id);
+    final src = await _lib?.source(id);
+    if (src == null) {
+      print('🔥 [Hype] Unknown sound: $id');
+      onPlaybackCompleted?.call();
       return;
     }
-
+    if (src.kind == SoundKind.ttsLive) {
+      print('🔥 [Hype] $id: no clip yet, spoken live');
+      _doTtsFallback(src.value);
+      return;
+    }
     try {
-      await _audioPlayer.play(AssetSource(assetPath));
-      print('🔥 [Hype] Playing: $id');
+      await _play(src);
+      print('🔥 [Hype] Playing: $id (${src.kind.name})');
       // onPlaybackCompleted fires via onPlayerComplete listener
     } catch (e) {
       print('🔥 [Hype] Player error for $id: $e');
-      _doTtsFallback(id);
+      _doTtsFallback(_lib?.sound(id)?.text ?? _getDisplayText(id));
     }
   }
 
-  void _doTtsFallback(String id) {
+  void _doTtsFallback(String text) {
     if (onTtsFallback != null) {
-      final text = _getDisplayText(id);
       onTtsFallback!.call(text);
     } else {
       onPlaybackCompleted?.call();

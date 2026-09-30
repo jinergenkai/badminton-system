@@ -72,12 +72,14 @@ class SoundCheckService extends GetxService {
     return [
       // Rendered first so the steps below play the boosted clips, and timed:
       // this is the real cost of a phrase on this device.
-      SoundCheckStep('Preparing voice clips', () async {
+      SoundCheckStep('Preparing TTS lines', () async {
         final clips = VoiceClipService.maybe;
         if (clips == null) return;
-        final sw = Stopwatch()..start();
+        clips.lastPrepareMs.value = 0;
         await clips.prepareAll(phrases);
-        prepareMs.value = sw.elapsedMilliseconds ~/ phrases.length;
+        // Only a real synthesis says anything about the device; lines that
+        // came from the cache leave the last measured value shown.
+        if (clips.lastPrepareMs.value > 0) prepareMs.value = clips.lastPrepareMs.value;
       }, Duration.zero),
       SoundCheckStep('Score (15 – 13)', () => _announcer.announceScore(15, 13, 'A'),
           const Duration(milliseconds: 2800)),
@@ -86,6 +88,7 @@ class SoundCheckService extends GetxService {
       SoundCheckStep('Winner', () => _announcer.announceWinner(pair, 21, 18),
           const Duration(milliseconds: 5000)),
       SoundCheckStep('Hype voice', () => _hype.preview(), const Duration(milliseconds: 3500)),
+      SoundCheckStep('Hype TTS line', () => _hype.previewTtsLine(), const Duration(milliseconds: 3500)),
       SoundCheckStep('Tension music', () => _music.previewTension(), const Duration(seconds: 6)),
       SoundCheckStep('Voice over music (ducking)', () async {
         _music.duck();

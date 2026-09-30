@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -65,5 +66,28 @@ void main() {
 
   test('not a 16-bit PCM WAV -> null (play the original)', () {
     expect(boostWav(Uint8List.fromList(List.filled(60, 0)), 2.0), isNull);
+  });
+
+  /// 1 s of a 220 Hz tone at [amp], with gaps like speech has.
+  List<int> speechLike(double amp) => [
+        for (var i = 0; i < 16000; i++)
+          (i ~/ 1600).isEven ? (amp * 32767 * math.sin(2 * math.pi * 220 * i / 16000)).round() : 0
+      ];
+
+  double dbOf(Uint8List out) =>
+      20 * math.log(rmsOf([for (final s in samplesOf(out)) s / 32768.0])) / math.ln10;
+
+  test('processSpeech: quiet and loud renders land at the same level', () {
+    final quiet = dbOf(processSpeech(wav(speechLike(0.05)))!);
+    final loud = dbOf(processSpeech(wav(speechLike(0.9)))!);
+    expect(quiet, closeTo(-10, 1.5));
+    expect(loud, closeTo(-10, 1.5));
+  });
+
+  test('processSpeech: boost is extra gain on top, never past full scale', () {
+    final base = dbOf(processSpeech(wav(speechLike(0.2)))!);
+    final boosted = processSpeech(wav(speechLike(0.2)), boost: 4.0)!;
+    expect(dbOf(boosted), greaterThan(base + 3));
+    expect(samplesOf(boosted).every((v) => v.abs() <= 32767), isTrue);
   });
 }

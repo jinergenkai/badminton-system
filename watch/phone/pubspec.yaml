@@ -31,6 +31,7 @@ dependencies:
   # Audio Playback for Hype Feature
   audioplayers: ^6.1.0
   path_provider: ^2.1.4
+  crypto: ^3.0.3
 
   # Keep screen on while scoring
   wakelock_plus: ^1.2.10
@@ -51,5 +52,5 @@ flutter:
     - assets/audio/music/
     - assets/audio/score/vi/
     - assets/audio/score/en/
-    - assets/config/hype_voice_config.json
+    - assets/config/sound_library.json
     - assets/image/
