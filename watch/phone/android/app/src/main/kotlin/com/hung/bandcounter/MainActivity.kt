@@ -164,26 +164,6 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // Audio helpers for ClipGainService: decoding runs off the main thread.
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.voice_counter/audio").setMethodCallHandler { call, result ->
-            when (call.method) {
-                "decodeToWav" -> {
-                    val src = call.argument<String>("src")
-                    val dst = call.argument<String>("dst")
-                    if (src == null || dst == null) { result.success(false); return@setMethodCallHandler }
-                    scope.launch {
-                        val ok = withContext(Dispatchers.IO) { AudioDecoder.decodeToWav(src, dst) }
-                        result.success(ok)
-                    }
-                }
-                // Changes on every install/update: bundled clips may have
-                // changed, so caches made from them are dropped.
-                "appStamp" -> result.success(
-                    packageManager.getPackageInfo(packageName, 0).lastUpdateTime.toString())
-                else -> result.notImplemented()
-            }
-        }
-
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, WATCH_EVENT_CHANNEL).setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(args: Any?, events: EventChannel.EventSink?) { eventSink = events }

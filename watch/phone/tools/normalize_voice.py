@@ -13,6 +13,11 @@ Per clip:
 Usage:  python tools/normalize_voice.py            (from bandcounter-flutter/)
         python tools/normalize_voice.py --dry-run  (report only)
         python tools/normalize_voice.py --changed  (only new/changed sources)
+        python tools/normalize_voice.py --louder 2 (every clip 2 dB louder, kept)
+        python tools/normalize_voice.py --louder 0 (back to the targets below)
+
+--louder is saved in audio_src/levels.json, so later builds keep it; the
+clips it changes are redone right away (their fingerprint includes it).
 
 --changed is what the Android build runs before bundling assets
 (android/app/build.gradle.kts): a source is redone when its bytes or the
@@ -69,6 +74,18 @@ def process(src, dst, target):
 
 
 STAMP = os.path.join('audio_src', '.normalized.json')
+LEVELS = os.path.join('audio_src', 'levels.json')
+
+
+def louder_db():
+    """Saved --louder offset, updated when the flag is given."""
+    levels = json.load(open(LEVELS, encoding='utf-8')) if os.path.exists(LEVELS) else {}
+    if '--louder' in sys.argv and '--dry-run' not in sys.argv:
+        levels['louder_db'] = float(sys.argv[sys.argv.index('--louder') + 1])
+        with open(LEVELS, 'w', encoding='utf-8', newline='\n') as f:
+            json.dump(levels, f, indent=1)
+            f.write('\n')
+    return float(levels.get('louder_db', 0))
 
 
 def fingerprint(src, target):
@@ -79,13 +96,18 @@ def fingerprint(src, target):
 
 def main():
     dry = '--dry-run' in sys.argv
-    changed_only = '--changed' in sys.argv
+    # --louder redoes only what it changes, like --changed.
+    changed_only = '--changed' in sys.argv or '--louder' in sys.argv
+    louder = louder_db()
+    if louder:
+        print(f'louder: +{louder:g} dB on every target (audio_src/levels.json)')
     stamps = {}
     if os.path.exists(STAMP):
         stamps = json.load(open(STAMP, encoding='utf-8'))
     done = 0
     print(f'{"file":44} {"before":>14} {"gain":>7} {"after":>14}')
     for sub, out_dir, target in SETS:
+        target += louder
         src_dir = os.path.join('audio_src', sub)
         if not os.path.isdir(src_dir):
             print(f'-- missing {src_dir}, skipped')

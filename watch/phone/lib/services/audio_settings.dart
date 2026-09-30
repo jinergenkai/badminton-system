@@ -48,10 +48,8 @@ class AudioSettings extends GetxService {
   bool get isMusicMode => mode.value == PlayMode.music;
 
   /// A player's own level, scaled by the master and clamped to a valid range.
-  /// An own level past 1.0 is not a louder volume — the clip itself is
-  /// boosted (ClipGainService) — so it plays at 1.0 here.
   double scale(double own) {
-    final v = (own > 1.0 ? 1.0 : own) * masterVolume.value;
+    final v = own * masterVolume.value;
     return v < 0.0 ? 0.0 : (v > 1.0 ? 1.0 : v);
   }
 

@@ -39,7 +39,8 @@ class TtsService extends GetxService {
       });
       final prefs = await SharedPreferences.getInstance();
       _currentLanguage.value = prefs.getString('tts_language') ?? 'en-US';
-      volume.value = prefs.getDouble('tts_volume') ?? 1.0;
+      // Clamped: a level above 100% may be saved from a build that allowed it.
+      volume.value = (prefs.getDouble('tts_volume') ?? 1.0).clamp(0.0, 1.0);
 
       // Cấu hình TTS
       await _flutterTts.setLanguage(_currentLanguage.value);

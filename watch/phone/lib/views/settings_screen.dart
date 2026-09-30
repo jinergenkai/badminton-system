@@ -5,7 +5,6 @@ import '../services/audio_settings.dart';
 import '../services/tts_service.dart';
 import '../services/sound_check_service.dart';
 import '../services/voice_clip_service.dart';
-import '../services/clip_gain_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -198,9 +197,8 @@ class SettingsScreen extends StatelessWidget {
       const SizedBox(height: 8),
       _volume('Master', 'Everything below at once — the big slider on the band',
           audio.masterVolume, Colors.amber, () => audio.setMaster(audio.masterVolume.value)),
-      _volume('Voice (all)', 'Every spoken line: score, names, winner. Past 100% the clips '
-              'themselves are boosted — the top end crackles',
-          tts.volume, Colors.amber, tts.saveVolumePreference, max: ClipGainService.maxLevel),
+      _volume('Voice (all)', 'Every spoken line: score, names, winner',
+          tts.volume, Colors.amber, tts.saveVolumePreference),
       if (clips != null)
         _volume(
             'Name boost (TTS)',
@@ -209,9 +207,11 @@ class SettingsScreen extends StatelessWidget {
             clips.boost,
             Colors.amberAccent,
             () => clips.setBoost(clips.boost.value),
-            max: VoiceClipService.maxBoost),
-      _volume('Hype', 'Streak and highlight voices; past 100% boosted like Voice',
-          hype.volume, Colors.cyanAccent, hype.savePreferences, max: ClipGainService.maxLevel),
+            max: VoiceClipService.maxBoost,
+            // 10% steps: each level is a set of files in the cache.
+            divisions: (VoiceClipService.maxBoost * 10).round()),
+      _volume('Hype', 'Streak and highlight voices', hype.volume, Colors.cyanAccent,
+          hype.savePreferences),
       _volume('Tension music', 'When both teams reach the threshold below',
           music.tensionVolume, Colors.orangeAccent, music.savePreferences),
       _volume('Win / playlist music', 'After a win, and all of Music mode',
@@ -289,7 +289,7 @@ class SettingsScreen extends StatelessWidget {
 
   /// A level with its name, what it affects, and the value in percent.
   Widget _volume(String label, String desc, RxDouble rx, Color color, VoidCallback? onSave,
-      {double max = 1.0}) {
+      {double max = 1.0, int? divisions}) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 12, 0),
       child: Obx(() => Column(
@@ -315,6 +315,7 @@ class SettingsScreen extends StatelessWidget {
                 value: rx.value.clamp(0.0, max),
                 min: 0.0,
                 max: max,
+                divisions: divisions,
                 activeColor: color,
                 inactiveColor: Colors.white12,
                 onChanged: (v) => rx.value = v,

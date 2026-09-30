@@ -51,7 +51,7 @@ class VoiceClipService extends GetxService {
 
   Future<VoiceClipService> init() async {
     final prefs = await SharedPreferences.getInstance();
-    boost.value = (prefs.getDouble(_prefBoost) ?? 1.0).clamp(0.0, maxBoost);
+    boost.value = (((prefs.getDouble(_prefBoost) ?? 1.0) * 10).round() / 10).clamp(0.0, maxBoost);
     final base = await getApplicationSupportDirectory();
     _raw = Directory('${base.path}/tts_cache/raw')..createSync(recursive: true);
     _out = Directory('${base.path}/tts_cache/out')..createSync(recursive: true);
@@ -59,13 +59,16 @@ class VoiceClipService extends GetxService {
     try {
       final old = Directory('${(await getTemporaryDirectory()).path}/voice_clips');
       if (old.existsSync()) old.deleteSync(recursive: true);
+      // Left by a short-lived build that boosted MP3s at play time.
+      final gain = Directory('${base.path}/gain_cache');
+      if (gain.existsSync()) gain.deleteSync(recursive: true);
     } catch (_) {}
     unawaited(_evict());
     return this;
   }
 
   Future<void> setBoost(double v) async {
-    boost.value = v.clamp(0.0, maxBoost);
+    boost.value = ((v * 10).round() / 10).clamp(0.0, maxBoost);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setDouble(_prefBoost, boost.value);
     // Every processed file was made at the old level; raw renders stay.

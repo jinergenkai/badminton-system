@@ -6,7 +6,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'tts_service.dart';
 import 'audio_settings.dart';
 import 'voice_clip_service.dart';
-import 'clip_gain_service.dart';
 import 'dart:io';
 
 /// Plays badminton-style score announcements using bundled MP3s
@@ -91,12 +90,7 @@ class ScoreAnnouncerService extends GetxService {
         _ownVolume = v;
         _player.setVolume(_scaled(v));
       });
-      // Past 100%: render this language's clips at the new level ahead of
-      // the next point, once the slider has settled.
-      debounce(tts.volume, (_) => warmBoost(), time: const Duration(milliseconds: 800));
-      debounce(currentLanguage, (_) => warmBoost(), time: const Duration(milliseconds: 800));
     } catch (_) {}
-    warmBoost();
 
     print('🔊 [ScoreAnnouncer] Ready (lang=${currentLanguage.value})');
   }
@@ -229,16 +223,6 @@ class ScoreAnnouncerService extends GetxService {
 
   bool _inRange(int score) => score >= 0 && score <= _maxScore;
 
-  /// Every number clip of the current language at the current Voice level.
-  void warmBoost() {
-    final lang = currentLanguage.value;
-    ClipGainService.maybe?.warm([
-      for (var n = 0; n <= _maxScore; n++) 'audio/score/$lang/$n.mp3',
-      'audio/score/$lang/all.mp3',
-      'audio/score/$lang/undo.mp3',
-    ], _ownVolume);
-  }
-
   /// "<name> giao cầu" — read after the score when the set is named.
   static String serveTail(String name, String lang) =>
       lang.startsWith('vi') ? '$name giao cầu' : '$name to serve';
@@ -260,9 +244,7 @@ class ScoreAnnouncerService extends GetxService {
     String? tail,
   }) async {
     // Pre-flight: verify every file is actually bundled. Cheaper than failing
-    // mid-chain (which would leave the hype callback un-fired). Boosted
-    // copies are resolved here too, so there is no gap between clips.
-    final play = <String>[];
+    // mid-chain (which would leave the hype callback un-fired).
     for (final f in files) {
       try {
         if (f.startsWith('/')) {
@@ -277,13 +259,9 @@ class ScoreAnnouncerService extends GetxService {
         return;
       }
     }
-    for (final f in files) {
-      play.add(await ClipGainService.maybe?.boosted(f, _ownVolume) ?? f);
-    }
-    if (myJob != _currentJob) return;
 
     try {
-      for (final f in play) {
+      for (final f in files) {
         if (myJob != _currentJob) return;
         // Held locally: a newer announcement's _cancelInFlight() nulls the
         // field while play() is still awaiting, and `_playCompleter!` then

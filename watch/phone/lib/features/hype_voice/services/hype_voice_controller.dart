@@ -10,7 +10,6 @@ import '../models/hype_display_event.dart';
 import 'package:voice_counter/services/audio_settings.dart';
 import 'package:voice_counter/services/sound_library_service.dart';
 import 'package:voice_counter/services/voice_clip_service.dart';
-import 'package:voice_counter/services/clip_gain_service.dart';
 
 class HypeVoiceController extends GetxController {
   final AudioPlayer _audioPlayer = AudioPlayer();
@@ -101,7 +100,8 @@ class HypeVoiceController extends GetxController {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     isEnabled.value = prefs.getBool('${_prefPrefix}enabled') ?? true;
-    volume.value = prefs.getDouble('${_prefPrefix}volume') ?? 0.2;
+    // Clamped: a level above 100% may be saved from a build that allowed it.
+    volume.value = (prefs.getDouble('${_prefPrefix}volume') ?? 0.2).clamp(0.0, 1.0);
     koEffectEnabled.value = prefs.getBool('${_prefPrefix}ko_enabled') ?? true;
   }
 
@@ -299,16 +299,11 @@ class HypeVoiceController extends GetxController {
     if (path != null) await _playFile(path);
   }
 
-  /// Hype past 100% plays a boosted copy of the clip at full volume.
-  Future<void> _play(SoundSource src) async {
-    final boosted = await ClipGainService.maybe?.boosted(src.value, volume.value);
-    if (boosted != null) return _audioPlayer.play(DeviceFileSource(boosted));
-    return src.kind == SoundKind.asset
-        ? _audioPlayer.play(AssetSource(src.value))
-        : _audioPlayer.play(DeviceFileSource(src.value));
-  }
+  Future<void> _play(SoundSource src) => src.kind == SoundKind.asset
+      ? _audioPlayer.play(AssetSource(src.value))
+      : _playFile(src.value);
 
-  Future<void> _playFile(String path) => _play(SoundSource(SoundKind.ttsClip, path));
+  Future<void> _playFile(String path) => _audioPlayer.play(DeviceFileSource(path));
 
   Future<void> stopAudio() async {
     _pendingHypeId = null;
