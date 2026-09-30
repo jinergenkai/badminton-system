@@ -7,7 +7,7 @@ import 'services/audio_settings.dart';
 import 'services/player_service.dart';
 import 'services/voice_clip_service.dart';
 import 'services/sound_library_service.dart';
-import 'services/phone_volume_service.dart';
+import 'services/phone_controls_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,7 +21,7 @@ void main() async {
   await Get.putAsync(() => PlayerService().init());
   await Get.putAsync(() => VoiceClipService().init());
   await Get.putAsync(() => SoundLibraryService().init());
-  Get.put(PhoneVolumeService());
+  Get.put(PhoneControlsService());
 
   runApp(const MyApp());
 }

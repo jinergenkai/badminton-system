@@ -32,6 +32,22 @@ class MainActivity : FlutterActivity() {
 
     private val scope = CoroutineScope(Dispatchers.Main + Job())
 
+    /** Band "Blank Phone" and the board's max-brightness chip share the window brightness. */
+    private var blank = false
+    private var brightMax = false
+
+    private fun windowBrightness(): Float = when {
+        blank -> 0.01f
+        brightMax -> 1f
+        else -> WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    }
+
+    private fun deviceState(am: AudioManager): Map<String, Any> = mapOf(
+        "vol" to am.getStreamVolume(AudioManager.STREAM_MUSIC),
+        "volMax" to am.getStreamMaxVolume(AudioManager.STREAM_MUSIC),
+        "brightMax" to brightMax,
+    )
+
     /** Last initialize() report, so Dart can re-read it without re-running init. */
     private var lastReport: Map<String, Any?> = mapOf("ok" to false, "error" to "not initialized")
 
@@ -118,8 +134,8 @@ class MainActivity : FlutterActivity() {
                 "setBlank" -> {
                     val on = call.argument<Boolean>("on") ?: false
                     val lp = window.attributes
-                    lp.screenBrightness = if (on) 0.01f
-                        else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+                    blank = on
+                    lp.screenBrightness = windowBrightness()
                     window.attributes = lp
                     Log.i(DIAG, "setBlank on=$on")
                     result.success(true)
@@ -166,18 +182,27 @@ class MainActivity : FlutterActivity() {
             }
         }
 
-        // Phone media volume, for the "volume not at max" warning on the board.
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.voice_counter/volume").setMethodCallHandler { call, result ->
+        // Phone media volume and screen brightness, for the two chips on the board.
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.voice_counter/device").setMethodCallHandler { call, result ->
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
-            val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
             when (call.method) {
-                "get" -> result.success(mapOf("cur" to am.getStreamVolume(AudioManager.STREAM_MUSIC), "max" to max))
-                "setMax" -> {
+                "state" -> result.success(deviceState(am))
+                "setVolumeMax" -> {
                     try {
+                        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
                         // FLAG_SHOW_UI: the system slider shows, so it is clear what changed.
                         am.setStreamVolume(AudioManager.STREAM_MUSIC, max, AudioManager.FLAG_SHOW_UI)
-                    } catch (e: Exception) { Log.w(TAG, "setMax volume: ${e.message}") }
-                    result.success(mapOf("cur" to am.getStreamVolume(AudioManager.STREAM_MUSIC), "max" to max))
+                    } catch (e: Exception) { Log.w(TAG, "setVolumeMax: ${e.message}") }
+                    result.success(deviceState(am))
+                }
+                // Max brightness for this window only: no WRITE_SETTINGS
+                // permission needed, and the phone's own setting is untouched.
+                "setBrightnessMax" -> {
+                    brightMax = call.argument<Boolean>("on") ?: false
+                    val lp = window.attributes
+                    lp.screenBrightness = windowBrightness()
+                    window.attributes = lp
+                    result.success(deviceState(am))
                 }
                 else -> result.notImplemented()
             }
