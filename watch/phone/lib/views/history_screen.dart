@@ -1,10 +1,12 @@
-import 'match_detail_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+
 import '../models/match.dart';
 import '../services/database_service.dart';
+import 'match_detail_screen.dart';
+import 'ui_kit.dart';
 
+/// Saved sets, newest first, grouped by day. #1 is the most recent.
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
 
@@ -15,384 +17,191 @@ class HistoryScreen extends StatefulWidget {
 class _HistoryScreenState extends State<HistoryScreen> {
   List<Match> _all = [];
   List<Match> _matches = [];
-  bool _isLoading = true;
 
   /// Complete sets by default: those are what analysis uses. Stopped sets
   /// (reset mid-game) are one tap away.
   String _filter = 'completed';
 
-  void _applyFilter() {
-    _matches = _filter == 'all' ? _all : _all.where((m) => m.status == _filter).toList();
-  }
-
   @override
   void initState() {
     super.initState();
-    _loadMatches();
+    _load();
   }
 
-  void _loadMatches() {
-    setState(() {
-      _isLoading = true;
-    });
-
+  void _load() {
     try {
       _all = DatabaseService.getAllMatches();
-      _applyFilter();
     } catch (e) {
       print('Error loading matches: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      _all = [];
     }
+    _applyFilter();
   }
 
-  void _deleteMatch(int index) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Match?'),
-        content: const Text('Are you sure you want to delete this match?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              // By id: the list index is not a Hive key (keys are never
-              // reused and the list is sorted), so it deleted the wrong set.
-              await DatabaseService.deleteMatchById(_matches[index].id);
-              _loadMatches();
-              Get.snackbar(
-                'Match Deleted',
-                'Match has been removed from history',
-                snackPosition: SnackPosition.BOTTOM,
-              );
-            },
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+  void _applyFilter() {
+    setState(() {
+      _matches = _filter == 'all' ? _all : _all.where((m) => m.status == _filter).toList();
+    });
   }
 
-  void _clearAllMatches() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Clear All History?'),
-        content: const Text(
-            'Are you sure you want to delete all match history? This cannot be undone.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              await DatabaseService.deleteAllMatches();
-              _loadMatches();
-              Get.snackbar(
-                'History Cleared',
-                'All matches have been deleted',
-                snackPosition: SnackPosition.BOTTOM,
-              );
-            },
-            child: const Text('Clear All', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
+  int _count(String f) => f == 'all' ? _all.length : _all.where((m) => m.status == f).length;
+
+  Future<bool> _delete(Match m) async {
+    final ok = await uiConfirm(context,
+        title: 'Delete this set?', message: '${m.teamAScore} – ${m.teamBScore}, ${uiDay(m.startTime)} ${uiTime(m.startTime)}');
+    if (!ok) return false;
+    // By id: the list index is not a Hive key (keys are never reused and the
+    // list is sorted), so deleting by index removed the wrong set.
+    await DatabaseService.deleteMatchById(m.id);
+    _load();
+    return false; // the list rebuilt itself; Dismissible must not also remove
+  }
+
+  Future<void> _clearAll() async {
+    final ok = await uiConfirm(context,
+        title: 'Clear all history?',
+        message: 'Every saved set is deleted. This cannot be undone.',
+        confirm: 'Clear all');
+    if (!ok) return;
+    await DatabaseService.deleteAllMatches();
+    _load();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Match History'),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                for (final f in const [['completed', 'Completed'], ['stopped', 'Stopped'], ['all', 'All']])
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 4),
-                    child: ChoiceChip(
-                      label: Text(f[1]),
-                      selected: _filter == f[0],
-                      onSelected: (_) => setState(() {
-                        _filter = f[0];
-                        _applyFilter();
-                      }),
-                    ),
+    return UiPage(
+      title: 'History',
+      actions: [
+        if (_all.isNotEmpty)
+          IconButton(icon: const Icon(Icons.delete_sweep_outlined), tooltip: 'Clear all', onPressed: _clearAll),
+      ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(52),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+          child: Row(
+            children: [
+              for (final f in const [['completed', 'Completed'], ['stopped', 'Stopped'], ['all', 'All']])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text('${f[1]}  ${_count(f[0])}'),
+                    selected: _filter == f[0],
+                    showCheckmark: false,
+                    onSelected: (_) {
+                      _filter = f[0];
+                      _applyFilter();
+                    },
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
-        actions: [
-          if (_all.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.delete_sweep),
-              onPressed: _clearAllMatches,
-              tooltip: 'Clear All',
-            ),
-        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _matches.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.history,
-                        size: 80,
-                        color: Colors.grey[600],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No matches yet',
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: Colors.grey[600],
+      body: _matches.isEmpty
+          ? UiEmpty(
+              icon: Icons.history,
+              title: _all.isEmpty ? 'No sets yet' : 'Nothing here',
+              hint: _all.isEmpty ? 'Finished sets from the band land here.' : 'Try another filter.',
+            )
+          : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+              itemCount: _matches.length,
+              itemBuilder: (context, i) {
+                final m = _matches[i];
+                final day = uiDay(m.startTime);
+                final newDay = i == 0 || uiDay(_matches[i - 1].startTime) != day;
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (newDay) UiSection(day),
+                    Dismissible(
+                      key: ValueKey(m.id),
+                      direction: DismissDirection.endToStart,
+                      confirmDismiss: (_) => _delete(m),
+                      background: Container(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(Ui.radius),
                         ),
+                        alignment: Alignment.centerRight,
+                        padding: const EdgeInsets.only(right: 24),
+                        child: const Icon(Icons.delete_outline, color: Colors.redAccent),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Play some games to see them here!',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[500],
-                        ),
+                      child: _MatchCard(
+                        match: m,
+                        number: i + 1,
+                        onTap: () => Get.to(() => MatchDetailScreen(match: m, number: i + 1)),
                       ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _matches.length,
-                  padding: const EdgeInsets.all(8),
-                  itemBuilder: (context, index) {
-                    final match = _matches[index];
-                    return _MatchCard(
-                      match: match,
-                      number: index + 1,
-                      onDelete: () => _deleteMatch(index),
-                    ).animate().fadeIn(delay: (index * 50).ms).slideX(
-                          begin: 0.2,
-                          end: 0,
-                        );
-                  },
-                ),
+                    ),
+                  ],
+                );
+              },
+            ),
     );
   }
 }
 
 class _MatchCard extends StatelessWidget {
   final Match match;
-  final VoidCallback onDelete;
-  /// 1 = most recent set, so today's count is the number on today's oldest.
   final int number;
+  final VoidCallback onTap;
 
-  const _MatchCard({
-    required this.match,
-    required this.number,
-    required this.onDelete,
-  });
+  const _MatchCard({required this.match, required this.number, required this.onTap});
+
+  /// Band names of a pair ("Hùng · Quỳnh"), or the stored team name.
+  String _names(String team) {
+    final lu = match.lineup;
+    if (lu == null) return team == 'A' ? match.teamAName : match.teamBName;
+    return lu.pair(team).map(lu.shortOf).join(' · ');
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isTeamAWinner = match.winner == 'A';
-    final teamAColor = isTeamAWinner ? Colors.green : Colors.grey;
-    final teamBColor = !isTeamAWinner && match.winner == 'B'
-        ? Colors.green
-        : Colors.grey;
+    final stopped = match.status == 'stopped';
+    final meta = [
+      uiTime(match.startTime),
+      '${match.durationEstimated ? '~' : ''}${match.formattedDuration}',
+    ].join('  ·  ');
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      elevation: 4,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => Get.to(() => MatchDetailScreen(match: match, number: number)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(Ui.radius),
+        child: UiPanel(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Match date and time
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      Text(
-                        '#$number',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w900,
-                        ),
+                  Text('#$number',
+                      style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900)),
+                  const SizedBox(width: 10),
+                  Text(meta, style: const TextStyle(color: Ui.muted, fontSize: 12)),
+                  const Spacer(),
+                  if (stopped)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.orangeAccent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orangeAccent.withOpacity(0.6)),
                       ),
-                      if (match.status == 'stopped') ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.orangeAccent.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: const Text('STOP',
-                              style: TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                      const SizedBox(width: 10),
-                      Icon(
-                        Icons.calendar_today,
-                        size: 16,
-                        color: Colors.grey[400],
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatDate(match.endTime),
-                        style: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.delete, size: 20),
-                    color: Colors.grey[400],
-                    onPressed: onDelete,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                  ),
+                      child: const Text('STOPPED',
+                          style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.w900)),
+                    ),
+                  const Icon(Icons.chevron_right, color: Colors.white24, size: 20),
                 ],
               ),
-              const SizedBox(height: 12),
-
-              // Score display
+              const SizedBox(height: 10),
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
-                  // Team A
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          match.teamAName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: teamAColor,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: teamAColor.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${match.teamAScore}',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w900,
-                              color: teamAColor,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // VS
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    child: Text(
-                      'VS',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[600],
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-
-                  // Team B
-                  Expanded(
-                    child: Column(
-                      children: [
-                        Text(
-                          match.teamBName,
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: teamBColor,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: teamBColor.withOpacity(0.2),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            '${match.teamBScore}',
-                            style: TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.w900,
-                              color: teamBColor,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              // Match info
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.timer,
-                    size: 16,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Duration: ${match.formattedDuration}',
-                    style: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 12,
-                    ),
-                  ),
+                  Expanded(child: _side('A', stopped)),
+                  const SizedBox(width: 10),
+                  Expanded(child: _side('B', stopped)),
                 ],
               ),
             ],
@@ -402,19 +211,39 @@ class _MatchCard extends StatelessWidget {
     );
   }
 
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      return 'Today ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays == 1) {
-      return 'Yesterday ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} days ago';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
-    }
+  /// One team: its colour always, bright when it won, dim when it lost.
+  Widget _side(String team, bool stopped) {
+    final c = Ui.team(team);
+    final score = team == 'A' ? match.teamAScore : match.teamBScore;
+    final won = !stopped && match.winner == team;
+    final lost = !stopped && match.winner.isNotEmpty && !won;
+    return Opacity(
+      opacity: lost ? 0.55 : 1,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: c.withOpacity(won ? 0.22 : 0.10),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: c.withOpacity(won ? 0.9 : 0.3), width: won ? 1.5 : 1),
+        ),
+        child: Row(
+          children: [
+            Text('$score',
+                style: TextStyle(color: Colors.white, fontSize: 30, fontWeight: FontWeight.w900, height: 1.1,
+                    shadows: won ? [Shadow(color: c, blurRadius: 12)] : null)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _names(team),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: c.withOpacity(0.95), fontSize: 13, fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (won) const Text('🏆', style: TextStyle(fontSize: 16)),
+          ],
+        ),
+      ),
+    );
   }
-
 }

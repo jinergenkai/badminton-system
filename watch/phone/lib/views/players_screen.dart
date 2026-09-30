@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../services/player_service.dart';
+import 'ui_kit.dart';
 
 /// Club roster + who is here today. Today's picks are what the band's
 /// player picker offers, so keep that to the 8-10 on this court.
@@ -16,9 +17,6 @@ class _PlayersScreenState extends State<PlayersScreen> {
   final PlayerService _svc = Get.find<PlayerService>();
   final TextEditingController _search = TextEditingController();
   String _query = '';
-
-  static const _bg = Color(0xFF0F172A);
-  static const _card = Color(0xFF1E293B);
 
   @override
   void dispose() {
@@ -50,9 +48,7 @@ class _PlayersScreenState extends State<PlayersScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setLocal) => AlertDialog(
-          backgroundColor: _card,
-          title: Text(player == null ? 'Add player' : 'Edit player',
-              style: const TextStyle(color: Colors.white)),
+          title: Text(player == null ? 'Add player' : 'Edit player'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -78,8 +74,11 @@ class _PlayersScreenState extends State<PlayersScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                style: TextButton.styleFrom(foregroundColor: Colors.white60),
+                child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
           ],
         ),
       ),
@@ -93,23 +92,9 @@ class _PlayersScreenState extends State<PlayersScreen> {
   }
 
   Future<bool> _confirmDelete(Player p) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _card,
-        title: Text('Remove ${p.name}?', style: const TextStyle(color: Colors.white)),
-        content: const Text('Past matches keep their name.',
-            style: TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove', style: TextStyle(color: Colors.redAccent)),
-          ),
-        ],
-      ),
-    );
-    if (ok == true) await _svc.remove(p.id);
+    final ok = await uiConfirm(context,
+        title: 'Remove ${p.name}?', message: 'Past matches keep their name.', confirm: 'Remove');
+    if (ok) await _svc.remove(p.id);
     return false; // the Obx list rebuilds itself; Dismissible must not also remove
   }
 
@@ -122,14 +107,9 @@ class _PlayersScreenState extends State<PlayersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bg,
-        foregroundColor: Colors.white,
-        title: const Text('Players'),
-      ),
-      floatingActionButton: FloatingActionButton(
+    return UiPage(
+      title: 'Players',
+      fab: FloatingActionButton(
         onPressed: () => _edit(),
         child: const Icon(Icons.person_add),
       ),
@@ -140,10 +120,8 @@ class _PlayersScreenState extends State<PlayersScreen> {
         return Column(
           children: [
             // Today summary + band sync
-            Container(
-              margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(14)),
+            UiPanel(
+              margin: const EdgeInsets.fromLTRB(16, 8, 16, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -178,7 +156,7 @@ class _PlayersScreenState extends State<PlayersScreen> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: TextField(
                 controller: _search,
                 style: const TextStyle(color: Colors.white),
@@ -187,9 +165,11 @@ class _PlayersScreenState extends State<PlayersScreen> {
                   hintStyle: const TextStyle(color: Colors.white38),
                   prefixIcon: const Icon(Icons.search, color: Colors.white38),
                   filled: true,
-                  fillColor: _card,
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  fillColor: Ui.panel,
+                  enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Ui.line)),
+                  focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14), borderSide: const BorderSide(color: Ui.accent)),
                 ),
                 onChanged: (v) => setState(() => _query = v),
               ),
@@ -197,11 +177,12 @@ class _PlayersScreenState extends State<PlayersScreen> {
             const SizedBox(height: 8),
             Expanded(
               child: _svc.roster.isEmpty
-                  ? const Center(
-                      child: Text('No players yet — tap + to add',
-                          style: TextStyle(color: Colors.white54)))
+                  ? const UiEmpty(
+                      icon: Icons.groups_outlined,
+                      title: 'No players yet',
+                      hint: 'Tap + to add the people you play with.')
                   : ListView.builder(
-                      padding: const EdgeInsets.only(bottom: 88),
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 88),
                       itemCount: visible.length,
                       itemBuilder: (context, i) {
                         final p = visible[i];
@@ -212,12 +193,17 @@ class _PlayersScreenState extends State<PlayersScreen> {
                           direction: DismissDirection.endToStart,
                           confirmDismiss: (_) => _confirmDelete(p),
                           background: Container(
-                            color: Colors.redAccent,
+                            decoration: BoxDecoration(
+                              color: Colors.redAccent.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                             alignment: Alignment.centerRight,
                             padding: const EdgeInsets.only(right: 20),
-                            child: const Icon(Icons.delete, color: Colors.white),
+                            child: const Icon(Icons.delete_outline, color: Colors.redAccent),
                           ),
                           child: ListTile(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                            tileColor: isToday ? Colors.greenAccent.withOpacity(0.06) : null,
                             onTap: () => _svc.toggleToday(p.id),
                             onLongPress: () => _edit(player: p),
                             leading: Icon(

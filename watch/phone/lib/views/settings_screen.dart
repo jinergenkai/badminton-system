@@ -9,6 +9,7 @@ import '../services/display_settings.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'ui_kit.dart';
 
 /// Phone settings. The band is the remote: anything it can set (mode, the
 /// on/off switches, master) is mirrored here, and everything else lives
@@ -18,53 +19,18 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: const Text(
-          'SETTINGS',
-          style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2),
-        ),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+    return UiPage(
+      title: 'Settings',
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+        children: [
+          const UiSection('Sound'),
+          _buildSoundCard().animate().fadeIn(delay: 50.ms),
+          const SizedBox(height: 24),
+          const UiSection('Game & display'),
+          _buildGameCard().animate().fadeIn(delay: 150.ms),
+        ],
       ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF0F172A), Color(0xFF1E1B4B)],
-          ),
-        ),
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 120, 16, 40),
-          children: [
-            _sectionHeader('SOUND'),
-            const SizedBox(height: 16),
-            _buildSoundCard().animate().fadeIn(delay: 50.ms),
-            const SizedBox(height: 32),
-            _sectionHeader('GAME & DISPLAY'),
-            const SizedBox(height: 16),
-            _buildGameCard().animate().fadeIn(delay: 150.ms),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _sectionHeader(String title) {
-    return Row(
-      children: [
-        Container(
-          width: 4,
-          height: 24,
-          decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(2)),
-        ),
-        const SizedBox(width: 12),
-        Text(title,
-            style: const TextStyle(
-                fontSize: 16, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1.5)),
-      ],
     );
   }
 
@@ -72,8 +38,8 @@ class SettingsScreen extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        borderRadius: BorderRadius.circular(Ui.radius),
+        border: Border.all(color: Ui.line),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
     );

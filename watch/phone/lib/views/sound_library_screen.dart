@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../services/music_service.dart';
 import '../services/sound_library_service.dart';
+import 'ui_kit.dart';
 
 /// Every sound the app can play, and when.
 ///
@@ -16,22 +17,19 @@ class SoundLibraryScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
+    return const DefaultTabController(
       length: 2,
-      child: Scaffold(
-        backgroundColor: const Color(0xFF0F172A),
-        appBar: AppBar(
-          backgroundColor: const Color(0xFF1E1B4B),
-          title: const Text('SOUND LIBRARY',
-              style: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 2)),
-          bottom: const TabBar(
-            indicatorColor: Colors.amber,
-            labelColor: Colors.amber,
-            unselectedLabelColor: Colors.white54,
-            tabs: [Tab(text: 'HYPE'), Tab(text: 'MUSIC')],
-          ),
+      child: UiPage(
+        title: 'Sound library',
+        bottom: TabBar(
+          indicatorColor: Ui.accent,
+          labelColor: Ui.accent,
+          unselectedLabelColor: Ui.muted,
+          dividerColor: Ui.line,
+          labelStyle: TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.5),
+          tabs: [Tab(text: 'HYPE'), Tab(text: 'MUSIC')],
         ),
-        body: const TabBarView(children: [_HypeTab(), _MusicTab()]),
+        body: TabBarView(children: [_HypeTab(), _MusicTab()]),
       ),
     );
   }
@@ -56,7 +54,7 @@ class _HypeTab extends StatelessWidget {
       final membership = {for (final d in sounds) d.id: lib.triggersOf(d.id)};
       final orphans = sounds.where((d) => membership[d.id]!.isEmpty).toList();
       return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 40),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
         children: [
           _header(context, lib),
           const SizedBox(height: 8),
@@ -78,13 +76,7 @@ class _HypeTab extends StatelessWidget {
   }
 
   Widget _header(BuildContext context, SoundLibraryService lib) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white12),
-      ),
+    return UiPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -122,10 +114,9 @@ class _HypeTab extends StatelessWidget {
 
   Widget _group(BuildContext context,
       {required String title, required String subtitle, required List<SoundDef> sounds}) {
-    return Card(
-      color: Colors.white.withOpacity(0.04),
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    return UiPanel(
+      padding: EdgeInsets.zero,
+      margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
         shape: const Border(),
         collapsedIconColor: Colors.white38,
@@ -200,8 +191,6 @@ class _SoundEditor extends StatefulWidget {
   static Future<void> open(BuildContext context, SoundDef? def) => showModalBottomSheet(
         context: context,
         isScrollControlled: true,
-        backgroundColor: const Color(0xFF1E1B4B),
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
         builder: (_) => _SoundEditor(def),
       );
 
@@ -381,15 +370,9 @@ class _MusicTab extends StatelessWidget {
       final tracks = music.playlist.toList();
       final playing = music.currentTrackName.value;
       return ListView(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 40),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 40),
         children: [
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white12),
-            ),
+          UiPanel(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [

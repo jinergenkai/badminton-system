@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../models/match.dart';
 import '../models/match_analysis.dart';
+import 'ui_kit.dart';
 
-const _red = Colors.redAccent;
-const _blue = Colors.blueAccent;
-const _bg = Color(0xFF0F172A);
-const _card = Color(0xFF1E293B);
+const _red = Ui.red;
+const _blue = Ui.blue;
 
 /// One set in detail: lineup, score progression, streaks, rally pace and —
 /// for named sets — each player's serve / receive record.
@@ -28,15 +27,10 @@ class MatchDetailScreen extends StatelessWidget {
     );
     final hasLog = match.rallySequence.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bg,
-        foregroundColor: Colors.white,
-        title: Text('#$number · ${_date(match.startTime)}'),
-      ),
+    return UiPage(
+      title: 'Set #$number',
       body: ListView(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           _Section(child: _header(lu == null)),
           if (lu != null)
@@ -115,17 +109,19 @@ class MatchDetailScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text('${match.teamAScore}',
-                style: const TextStyle(color: _red, fontSize: 44, fontWeight: FontWeight.w900)),
-            const Text('  -  ', style: TextStyle(color: Colors.white54, fontSize: 32)),
+                style: const TextStyle(color: _red, fontSize: 52, fontWeight: FontWeight.w900,
+                    shadows: [Shadow(color: _red, blurRadius: 16)])),
+            const Text('  –  ', style: TextStyle(color: Colors.white38, fontSize: 32)),
             Text('${match.teamBScore}',
-                style: const TextStyle(color: _blue, fontSize: 44, fontWeight: FontWeight.w900)),
+                style: const TextStyle(color: _blue, fontSize: 52, fontWeight: FontWeight.w900,
+                    shadows: [Shadow(color: _blue, blurRadius: 16)])),
           ],
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 6),
         Text(
-          '${stopped ? 'STOPPED' : 'COMPLETED'} · '
+          '${stopped ? 'STOPPED' : 'COMPLETED'}  ·  ${uiDay(match.startTime)} ${uiTime(match.startTime)}  ·  '
           '${match.durationEstimated ? '~' : ''}${match.formattedDuration}',
-          style: TextStyle(color: stopped ? Colors.orangeAccent : Colors.white70),
+          style: TextStyle(color: stopped ? Colors.orangeAccent : Colors.white70, fontSize: 13),
         ),
         if (unnamed) ...[
           const SizedBox(height: 4),
@@ -165,8 +161,6 @@ class MatchDetailScreen extends StatelessWidget {
         ]),
       );
 
-  static String _date(DateTime d) =>
-      '${d.day}/${d.month} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 }
 
 class _Section extends StatelessWidget {
@@ -175,15 +169,14 @@ class _Section extends StatelessWidget {
   const _Section({this.title, required this.child});
 
   @override
-  Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: _card, borderRadius: BorderRadius.circular(14)),
+  Widget build(BuildContext context) => UiPanel(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (title != null) ...[
-              Text(title!, style: const TextStyle(color: Colors.white70, fontWeight: FontWeight.bold)),
+              Text(title!.toUpperCase(),
+                  style: const TextStyle(
+                      color: Ui.muted, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1.5)),
               const SizedBox(height: 10),
             ],
             child,
