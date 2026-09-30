@@ -7,8 +7,9 @@
 #   .\deploy.ps1 -Mem            show RAM and the biggest processes
 #   .\deploy.ps1 -StopMiFitness  stop Mi Fitness so Notify can install on the band
 #   .\deploy.ps1 -Dev            the whole dev loop, guided (README section 4)
-#   .\deploy.ps1 -Court          one-time, at home: turn off apps the court
-#                                tablet does not need (kept across reboots)
+#   .\deploy.ps1 -Court          one-time, at home: no background running for
+#                                apps the court tablet does not need (kept
+#                                across reboots)
 #   .\deploy.ps1 -Uncourt        undo -Court
 
 param(
@@ -101,17 +102,9 @@ if ($Unslim) {
 
 # ── Court tablet: run once at home, it lasts across reboots ─────────────
 # Nothing here uninstalls or deletes data: every step is undone by -Uncourt.
+# (Zalo, Galaxy Wearable, ChatGPT, Chess, EnglishScore were uninstalled by
+# hand on 2026-09-30.)
 #
-# Off: cannot run at all, icon hidden (pm disable-user). Asked to be removed;
-# uninstalling would also delete their data, so they are only switched off —
-# uninstall them from Settings if they are really not wanted.
-$CourtOff = @(
-    'com.zing.zalo',
-    'com.samsung.android.app.watchmanager',  # Galaxy Wearable: scans Bluetooth
-    'com.openai.chatgpt',
-    'com.chess',
-    'com.englishscore'
-)
 # No background: still open normally, but cannot start or keep running on
 # their own (after boot, for push, sync...).
 $CourtNoBackground = @(
@@ -138,9 +131,6 @@ $CourtNoBackground = @(
 # Touch Lock overlay used on court, the keyboard and TTS.
 
 if ($Court) {
-    Write-Host '== Court: off =='
-    $cmd = ($CourtOff | ForEach-Object { "pm disable-user --user 0 $_ >/dev/null 2>&1 && echo '  off  $_'" }) -join '; '
-    adb shell $cmd
     Write-Host '== Court: no background =='
     $cmd = ($CourtNoBackground | ForEach-Object {
         "cmd appops set $_ RUN_ANY_IN_BACKGROUND ignore >/dev/null 2>&1 && " +
@@ -153,8 +143,6 @@ if ($Court) {
 
 if ($Uncourt) {
     Write-Host '== Uncourt =='
-    $cmd = ($CourtOff | ForEach-Object { "pm enable $_ >/dev/null 2>&1 && echo '  on   $_'" }) -join '; '
-    adb shell $cmd
     $cmd = ($CourtNoBackground | ForEach-Object {
         "cmd appops set $_ RUN_ANY_IN_BACKGROUND allow >/dev/null 2>&1; " +
         "cmd appops set $_ RUN_IN_BACKGROUND allow >/dev/null 2>&1; " +
