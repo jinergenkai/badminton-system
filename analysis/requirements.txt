@@ -1,0 +1,13 @@
+# PyTorch with CUDA 12.8 (needed for RTX 50-series). On another GPU/CPU pick the matching index:
+# https://pytorch.org/get-started/locally/
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.11.0+cu128
+
+numpy==2.2.6
+opencv-python==5.0.0.93
+pandas==2.3.3
+scipy==1.15.3
+
+# pose (install onnxruntime-gpu only: the CPU 'onnxruntime' pulled in by rtmlib breaks the GPU provider)
+rtmlib==0.0.16
+onnxruntime-gpu==1.23.2
