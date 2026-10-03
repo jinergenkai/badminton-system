@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../views/ui_kit.dart';
 import '../features/hype_voice/models/hype_display_event.dart';
 import '../services/display_settings.dart';
 
@@ -118,7 +118,7 @@ class _KillOverlayState extends State<KillOverlay> {
                     Text(
                       widget.event.displayText,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.orbitron(
+                      style: Ui.orbitron(
                         fontSize: fontSize,
                         fontWeight: FontWeight.w900,
                         color: widget.event.glowColor.withOpacity(0.5),
@@ -132,7 +132,7 @@ class _KillOverlayState extends State<KillOverlay> {
                     Text(
                       widget.event.displayText,
                       textAlign: TextAlign.center,
-                      style: GoogleFonts.orbitron(
+                      style: Ui.orbitron(
                         fontSize: fontSize,
                         fontWeight: FontWeight.w900,
                         color: Colors.white,
@@ -180,7 +180,7 @@ class _KillOverlayState extends State<KillOverlay> {
                 child: Text(
                   widget.event.displayText,
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.orbitron(
+                  style: Ui.orbitron(
                     fontSize: fontSize,
                     fontWeight: FontWeight.w900,
                     color: Colors.white,

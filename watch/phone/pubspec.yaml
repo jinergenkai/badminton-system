@@ -11,7 +11,6 @@ dependencies:
     sdk: flutter
 
   get: ^4.6.6
-  google_fonts: ^6.2.1
   flutter_animate: ^4.5.0
   flutter_tts: ^4.2.3
   shared_preferences: ^2.5.3
@@ -48,3 +47,15 @@ flutter:
     - assets/audio/score/en/
     - assets/config/sound_library.json
     - assets/image/
+
+  # Bundled, not fetched: google_fonts downloaded these on first use, and a
+  # court tablet without internet fell back to a plain font for the score.
+  fonts:
+    - family: Orbitron
+      fonts:
+        - asset: assets/fonts/Orbitron-Variable.ttf
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500

@@ -4,7 +4,7 @@ import 'frame_clock.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:google_fonts/google_fonts.dart';
+import '../views/ui_kit.dart';
 import 'package:get/get.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
@@ -554,7 +554,7 @@ class _PulsingScoreState extends State<_PulsingScore> {
     final text = Text(
         '${widget.score}',
         key: ValueKey(widget.score),
-        style: GoogleFonts.orbitron(
+        style: Ui.orbitron(
           fontSize: widget.fontSize,
           fontWeight: FontWeight.w900,
           color: Colors.white,

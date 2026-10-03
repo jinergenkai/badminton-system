@@ -4,6 +4,27 @@ import 'package:flutter/material.dart';
 /// translucent panels with a hairline border, amber accent, uppercase
 /// letter-spaced titles. Red is team A, blue is team B — everywhere.
 class Ui {
+  /// The score font: Orbitron, bundled (assets/fonts). Variable font, so
+  /// the weight goes to its axis as well as to fontWeight.
+  static TextStyle orbitron({
+    double? fontSize,
+    FontWeight fontWeight = FontWeight.w900,
+    Color? color,
+    double? height,
+    double? letterSpacing,
+    List<Shadow>? shadows,
+  }) =>
+      TextStyle(
+        fontFamily: 'Orbitron',
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        fontVariations: [FontVariation('wght', fontWeight.value.toDouble())],
+        color: color,
+        height: height,
+        letterSpacing: letterSpacing,
+        shadows: shadows,
+      );
+
   static const bg = Color(0xFF0F172A);
   static const bg2 = Color(0xFF1E1B4B);
   static const sheet = Color(0xFF1E1B4B);

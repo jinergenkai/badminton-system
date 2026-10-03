@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'views/score_screen.dart';
 import 'views/ui_kit.dart';
 import 'services/database_service.dart';
@@ -64,7 +63,7 @@ class MyApp extends StatelessWidget {
       title: 'Godminton',
       debugShowCheckedModeBanner: false,
       theme: Ui.theme().copyWith(
-        textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
+        textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Poppins'),
       ),
       home: const ScoreScreen(),
     );
