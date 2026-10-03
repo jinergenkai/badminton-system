@@ -212,7 +212,22 @@ sang phone nữa**. Mi Fitness chỉ được dừng lúc cài `.rpk` qua Notify
 
 ---
 
-## 6. 🐛 Bug đang mở: kết nối một chiều
+## 6. 🐛 Kết nối một chiều
+
+> **Nguyên nhân đã tìm ra (2026-10-03), trên tablet Teclast:** trình quản lý chạy nền của
+> hãng (`awbms`, *Cài đặt → Background Manage*) chặn Mi Fitness mở dịch vụ trung gian
+> chuyển tin từ band sang app. Log có dòng `awbms skipService … com.xiaomi.wearable …
+> WearableXmsService`. Mi Fitness vẫn nhận được gói từ band nhưng không chuyển tiếp được,
+> nên chiều phone → band vẫn chạy còn band → phone thì chết. Sau mỗi lần khởi động lại
+> tablet là lỗi xuất hiện ngay.
+>
+> **Cách chữa:** trong *Background Manage*, chuyển **Mi Fitness**, **Godminton** và
+> **Notify for Xiaomi** sang **Allowed**. Sau đó mở Mi Fitness một lần, rồi làm thứ tự bắt
+> tay ở mục 5. Đã kiểm chứng: chạy ổn trở lại.
+>
+> Kiểm tra nhanh: `adb logcat -d | grep "awbms skipService"`. Có dòng nào là bị chặn.
+>
+> Phần bên dưới là quá trình điều tra trước đó, giữ lại để tham khảo.
 
 ### Triệu chứng
 
