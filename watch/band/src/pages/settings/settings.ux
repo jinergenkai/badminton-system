@@ -1,18 +1,18 @@
 <template>
   <div class="settings-page">
     <div class="header">
-      <text class="title">SETTINGS</text>
+      <text class="title">Settings</text>
     </div>
 
     <list class="settings-list">
       <!-- Ordered by how often each is reached mid-match. No "Back" item:
            the edge swipe already goes back. -->
       <list-item type="setting" class="item" onclick="onSwapSides">
-        <text class="item-text">Swap Side</text>
+        <text class="item-text">Swap side</text>
       </list-item>
 
       <list-item type="setting" class="item" onclick="onPhoneScreen">
-        <text class="item-text">{{ phoneBlank ? 'On Phone' : 'Off Phone' }}</text>
+        <text class="item-text">{{ phoneBlank ? 'Wake phone' : 'Blank phone' }}</text>
       </list-item>
 
       <list-item type="setting" class="item" onclick="onMediaControl">
@@ -24,11 +24,11 @@
       </list-item>
 
       <list-item type="setting" class="item" onclick="onSetScore">
-        <text class="item-text">Set Score</text>
+        <text class="item-text">Set score</text>
       </list-item>
 
       <list-item type="setting" class="item" onclick="onSync">
-        <text class="item-text">Sync Score</text>
+        <text class="item-text">Sync score</text>
       </list-item>
 
       <list-item type="setting" class="item" onclick="onAlarm">
@@ -39,12 +39,16 @@
         <text class="item-text">History</text>
       </list-item>
 
+      <list-item type="setting" class="item" onclick="onKeepOn">
+        <text class="item-text">{{ keepOn ? 'Screen always on' : 'Screen auto off' }}</text>
+      </list-item>
+
       <list-item type="setting" class="item" onclick="onPlayerList">
-        <text class="item-text">Player List</text>
+        <text class="item-text">Player list</text>
       </list-item>
 
       <list-item type="setting" class="item danger" onclick="onReset">
-        <text class="item-text">End Set</text>
+        <text class="item-text">End set</text>
       </list-item>
 
       <list-item type="setting" class="item" onclick="onDiag">
@@ -65,7 +69,8 @@
       connected: false,
       scoreA: 0,
       scoreB: 0,
-      phoneBlank: false
+      phoneBlank: false,
+      keepOn: false
     },
 
     // ── Step-0 diagnostics ───────────────────────────────────────────────
@@ -80,6 +85,7 @@
       this.diag('onShow')
       const def = this.$app && this.$app.$def
       this.phoneBlank = !!(def && def.phoneBlank)
+      this.keepOn = !!(def && def.keepOn)
     },
     // Worth noticing in the log: this page never attaches an onmessage
     // handler, so while it is up the app's single receive slot is whatever
@@ -172,6 +178,17 @@
       if (def) def.pendingMatchCommand = { action: 'publish_state' }
       prompt.showToast({ message: 'Sending current score...' })
       router.back()
+    },
+
+    // Applied by the board when it is back on screen (it only holds the
+    // screen on while a set is shown).
+    onKeepOn() {
+      const def = this.$app && this.$app.$def
+      const on = !this.keepOn
+      this.keepOn = on
+      if (def) def.keepOn = on
+      storage.set({ key: 'bc_keep_on', value: on ? '1' : '' })
+      prompt.showToast({ message: on ? 'Screen stays on during a set' : 'Screen times out' })
     },
 
     onPlayerList() { router.push({ uri: 'pages/players' }) },

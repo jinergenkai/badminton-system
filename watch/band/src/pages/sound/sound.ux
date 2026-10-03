@@ -3,7 +3,7 @@
        below. Per-source volumes live on the phone only. -->
   <div class="container">
     <div class="header">
-      <text class="title">SOUND</text>
+      <text class="title">Sound</text>
       <text class="conn {{ synced ? 'ok' : 'no' }}">{{ synced ? '●' : '○' }}</text>
     </div>
 
@@ -21,18 +21,18 @@
 
     <div class="grid">
       <div class="tog {{ announceOn ? 'on' : 'off' }}" onclick="toggle('announceOn')">
-        <text class="tog-text">SCORE</text>
+        <text class="tog-text">Score</text>
       </div>
       <div class="tog {{ hypeOn ? 'on' : 'off' }}" onclick="toggle('hypeOn')">
-        <text class="tog-text">HYPE</text>
+        <text class="tog-text">Hype</text>
       </div>
     </div>
     <div class="grid">
       <div class="tog {{ tensionOn ? 'on' : 'off' }}" onclick="toggle('tensionOn')">
-        <text class="tog-text">TENSION</text>
+        <text class="tog-text">Tension</text>
       </div>
       <div class="tog {{ winOn ? 'on' : 'off' }}" onclick="toggle('winOn')">
-        <text class="tog-text">WIN</text>
+        <text class="tog-text">Win</text>
       </div>
     </div>
   </div>

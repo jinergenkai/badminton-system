@@ -1,9 +1,9 @@
 <template>
   <div class="container">
     <div class="header">
-      <text class="title">MUSIC</text>
+      <text class="title">Music</text>
       <div class="sync-btn" onclick="requestMediaList">
-        <text class="sync-text">SYNC</text>
+        <text class="sync-text">Sync</text>
       </div>
     </div>
 
@@ -11,10 +11,10 @@
          other control below means. -->
     <div class="mode-row">
       <div class="mode-btn {{ mode === 'commentary' ? 'mode-on' : '' }}" onclick="setMode('commentary')">
-        <text class="mode-text">TALK</text>
+        <text class="mode-text">Talk</text>
       </div>
       <div class="mode-btn {{ mode === 'music' ? 'mode-on' : '' }}" onclick="setMode('music')">
-        <text class="mode-text">MUSIC</text>
+        <text class="mode-text">Music</text>
       </div>
     </div>
 
@@ -38,7 +38,7 @@
 
     <div class="t-row">
       <div class="t-btn {{ playMode === 'random' ? 't-on' : '' }}" onclick="togglePlayMode">
-        <text class="t-text-sm">{{ playMode === 'random' ? 'RANDOM' : 'IN ORDER' }}</text>
+        <text class="t-text-sm">{{ playMode === 'random' ? 'Random' : 'In order' }}</text>
       </div>
       <div class="t-btn t-stop" onclick="stopAll">
         <text class="t-text">■</text>

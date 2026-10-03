@@ -14,6 +14,7 @@
     { "name": "system.alarm" },
     { "name": "system.storage" },
     { "name": "system.vibrator" },
+    { "name": "system.brightness" },
     { "name": "system.notification" },
     { "name": "system.configuration" }
   ],

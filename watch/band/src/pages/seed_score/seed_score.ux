@@ -1,9 +1,9 @@
 <template>
   <!-- No BACK button: the band's own edge swipe already goes back. -->
   <div class="page">
-    <text class="title t-blue" if="{{ step === 0 }}">BLUE SCORE</text>
-    <text class="title t-red" if="{{ step === 1 }}">RED SCORE</text>
-    <text class="title" if="{{ step === 2 }}">WHO SERVES?</text>
+    <text class="title t-blue" if="{{ step === 0 }}">Blue score</text>
+    <text class="title t-red" if="{{ step === 1 }}">Red score</text>
+    <text class="title" if="{{ step === 2 }}">Who serves?</text>
 
     <list class="numbers" if="{{ step < 2 }}">
       <list-item type="score" for="{{ numbers }}" class="number-row" onclick="chooseScore($idx)">
@@ -11,8 +11,8 @@
       </list-item>
     </list>
 
-    <div class="serve red" if="{{ step === 2 }}" onclick="chooseServe('A')"><text class="serve-text">RED SERVES</text></div>
-    <div class="serve blue" if="{{ step === 2 }}" onclick="chooseServe('B')"><text class="serve-text">BLUE SERVES</text></div>
+    <div class="serve red" if="{{ step === 2 }}" onclick="chooseServe('A')"><text class="serve-text">Red serves</text></div>
+    <div class="serve blue" if="{{ step === 2 }}" onclick="chooseServe('B')"><text class="serve-text">Blue serves</text></div>
   </div>
 </template>
 

@@ -1,7 +1,7 @@
 <template>
   <div class="container">
     <div class="header">
-      <text class="title">REMIND</text>
+      <text class="title">Remind</text>
       <text class="now-text">{{ nowText }}</text>
     </div>
 

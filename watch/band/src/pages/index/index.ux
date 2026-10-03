@@ -5,7 +5,7 @@
       <!-- ZONE 1: SETTINGS (TOP - 20%) -->
       <div class="settings-area" onclick="openSettings">
         <div class="status-indicator {{ connected ? 'online' : 'offline' }}"></div>
-        <text class="settings-label">SETTINGS & SYNC</text>
+        <text class="settings-label">Settings & sync</text>
         <div class="progress-bar">
           <div class="progress-inner" style="width: {{ cooldownProgress }}%"></div>
         </div>
@@ -101,6 +101,7 @@
   import app from '@system.app'
   import storage from '@system.storage'
   import vibrator from '@system.vibrator'
+  import brightness from '@system.brightness'
 
   export default {
     private: {
@@ -144,6 +145,8 @@
       // has already buzzed.
       lastPointAt: 0,
       idleAsked: false,
+      // What was last asked of the screen (Settings "Screen always on").
+      keepOnApplied: false,
       // Pending deferred history push (pushUnsyncedHistory).
       historyTimer: null,
       connected: false,
@@ -262,6 +265,13 @@
               try { def.players = JSON.parse(raw) } catch (e) {}
             }
             this.refreshHome()
+          }
+        })
+        storage.get({
+          key: 'bc_keep_on',
+          success: (v) => {
+            def.keepOn = (v === '1')
+            this.applyKeepOn()
           }
         })
         // Left by the old Players On/Off switch.
@@ -510,7 +520,7 @@
       this.checkWinner()
       this.matchRevision++
       this.persistMatch()
-      this.screen = 'game'
+      this.setScreen('game')
       this.markActivity()
       this.sendState('seed_score')
       this.status('Score set')
@@ -578,14 +588,35 @@
       this.startedAt = Date.now()
       this.matchRevision++
       this.persistMatch()
-      this.screen = 'game'
+      this.setScreen('game')
       this.markActivity()
       this.sendState(reset ? 'new_match' : 'match_start')
       this.status(lu ? 'Players set - go' : 'Go')
     },
 
+    setScreen(v) {
+      this.screen = v
+      this.applyKeepOn()
+    },
+
+    // Settings "Screen always on": held only while a set is on screen, so the
+    // start screen and every other page still dim as usual. Costs battery
+    // (the screen is the band's biggest draw), hence off by default.
+    applyKeepOn() {
+      const def = this.$app && this.$app.$def
+      const want = !!(def && def.keepOn) && this.screen === 'game'
+      if (want === this.keepOnApplied) return
+      this.keepOnApplied = want
+      try {
+        brightness.setKeepScreenOn({
+          keepScreenOn: want,
+          fail: (data, code) => this.diag('keepScreenOn FAIL ' + code)
+        })
+      } catch (e) { this.diag('keepScreenOn threw: ' + e.message) }
+    },
+
     onResume() {
-      this.screen = 'game'
+      this.setScreen('game')
       this.markActivity()
     },
 
@@ -602,7 +633,7 @@
     // history; the phone clears its board as it did for NEXT MATCH.
     onDone() {
       this.startFreshMatch()
-      this.screen = 'home'
+      this.setScreen('home')
       this.sendState('new_match')
     },
 
@@ -767,6 +798,7 @@
       this.loadAlarm()
       this.applyPendingMatchCommand()
       this.refreshHome()
+      this.applyKeepOn()
     },
 
     setupConnect() {
@@ -1007,6 +1039,11 @@
       }
       this.stopClock()
       this.stopLinkPoll()
+      // Another page or app: let the screen time out there.
+      if (this.keepOnApplied) {
+        this.keepOnApplied = false
+        try { brightness.setKeepScreenOn({ keepScreenOn: false }) } catch (e) {}
+      }
     },
 
     // ── Clock ────────────────────────────────────────────────────────────
@@ -1182,7 +1219,7 @@
       // message sent back-to-back with `new_match` (that one tended to drop).
       this.closeUnfinished()
       this.startFreshMatch()
-      this.screen = 'home'
+      this.setScreen('home')
       this.sendState('new_match')
       this.status('Set ended')
     },
@@ -1278,7 +1315,7 @@
           this.startedAt = 0
           this.lineup = null
           this.persistMatch()
-          this.screen = 'home'
+          this.setScreen('home')
           this.sendState('state_reply')
           return true
         }
@@ -1328,7 +1365,7 @@
       this.persistMatch()
       if (this.matchStatus === 'completed') this.archiveCurrent('completed')
       // A point from the phone while the band shows home still counts.
-      this.screen = 'game'
+      this.setScreen('game')
       this.markActivity()
       this.startCooldown()
       this.sendState(team === 'A' ? 'score_A' : 'score_B', manualHype)

@@ -1,6 +1,6 @@
 <template>
   <div class="page">
-    <div class="header"><text class="title">LAST 20 SETS</text></div>
+    <div class="header"><text class="title">Last 20 sets</text></div>
     <text class="empty" if="{{ rows.length === 0 }}">{{ emptyText }}</text>
     <list class="history-list" if="{{ rows.length > 0 }}">
       <!-- One type, one structure for every row (no if/else inside list-item:
@@ -73,7 +73,7 @@
       n: '#' + (i + 1),
       a: '' + r.scoreA,
       b: '' + r.scoreB,
-      status: r.status === 'completed' ? 'DONE' : 'STOP',
+      status: r.status === 'completed' ? 'Done' : 'Stop',
       meta: when + ' · ' + dur + synced
     }
   }
@@ -81,7 +81,7 @@
   export default {
     // Finished sets by default, like the phone's history; the choice is kept
     // for the session in $def. Numbers count within what is shown.
-    private: { rows: [], all: [], doneOnly: true, filterText: 'DONE ONLY', emptyText: 'NO SETS YET' },
+    private: { rows: [], all: [], doneOnly: true, filterText: 'Done only', emptyText: 'No sets yet' },
 
     onShow() {
       const def = this.$app && this.$app.$def
@@ -106,8 +106,8 @@
     apply() {
       const list = this.doneOnly ? this.all.filter((r) => r.status === 'completed') : this.all
       this.rows = list.map(toRow)
-      this.filterText = this.doneOnly ? 'DONE ONLY' : 'ALL SETS'
-      this.emptyText = this.all.length === 0 ? 'NO SETS YET' : 'NO FINISHED SETS'
+      this.filterText = this.doneOnly ? 'Done only' : 'All sets'
+      this.emptyText = this.all.length === 0 ? 'No sets yet' : 'No finished sets'
     },
 
     onToggle() {
