@@ -6,6 +6,7 @@ import '../features/camera/camera_link_service.dart';
 import '../features/camera/camera_platform.dart';
 import '../features/camera/camera_rig.dart';
 import '../features/camera/camera_settings.dart';
+import '../features/camera/video_gallery_screen.dart';
 import 'ui_kit.dart';
 
 /// Recording tools around the board: the corner camera (another phone),
@@ -32,6 +33,17 @@ class UtilityScreen extends StatelessWidget {
             UiPanel(child: _BoardRecPanel(rec)),
             const SizedBox(height: 16),
           ],
+          const UiSection('Saved videos'),
+          UiPanel(
+            child: ListTile(
+              leading: const Icon(Icons.video_library, color: Colors.amber, size: 32),
+              title: const Text('Videos on this device'),
+              subtitle: const Text('Recorded by this device, newest first. Tap one to play it.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Get.to(() => const VideoGalleryScreen()),
+            ),
+          ),
+          const SizedBox(height: 16),
           const UiSection('This device'),
           UiPanel(
             child: ListTile(

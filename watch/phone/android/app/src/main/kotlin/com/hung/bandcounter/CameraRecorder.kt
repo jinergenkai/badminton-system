@@ -146,6 +146,16 @@ class CameraRecorder(
                     call.argument<String>("text")!!, call.argument<String>("uri"))
             )
             "deviceStatus" -> result.success(deviceStatus())
+            "listVideos" -> Thread { val v = listVideos(); main.execute { result.success(v) } }.start()
+            "thumbnail" -> {
+                val uri = call.argument<String>("uri")!!
+                val w = call.argument<Int>("width") ?: 320
+                Thread {
+                    val b = thumbnail(uri, w)
+                    main.execute { result.success(b) }
+                }.start()
+            }
+            "openVideo" -> result.success(openVideo(call.argument<String>("uri")!!))
             "gateway" -> result.success(gateway())
             "openHotspot" -> {
                 // No public constant for the tethering page; fall back to
@@ -390,6 +400,81 @@ class CameraRecorder(
     } catch (e: Exception) {
         Log.w(TAG, "writeText failed: ${e.message}")
         null
+    }
+
+    // ── Gallery ────────────────────────────────────────────────────────────
+    /**
+     * Every finished video under Download/Godminton, newest first. A file
+     * still being recorded is pending in MediaStore and not listed.
+     */
+    private fun listVideos(): List<Map<String, Any?>> {
+        val out = mutableListOf<Map<String, Any?>>()
+        val cols = arrayOf(
+            MediaStore.MediaColumns._ID,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.SIZE,
+            MediaStore.MediaColumns.DURATION,
+            MediaStore.MediaColumns.DATE_ADDED,
+            MediaStore.MediaColumns.RELATIVE_PATH,
+        )
+        try {
+            activity.contentResolver.query(
+                MediaStore.Downloads.EXTERNAL_CONTENT_URI, cols,
+                "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND ${MediaStore.MediaColumns.MIME_TYPE} = ?",
+                arrayOf("Download/Godminton/%", "video/mp4"),
+                "${MediaStore.MediaColumns.DATE_ADDED} DESC",
+            )?.use { c ->
+                while (c.moveToNext()) {
+                    val id = c.getLong(0)
+                    val uri = android.content.ContentUris.withAppendedId(MediaStore.Downloads.EXTERNAL_CONTENT_URI, id)
+                    var dur = if (c.isNull(3)) 0L else c.getLong(3)
+                    if (dur <= 0) dur = durationOf(uri)
+                    out.add(mapOf(
+                        "uri" to uri.toString(),
+                        "name" to c.getString(1),
+                        "size" to c.getLong(2),
+                        "durationMs" to dur,
+                        "added" to c.getLong(4) * 1000,
+                        "dir" to c.getString(5),
+                    ))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "listVideos: ${e.message}")
+        }
+        return out
+    }
+
+    private fun durationOf(uri: android.net.Uri): Long = try {
+        val r = android.media.MediaMetadataRetriever()
+        r.setDataSource(activity, uri)
+        val d = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+        r.release()
+        d
+    } catch (e: Exception) { 0L }
+
+    /** JPEG bytes of a frame, [width] px wide (16:9). */
+    private fun thumbnail(uri: String, width: Int): ByteArray? = try {
+        val bmp = activity.contentResolver.loadThumbnail(
+            android.net.Uri.parse(uri), android.util.Size(width, width * 9 / 16), null)
+        val bos = java.io.ByteArrayOutputStream()
+        bmp.compress(android.graphics.Bitmap.CompressFormat.JPEG, 80, bos)
+        bos.toByteArray()
+    } catch (e: Exception) {
+        Log.w(TAG, "thumbnail: ${e.message}")
+        null
+    }
+
+    /** Plays [uri] in the phone's own video player. */
+    private fun openVideo(uri: String): Boolean = try {
+        val i = Intent(Intent.ACTION_VIEW)
+            .setDataAndType(android.net.Uri.parse(uri), "video/mp4")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        activity.startActivity(i)
+        true
+    } catch (e: Exception) {
+        Log.w(TAG, "openVideo: ${e.message}")
+        false
     }
 
     // ── Device ─────────────────────────────────────────────────────────────

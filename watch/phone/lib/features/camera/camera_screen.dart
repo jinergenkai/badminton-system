@@ -11,6 +11,7 @@ import 'camera_platform.dart';
 import 'camera_rig.dart';
 import 'camera_server.dart';
 import 'camera_settings.dart';
+import 'video_gallery_screen.dart';
 
 /// Camera mode: this device is the corner camera and nothing else. It
 /// records continuously, one file per set, from the board's events
@@ -189,6 +190,13 @@ class CameraScreen extends StatelessWidget {
                 onPressed: rec ? s.split : null,
                 icon: const Icon(Icons.content_cut),
                 label: const Text('Split file now'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                style: _outline,
+                onPressed: () => Get.to(() => const VideoGalleryScreen()),
+                icon: const Icon(Icons.video_library),
+                label: Text('Videos (${s.finished.length} new)'),
               ),
               const SizedBox(height: 16),
               // Settings: only while not recording (they rebind the camera).

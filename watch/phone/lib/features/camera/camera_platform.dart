@@ -72,6 +72,19 @@ class CameraPlatform implements VideoSink {
     }
   }
 
+  /// Saved videos, newest first: {uri, name, size, durationMs, added, dir}.
+  static Future<List<Map<String, dynamic>>> listVideos() async {
+    final r = await _ch.invokeMethod<List>('listVideos') ?? const [];
+    return [for (final e in r) (e as Map).map((k, v) => MapEntry('$k', v))];
+  }
+
+  static Future<Uint8List?> thumbnail(String uri, {int width = 320}) =>
+      _ch.invokeMethod<Uint8List>('thumbnail', {'uri': uri, 'width': width});
+
+  /// Plays it in the system video player.
+  static Future<bool> openVideo(String uri) async =>
+      await _ch.invokeMethod<bool>('openVideo', {'uri': uri}) ?? false;
+
   Future<void> openHotspotSettings() => _ch.invokeMethod('openHotspot');
 
   Future<void> setDim(bool on) => _ch.invokeMethod('setDim', {'on': on});
