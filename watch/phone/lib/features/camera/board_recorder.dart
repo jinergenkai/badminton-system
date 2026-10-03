@@ -34,7 +34,8 @@ class BoardRecorder extends GetxService {
       final r = rig ??
           CameraRig(
             role: 'front',
-            lens: CameraSettings.boardLens,
+            // The board faces the players: only its front camera sees the court.
+            lens: 'front',
             overlay: CameraSettings.boardOverlay,
             // Bound but dark: fed only while Utility shows it.
             preview: true,
@@ -42,7 +43,7 @@ class BoardRecorder extends GetxService {
             quality: CameraSettings.boardQuality,
           )
             ..lockOn = CameraSettings.lock
-            ..focus = CameraSettings.focus;
+            ..focus = 'auto';
       rig = r;
       if (!r.opened.value && !await r.open()) return;
       await r.start();

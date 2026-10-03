@@ -87,7 +87,12 @@ class CameraRig with WidgetsBindingObserver {
       }
       if (p['audio'] != true) error.value = 'No microphone permission: video without sound';
       textureId.value = await platform.open(
-          lens: lens, preview: preview, previewActive: previewActive, overlay: overlay, quality: quality);
+        lens: lens,
+        preview: preview,
+        previewActive: previewActive,
+        overlay: overlay,
+        quality: quality,
+      );
       _pushOverlay();
       opened.value = true;
       final st = await platform.deviceStatus();
@@ -149,10 +154,7 @@ class CameraRig with WidgetsBindingObserver {
     try {
       final r = await platform.setLock(focus, exposure);
       final f = r['focus'] as String;
-      lockState.value = [
-        if (f.isNotEmpty) 'focus $f',
-        if (r['exposure'] == true) 'exposure',
-      ].join(' + ');
+      lockState.value = [if (f.isNotEmpty) 'focus $f', if (r['exposure'] == true) 'exposure'].join(' + ');
     } catch (_) {}
   }
 
@@ -267,31 +269,36 @@ class CameraPreviewBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Obx(() {
-        final id = rig.textureId.value;
-        if (id == null) {
-          return AspectRatio(
-            aspectRatio: 16 / 9,
-            child: Center(
-              child: Text(rig.error.value.isEmpty ? 'Opening camera…' : rig.error.value,
-                  style: const TextStyle(color: Colors.white38)),
-            ),
-          );
-        }
-        final a = rig.previewAspect.value;
-        return AspectRatio(
-          aspectRatio: 16 / 9,
-          child: ClipRect(
-            child: FittedBox(
-              fit: BoxFit.cover,
-              child: SizedBox(
-                width: 1000 * a,
-                height: 1000,
-                child: RotatedBox(quarterTurns: rig.previewTurns.value, child: Texture(textureId: id)),
-              ),
+    final id = rig.textureId.value;
+    if (id == null) {
+      return AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Center(
+          child: Text(
+            rig.error.value.isEmpty ? 'Opening camera…' : rig.error.value,
+            style: const TextStyle(color: Colors.white38),
+          ),
+        ),
+      );
+    }
+    final a = rig.previewAspect.value;
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: ClipRect(
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: 1000 * a,
+            height: 1000,
+            child: RotatedBox(
+              quarterTurns: rig.previewTurns.value,
+              child: Texture(textureId: id),
             ),
           ),
-        );
-      });
+        ),
+      ),
+    );
+  });
 }
 
 /// Focus mode, exposure lock and resolution, as both camera screens show
@@ -308,8 +315,12 @@ class CameraOptions extends StatelessWidget {
   /// recording, which starts a new file). Otherwise it waits for Stop.
   final bool qualityWhileRecording;
 
+  /// Hidden on the board: its front camera has no autofocus to set.
+  final bool showFocus;
+
   const CameraOptions({
     this.qualityWhileRecording = false,
+    this.showFocus = true,
     super.key,
     required this.rig,
     required this.recording,
@@ -328,32 +339,32 @@ class CameraOptions extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Focus', style: _label),
-        const SizedBox(height: 4),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(value: 'infinity', label: Text('Infinity')),
-            ButtonSegment(value: 'center', label: Text('Centre')),
-            ButtonSegment(value: 'auto', label: Text('Auto')),
-          ],
-          selected: {rig.focus},
-          onSelectionChanged: (v) => onFocus(v.first),
-        ),
-        Text(
-          {
-            'infinity': 'Whole court sharp; nobody near the lens can pull focus',
-            'center': 'One autofocus pass at the centre, then held',
-            'auto': 'Continuous autofocus: may hunt when someone passes',
-          }[rig.focus]!,
-          style: _hint,
-        ),
+        if (showFocus) ...[
+          const Text('Focus', style: _label),
+          const SizedBox(height: 4),
+          SegmentedButton<String>(
+            segments: const [
+              ButtonSegment(value: 'infinity', label: Text('Infinity')),
+              ButtonSegment(value: 'center', label: Text('Centre')),
+              ButtonSegment(value: 'auto', label: Text('Auto')),
+            ],
+            selected: {rig.focus},
+            onSelectionChanged: (v) => onFocus(v.first),
+          ),
+          Text(
+            {
+              'infinity': 'Whole court sharp; nobody near the lens can pull focus',
+              'center': 'One autofocus pass at the centre, then held',
+              'auto': 'Continuous autofocus: may hunt when someone passes',
+            }[rig.focus]!,
+            style: _hint,
+          ),
+        ],
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('Lock exposure', style: _label),
           subtitle: Text(
-            recording && state.isNotEmpty
-                ? 'Now: $state'
-                : 'Measured 2 s into every set, then held for the set',
+            recording && state.isNotEmpty ? 'Now: $state' : 'Measured 2 s into every set, then held for the set',
             style: _hint,
           ),
           value: rig.lockOn,
@@ -369,8 +380,10 @@ class CameraOptions extends StatelessWidget {
           selected: {quality},
           onSelectionChanged: recording && !qualityWhileRecording ? null : (v) => onQuality(v.first),
         ),
-        Text(quality == '720' ? '6 Mbps, about 2.7 GB an hour, lighter on the device' : '12 Mbps, about 5.4 GB an hour',
-            style: _hint),
+        Text(
+          quality == '720' ? '6 Mbps, about 2.7 GB an hour, lighter on the device' : '12 Mbps, about 5.4 GB an hour',
+          style: _hint,
+        ),
       ],
     );
   }

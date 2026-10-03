@@ -195,7 +195,7 @@ class _BoardRecPanelState extends State<_BoardRecPanel> {
                   ? (recording
                       ? 'Recording · ${rig!.session.finished.length} file(s) saved · Download/Godminton'
                       : 'Starting…')
-                  : 'One file per set, behind the scoreboard. Adds load to this device.'),
+                  : 'Front camera, one file per set, behind the scoreboard. Adds load to this device.'),
               value: on,
               onChanged: _enable,
             ),
@@ -212,42 +212,6 @@ class _BoardRecPanelState extends State<_BoardRecPanel> {
                 ),
               ),
             const SizedBox(height: 8),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'front', label: Text('Front cam')),
-                ButtonSegment(value: 'back', label: Text('Back cam')),
-              ],
-              selected: {CameraSettings.boardLens},
-              onSelectionChanged: (v) async {
-                await CameraSettings.setBoardLens(v.first);
-                await _reconfigure();
-              },
-            ),
-            if (rig != null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: CameraOptions(
-                  rig: rig,
-                  recording: recording,
-                  quality: CameraSettings.boardQuality,
-                  qualityWhileRecording: true,
-                  onFocus: (v) async {
-                    await CameraSettings.setFocus(v);
-                    await rig.setFocus(v);
-                    rec.on.refresh();
-                  },
-                  onLock: (v) async {
-                    await CameraSettings.setLock(v);
-                    await rig.setLockOn(v);
-                    rec.on.refresh();
-                  },
-                  // A new resolution needs the camera reopened: restart it.
-                  onQuality: (v) async {
-                    await CameraSettings.setBoardQuality(v);
-                    await _reconfigure();
-                  },
-                ),
-              ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Score on video'),
