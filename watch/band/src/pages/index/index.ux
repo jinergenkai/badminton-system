@@ -532,7 +532,7 @@
       this.matchRevision++
       this.persistMatch()
       this.sendState('lineup')
-      this.status(this.serveName + ' serves')
+      this.status('Players set')
     },
 
     skipLineup() {
