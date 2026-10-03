@@ -179,11 +179,17 @@ ffmpeg -i audio_src/pack/pack7_viet_hai.mp3 -ss 12.3 -to 14.1 audio_src/hype/u_b
 Sau đó thêm một mục `u_ba_khi` vào `sound_library.json`. Việc chuẩn hóa độ to diễn ra
 khi build.
 
-Độ to của các clip được chỉnh lúc build, không chỉnh lúc chạy. Muốn mọi clip to hơn:
-`python tools/normalize_voice.py --louder 2`. Mức này được lưu trong
-`audio_src/levels.json` nên các lần build sau vẫn giữ; `--louder 0` để quay về. Đo thực
-tế: +2 dB chỉ to thêm khoảng 1 dB, vì các clip đã sát trần. Riêng câu TTS có thêm
-**Name boost** (tới 400%, mỗi bước 10%).
+Độ to của các clip được chỉnh lúc build, không chỉnh lúc chạy. **Mọi giọng nói cùng một
+mức: −10 LUFS** (độ to theo tai nghe, chuẩn EBU R128), gồm số điểm, hype, và cả câu TTS
+(app xử lý bằng đúng chuỗi đó, xem `lib/services/wav_gain.dart`). Vì các câu được ghép
+nối tiếp nhau nên lệch nhau là nghe ra ngay. Đo ngày 2026-10-03: số điểm tiếng Việt và hype
+lệch nhau trong ±0,4 dB. Bộ tiếng Anh chỉ lên được khoảng −11 vì phụ âm gắt chạm trần
+−0,5 dBFS.
+
+Muốn đổi mức chung thì sửa `TARGET_LUFS` trong `tools/normalize_voice.py` **và**
+`kTargetLufs` trong `wav_gain.dart` cùng lúc. Còn `--louder N` chỉ áp cho các file MP3,
+không áp cho TTS, nên sẽ làm lệch hai bên. Đã bỏ Name boost: chính nó làm TTS bị rè
+ngoài sân.
 
 ---
 
