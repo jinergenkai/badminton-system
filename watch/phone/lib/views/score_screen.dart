@@ -12,6 +12,8 @@ import 'settings_screen.dart';
 import 'players_screen.dart';
 import 'sound_library_screen.dart';
 import '../services/phone_controls_service.dart';
+import 'utility_screen.dart';
+import '../features/camera/camera_link_service.dart';
 
 class ScoreScreen extends StatefulWidget {
   const ScoreScreen({super.key});
@@ -247,7 +249,14 @@ class _ScoreScreenState extends State<ScoreScreen> {
               ),
             );
           }),
-          Row(
+          // Scrolls sideways when the screen is too narrow for every
+          // button (a phone held upright): the last ones stay reachable.
+          const SizedBox(width: 12),
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
             children: [
               // Phone volume and screen brightness, always shown: green = at
               // max, orange = not. Volume: tap for max (the band's Master is
@@ -276,14 +285,33 @@ class _ScoreScreenState extends State<ScoreScreen> {
                 }),
                 const SizedBox(width: 12),
               ],
+              // Corner camera: shown once the phone is reachable; red = recording.
+              if (CameraLinkService.maybe != null)
+                Obx(() {
+                  final l = CameraLinkService.maybe!;
+                  if (!l.connected.value) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: _buildStatusChip(
+                      icon: l.recording ? Icons.fiber_manual_record : Icons.videocam_outlined,
+                      label: l.recording ? 'REC' : 'CAM',
+                      ok: l.recording,
+                      onTap: () => Get.to(() => const UtilityScreen()),
+                    ),
+                  );
+                }),
               _buildTopIconButton(icon: Icons.groups, onPressed: () => Get.to(() => const PlayersScreen())),
               const SizedBox(width: 12),
               _buildTopIconButton(icon: Icons.library_music, onPressed: () => Get.to(() => const SoundLibraryScreen())),
               const SizedBox(width: 12),
               _buildTopIconButton(icon: Icons.history, onPressed: () => Get.to(() => const HistoryScreen())),
               const SizedBox(width: 12),
+              _buildTopIconButton(icon: Icons.apps, onPressed: () => Get.to(() => const UtilityScreen())),
+              const SizedBox(width: 12),
               _buildTopIconButton(icon: Icons.settings, onPressed: () => Get.to(() => const SettingsScreen())),
             ],
+          ),
+            ),
           ),
         ],
       ),

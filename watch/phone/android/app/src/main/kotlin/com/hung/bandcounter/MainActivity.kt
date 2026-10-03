@@ -35,9 +35,14 @@ class MainActivity : FlutterActivity() {
     /** Band "Blank Phone" and the board's max-brightness chip share the window brightness. */
     private var blank = false
     private var brightMax = false
+    /** Camera screen while recording: lowest brightness, less heat. */
+    private var dim = false
+
+    private var camera: CameraRecorder? = null
+    private var cameraSink: EventChannel.EventSink? = null
 
     private fun windowBrightness(): Float = when {
-        blank -> 0.01f
+        blank || dim -> 0.01f
         brightMax -> 1f
         else -> WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
     }
@@ -208,6 +213,27 @@ class MainActivity : FlutterActivity() {
             }
         }
 
+        // Corner camera (docs/camera-recording-requirements.md).
+        val cam = CameraRecorder(this, flutterEngine.renderer) { e -> runOnUiThread { cameraSink?.success(e) } }
+        camera = cam
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.voice_counter/camera").setMethodCallHandler { call, result ->
+            if (call.method == "setDim") {
+                dim = call.argument<Boolean>("on") ?: false
+                val lp = window.attributes
+                lp.screenBrightness = windowBrightness()
+                window.attributes = lp
+                result.success(true)
+            } else {
+                cam.handle(call, result)
+            }
+        }
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, "com.voice_counter/camera_events").setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(args: Any?, events: EventChannel.EventSink?) { cameraSink = events }
+                override fun onCancel(args: Any?) { cameraSink = null }
+            }
+        )
+
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, WATCH_EVENT_CHANNEL).setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(args: Any?, events: EventChannel.EventSink?) { eventSink = events }
@@ -376,7 +402,13 @@ class MainActivity : FlutterActivity() {
             }
     }
 
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == CameraRecorder.PERMISSION_REQUEST) camera?.onPermissionsResult()
+    }
+
     override fun onDestroy() {
+        camera?.close()
         super.onDestroy()
         scope.cancel()
         watchNodeId?.let { try { messageApi.removeListener(it) } catch (e: Exception) {} }

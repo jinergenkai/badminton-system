@@ -16,6 +16,7 @@ import '../services/sound_check_service.dart';
 import '../services/voice_clip_service.dart';
 import '../services/sound_library_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
+import '../features/camera/camera_link_service.dart';
 
 class ScoreController extends GetxController {
   final TtsService _ttsService = Get.put(TtsService());
@@ -115,6 +116,11 @@ class ScoreController extends GetxController {
     ]);
   }
   DateTime? _lastBandSeen;
+
+  /// The set the corner camera has been told about, and whether its end
+  /// has been sent (docs/camera-recording-requirements.md §4).
+  String? _camMatchId;
+  bool _camEnded = false;
   Future<void> _dbChain = Future.value();
 
   /// The band app has spoken recently, so it is the scoreboard's authority:
@@ -267,6 +273,11 @@ class ScoreController extends GetxController {
     if (action == 'match_record') {
       _lastBandSeen = DateTime.now();
       _storeBandRecord(event);
+      // A set closed with End set reaches the board only as its record.
+      if (event['status'] == 'stopped' && event['matchId'] == _camMatchId && !_camEnded) {
+        _camEnded = true;
+        _cameraSend('match_end', _camEndFields(event, 'stopped'));
+      }
       // Backstop for a lost live state: the record of the set on court says
       // it is over, but the board has not ended it. Seen with a lineup on
       // board: the winning score_X (sent right after this record) was dropped
@@ -301,6 +312,7 @@ class ScoreController extends GetxController {
         _lastBandMatchId = bandMatchId;
         _lastBandRevision = bandRevision;
       }
+      _cameraFromBand(event, action, isNewRev);
       // Band state says this set is open again (undo after a win): reopen it
       // here too, and drop any record already saved for it.
       if (event['status'] == 'active' && isGameEnded.value) {
@@ -437,6 +449,62 @@ class ScoreController extends GetxController {
         // _checkTensionMusic() moved to onPlaybackCompleted — avoids AudioFocus conflict
         _checkGameEnd(fromBand: fromBand);
       }
+    }
+  }
+
+  // ── Corner camera ─────────────────────────────────────────────────────
+  // Only queued here: the camera link never slows the band → board path.
+  void _cameraSend(String type, Map<String, dynamic> fields) =>
+      CameraLinkService.maybe?.send(type, fields);
+
+  Map<String, dynamic> _camEndFields(Map<String, dynamic> e, String status) => {
+        'matchId': e['matchId'],
+        'status': status,
+        'scoreA': e['scoreA'],
+        'scoreB': e['scoreB'],
+        'startedAt': e['startedAt'],
+        'endedAt': e['endedAt'],
+        'rallies': e['rallies'],
+        'ralT': e['ralT'],
+        'lineup': e['lu'],
+      };
+
+  void _cameraFromBand(Map<String, dynamic> e, String action, bool isNewRev) {
+    if (CameraLinkService.maybe == null) return;
+    final id = e['matchId']?.toString();
+    if (id == null || id.isEmpty) return;
+    final startedAt = (e['startedAt'] as num?)?.toInt() ?? 0;
+    // A set begins when the band starts its clock (the start screen tap).
+    if (id != _camMatchId && startedAt > 0) {
+      _camMatchId = id;
+      _camEnded = false;
+      _cameraSend('match_start', {
+        'matchId': id,
+        'bandStartedAt': startedAt,
+        'lineup': e['lu'],
+        // Not the tap itself: the board (re)joined a set already running.
+        'joined': !(action == 'match_start' || action == 'new_match'),
+      });
+    }
+    if (id != _camMatchId) return;
+    if (isNewRev && (action == 'score_A' || action == 'score_B')) {
+      _cameraSend('point', {
+        'matchId': id,
+        'team': action == 'score_A' ? 'A' : 'B',
+        'scoreA': e['scoreA'],
+        'scoreB': e['scoreB'],
+        'rev': e['revision'],
+      });
+    } else if (isNewRev && action == 'undo') {
+      _cameraSend('undo', {'matchId': id, 'scoreA': e['scoreA'], 'scoreB': e['scoreB'], 'rev': e['revision']});
+    }
+    final status = e['status']?.toString() ?? 'active';
+    if (status == 'completed' && !_camEnded) {
+      _camEnded = true;
+      _cameraSend('match_end', _camEndFields(e, 'completed'));
+    } else if (status == 'active' && _camEnded) {
+      _camEnded = false;
+      _cameraSend('match_reopen', {'matchId': id});
     }
   }
 

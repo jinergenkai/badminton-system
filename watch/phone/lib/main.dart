@@ -16,6 +16,7 @@ import 'services/voice_clip_service.dart';
 import 'services/sound_library_service.dart';
 import 'services/phone_controls_service.dart';
 import 'services/display_settings.dart';
+import 'features/camera/camera_link_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +32,7 @@ void main() async {
   await Get.putAsync(() => VoiceClipService().init());
   await Get.putAsync(() => SoundLibraryService().init());
   Get.put(PhoneControlsService());
+  await Get.putAsync(() => CameraLinkService().init());
 
   runApp(const MyApp());
   unawaited(_dumpSettings());

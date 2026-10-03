@@ -97,4 +97,11 @@ dependencies {
     implementation(files("${projectDir}/libs/xms-wearable-lib_1.4_release.aar"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.7.3")
+    // Corner camera: CameraX controls stabilisation, frame rate and bitrate,
+    // which the Flutter camera plugin does not.
+    val camerax = "1.4.1"
+    implementation("androidx.camera:camera-core:$camerax")
+    implementation("androidx.camera:camera-camera2:$camerax")
+    implementation("androidx.camera:camera-lifecycle:$camerax")
+    implementation("androidx.camera:camera-video:$camerax")
 }

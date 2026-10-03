@@ -3,6 +3,10 @@
     <!-- google_fonts fetches a font the first time it is used -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- Corner camera: asked for only when its screen is opened -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
     
     <application
         android:label="Godminton"
