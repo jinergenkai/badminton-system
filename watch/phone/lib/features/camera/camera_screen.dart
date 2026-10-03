@@ -31,7 +31,10 @@ class CornerCameraController extends GetxController {
       lens: CameraSettings.cornerLens,
       overlay: CameraSettings.overlay,
       preview: true,
-    )..lockOn = CameraSettings.lock;
+      quality: CameraSettings.cornerQuality,
+    )
+      ..lockOn = CameraSettings.lock
+      ..focus = CameraSettings.focus;
     server = CameraServer(rig.session, _statusForBoard);
     rig.clock = () => server.clock;
     server.onEvent = rig.live;
@@ -79,6 +82,18 @@ class CornerCameraController extends GetxController {
     await CameraSettings.setLock(v);
     await rig.setLockOn(v);
     rig.tick.value++;
+  }
+
+  Future<void> setFocus(String v) async {
+    await CameraSettings.setFocus(v);
+    await rig.setFocus(v);
+    rig.tick.value++;
+  }
+
+  Future<void> setQuality(String v) async {
+    await CameraSettings.setCornerQuality(v);
+    rig.quality = v;
+    await rig.reopen();
   }
 
   Future<void> setOverlay(bool v) async {
@@ -214,16 +229,14 @@ class CameraScreen extends StatelessWidget {
                 selected: {rig.lens},
                 onSelectionChanged: rec ? null : (v) => c.setLens(v.first),
               ),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: const Text('Lock focus & exposure', style: TextStyle(color: Colors.white70)),
-                subtitle: Text(
-                    rec && rig.lockOn
-                        ? (rig.lockState.value.isEmpty ? 'locking…' : 'locked: ${rig.lockState.value}')
-                        : 'Locked 2 s after Start, released on Stop',
-                    style: const TextStyle(color: Colors.white38, fontSize: 12)),
-                value: rig.lockOn,
-                onChanged: c.setLock,
+              const SizedBox(height: 8),
+              CameraOptions(
+                rig: rig,
+                recording: rec,
+                quality: rig.quality,
+                onFocus: c.setFocus,
+                onLock: c.setLock,
+                onQuality: c.setQuality,
               ),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

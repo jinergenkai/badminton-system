@@ -118,7 +118,8 @@ class CameraRecorder(
     companion object {
         const val TAG = "CameraRec"
         const val PERMISSION_REQUEST = 4711
-        const val BITRATE = 12_000_000
+        const val BITRATE_FHD = 12_000_000
+        const val BITRATE_HD = 6_000_000
     }
 
     fun handle(call: MethodCall, result: MethodChannel.Result) {
@@ -129,9 +130,14 @@ class CameraRecorder(
                 call.argument<Boolean>("preview") ?: true,
                 call.argument<Boolean>("overlay") ?: true,
                 call.argument<Boolean>("previewActive") ?: true,
+                call.argument<String>("quality") ?: "1080",
                 result,
             )
-            "setLock" -> setLock(call.argument<Boolean>("on") ?: false, result)
+            "setLock" -> setLock(
+                call.argument<String>("focus") ?: "auto",
+                call.argument<Boolean>("exposure") ?: false,
+                result,
+            )
             "setPreviewActive" -> {
                 val on = call.argument<Boolean>("on") ?: false
                 previewUseCase?.setSurfaceProvider(main, if (on) previewProvider else null)
@@ -209,7 +215,7 @@ class CameraRecorder(
 
     // ── Camera ─────────────────────────────────────────────────────────────
     private fun open(lens: String, withPreview: Boolean, withOverlay: Boolean, previewActive: Boolean,
-                     result: MethodChannel.Result) {
+                     quality: String, result: MethodChannel.Result) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             result.error("OLD_ANDROID", "Recording needs Android 10+", null); return
         }
@@ -241,10 +247,13 @@ class CameraRecorder(
                 previewUseCase = preview
                 previewProvider = provider
                 if (previewActive) preview?.setSurfaceProvider(main, provider)
+                // 1080p (12 Mbps) or 720p (6 Mbps, about half the load and
+                // the storage); falls back lower if the lens cannot.
+                val q = if (quality == "720") Quality.HD else Quality.FHD
+                val recorderQuality = QualitySelector.from(q, FallbackStrategy.lowerQualityOrHigherThan(q))
                 val recorder = Recorder.Builder()
-                    .setQualitySelector(QualitySelector.from(Quality.FHD,
-                        FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)))
-                    .setTargetVideoEncodingBitRate(BITRATE)
+                    .setQualitySelector(recorderQuality)
+                    .setTargetVideoEncodingBitRate(if (q == Quality.HD) BITRATE_HD else BITRATE_FHD)
                     .build()
                 val vc = VideoCapture.Builder(recorder)
                     .setVideoStabilizationEnabled(false)
@@ -379,8 +388,22 @@ class CameraRecorder(
             is VideoRecordEvent.Finalize -> {
                 val uri = ev.outputResults.outputUri.toString()
                 recordingUri = uri
+                // The size actually recorded (a lens may fall back lower).
+                var w = 0
+                var h = 0
+                try {
+                    val r = android.media.MediaMetadataRetriever()
+                    r.setDataSource(activity, ev.outputResults.outputUri)
+                    w = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH)?.toIntOrNull() ?: 0
+                    h = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT)?.toIntOrNull() ?: 0
+                    val rot = r.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)?.toIntOrNull() ?: 0
+                    if (rot % 180 != 0) { val t = w; w = h; h = t }
+                    r.release()
+                } catch (e: Exception) {}
                 emit(mapOf(
                     "type" to "finalized",
+                    "width" to w,
+                    "height" to h,
                     "uri" to uri,
                     "durationMs" to durMs,
                     "error" to if (ev.hasError()) "${ev.error}: ${ev.cause?.message}" else null,
@@ -420,49 +443,57 @@ class CameraRecorder(
 
     // ── Focus / exposure lock ──────────────────────────────────────────────
     /**
-     * The phone's own Camera2 3A locks: focus held where it is (one AF pass
-     * at the centre, then no auto-cancel), exposure and white balance
-     * frozen. A player walking past the lens then neither refocuses nor
-     * darkens the frame. Off: back to continuous auto. Fixed-focus lenses
-     * (most front cameras) only get the exposure lock.
-     * Replies {focus, exposure}: which of the two this camera could lock.
+     * The phone's own Camera2 controls, set as one request:
+     *   focus "infinity"  autofocus off, lens at infinity: on a court seen
+     *                     from 3-15 m everything is sharp there, whoever
+     *                     stands near the lens (the default)
+     *         "center"    one autofocus pass at the centre, then held
+     *         "auto"      continuous autofocus, as without any lock
+     *   exposure true     exposure and white balance frozen
+     * The session calls this with exposure false at each new file, then true
+     * 2 s later: exposure is measured again for every set, held within it.
+     * focus "auto" + exposure false = everything back to automatic.
+     * Fixed-focus lenses (most front cameras) ignore the focus part.
+     * Replies {focus, exposure}: what this camera actually did.
      */
     @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
-    private fun setLock(on: Boolean, result: MethodChannel.Result) {
-        val cam = boundCamera ?: run { result.success(mapOf("focus" to false, "exposure" to false)); return }
+    private fun setLock(focus: String, exposure: Boolean, result: MethodChannel.Result) {
+        val cam = boundCamera ?: run { result.success(mapOf("focus" to "", "exposure" to false)); return }
         val c2 = Camera2CameraControl.from(cam.cameraControl)
         val info = Camera2CameraInfo.from(cam.cameraInfo)
         val aeLock = info.getCameraCharacteristic(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true
         val awbLock = info.getCameraCharacteristic(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE) == true
-        val afModes = info.getCameraCharacteristic(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)
-        val hasAf = afModes != null && afModes.any { it == CaptureRequest.CONTROL_AF_MODE_AUTO }
-        if (!on) {
-            c2.clearCaptureRequestOptions()
-            cam.cameraControl.cancelFocusAndMetering()
-            result.success(mapOf("focus" to false, "exposure" to false))
+        val minFocus = info.getCameraCharacteristic(CameraCharacteristics.LENS_INFO_MINIMUM_FOCUS_DISTANCE) ?: 0f
+        val canFocus = minFocus > 0f
+
+        fun options(): CaptureRequestOptions {
+            val o = CaptureRequestOptions.Builder()
+            if (focus == "infinity" && canFocus) {
+                o.setCaptureRequestOption(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_OFF)
+                o.setCaptureRequestOption(CaptureRequest.LENS_FOCUS_DISTANCE, 0f)
+            }
+            if (exposure && aeLock) o.setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true)
+            if (exposure && awbLock) o.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, true)
+            return o.build()
+        }
+
+        if (focus != "center") cam.cameraControl.cancelFocusAndMetering()
+        if (focus == "center" && canFocus && exposure) {
+            val point = SurfaceOrientedMeteringPointFactory(1f, 1f).createPoint(0.5f, 0.5f)
+            val f = cam.cameraControl.startFocusAndMetering(
+                FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF).disableAutoCancel().build())
+            f.addListener({
+                c2.setCaptureRequestOptions(options())
+                val ok = try { f.get().isFocusSuccessful } catch (e: Exception) { false }
+                result.success(mapOf("focus" to if (ok) "center" else "", "exposure" to aeLock))
+            }, main)
             return
         }
-        fun lockExposure() {
-            val o = CaptureRequestOptions.Builder()
-            if (aeLock) o.setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true)
-            if (awbLock) o.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, true)
-            c2.setCaptureRequestOptions(o.build())
-        }
-        if (hasAf) {
-            val point = SurfaceOrientedMeteringPointFactory(1f, 1f).createPoint(0.5f, 0.5f)
-            val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
-                .disableAutoCancel()
-                .build()
-            val f = cam.cameraControl.startFocusAndMetering(action)
-            f.addListener({
-                lockExposure()
-                val focused = try { f.get().isFocusSuccessful } catch (e: Exception) { false }
-                result.success(mapOf("focus" to focused, "exposure" to aeLock))
-            }, main)
-        } else {
-            lockExposure()
-            result.success(mapOf("focus" to false, "exposure" to aeLock))
-        }
+        c2.setCaptureRequestOptions(options())
+        result.success(mapOf(
+            "focus" to if (focus == "infinity" && canFocus) "infinity" else "",
+            "exposure" to (exposure && aeLock),
+        ))
     }
 
     // ── Gallery ────────────────────────────────────────────────────────────

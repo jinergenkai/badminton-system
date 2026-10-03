@@ -22,6 +22,9 @@ class CameraRig with WidgetsBindingObserver {
   /// Whether the preview is fed right now (the board keeps it dark unless
   /// its preview is on screen).
   bool previewActive;
+
+  /// '1080' | '720' (applied when the camera is opened).
+  String quality;
   ClockInfo Function() clock;
 
   CameraRig({
@@ -30,6 +33,7 @@ class CameraRig with WidgetsBindingObserver {
     required this.overlay,
     required this.preview,
     this.previewActive = true,
+    this.quality = '1080',
     ClockInfo Function()? clock,
   }) : clock = clock ?? (() => const ClockInfo(0, 0, 0));
 
@@ -50,9 +54,11 @@ class CameraRig with WidgetsBindingObserver {
   final RxInt previewTurns = 0.obs;
   final RxInt tick = 0.obs;
 
-  /// Lock focus / exposure while recording (CameraSettings.lock), and what
-  /// the camera managed to lock, for the screen.
+  /// While recording: freeze exposure (re-measured for every file), and
+  /// how to focus ('infinity' | 'center' | 'auto'). [lockState] says what the
+  /// camera actually did, for the screen.
   bool lockOn = true;
+  String focus = 'infinity';
   final RxString lockState = ''.obs;
   Timer? _lockTimer;
 
@@ -72,6 +78,7 @@ class CameraRig with WidgetsBindingObserver {
     _events ??= platform.events.listen(_onEvent);
     WidgetsBinding.instance.addObserver(this);
     session.onChange = () => tick.value++;
+    session.onFileStarted = _onFileStarted;
     try {
       final p = await platform.requestPermissions();
       if (p['camera'] != true) {
@@ -80,7 +87,7 @@ class CameraRig with WidgetsBindingObserver {
       }
       if (p['audio'] != true) error.value = 'No microphone permission: video without sound';
       textureId.value = await platform.open(
-          lens: lens, preview: preview, previewActive: previewActive, overlay: overlay);
+          lens: lens, preview: preview, previewActive: previewActive, overlay: overlay, quality: quality);
       _pushOverlay();
       opened.value = true;
       final st = await platform.deviceStatus();
@@ -119,9 +126,6 @@ class CameraRig with WidgetsBindingObserver {
     error.value = '';
     await session.begin();
     recording.value = true;
-    // Let auto exposure and focus settle on the court first.
-    _lockTimer?.cancel();
-    if (lockOn) _lockTimer = Timer(const Duration(seconds: 2), () => applyLock(true));
   }
 
   Future<void> stop() async {
@@ -129,24 +133,38 @@ class CameraRig with WidgetsBindingObserver {
     _lockTimer?.cancel();
     await session.end();
     recording.value = false;
-    await applyLock(false);
+    await _apply(focus: 'auto', exposure: false);
   }
 
-  Future<void> applyLock(bool on) async {
+  /// Each new file (the first one and every set's): focus as chosen,
+  /// exposure free for 2 s to measure the court, then frozen for the set.
+  void _onFileStarted() {
+    _lockTimer?.cancel();
+    _apply(focus: focus, exposure: false);
+    if (lockOn) _lockTimer = Timer(const Duration(seconds: 2), () => _apply(focus: focus, exposure: true));
+  }
+
+  Future<void> _apply({required String focus, required bool exposure}) async {
     if (!opened.value) return;
     try {
-      final r = await platform.setLock(on);
-      lockState.value = !on
-          ? ''
-          : [if (r['focus'] == true) 'focus', if (r['exposure'] == true) 'exposure'].join(' + ');
-      if (on && lockState.value.isEmpty) lockState.value = 'not supported';
+      final r = await platform.setLock(focus, exposure);
+      final f = r['focus'] as String;
+      lockState.value = [
+        if (f.isNotEmpty) 'focus $f',
+        if (r['exposure'] == true) 'exposure',
+      ].join(' + ');
     } catch (_) {}
   }
 
-  /// The switch was flipped: takes effect now if recording.
+  /// A switch was flipped: takes effect now if recording.
   Future<void> setLockOn(bool v) async {
     lockOn = v;
-    if (recording.value) await applyLock(v);
+    if (session.running) await _apply(focus: focus, exposure: v);
+  }
+
+  Future<void> setFocus(String v) async {
+    focus = v;
+    if (session.running) await _apply(focus: v, exposure: lockOn);
   }
 
   @override
@@ -178,11 +196,17 @@ class CameraRig with WidgetsBindingObserver {
 
   void _onEvent(Map<String, dynamic> e) {
     switch (e['type']) {
-      case 'startWall':
       case 'started':
+      case 'startWall':
         session.onStartWall((e['wall'] as num).toInt());
         break;
       case 'finalized':
+        // The JSON written now carries the size this file really has.
+        final w = (e['width'] as num?)?.toInt() ?? 0, h = (e['height'] as num?)?.toInt() ?? 0;
+        if (w > 0 && h > 0) {
+          session.deviceInfo['width'] = w;
+          session.deviceInfo['height'] = h;
+        }
         session.onFinalized(e['uri'] as String?, error: e['error'] as String?).catchError((_) {});
         break;
       case 'preview':
@@ -268,4 +292,86 @@ class CameraPreviewBox extends StatelessWidget {
           ),
         );
       });
+}
+
+/// Focus mode, exposure lock and resolution, as both camera screens show
+/// them. Resolution rebinds the camera, so it waits until not recording.
+class CameraOptions extends StatelessWidget {
+  final CameraRig rig;
+  final bool recording;
+  final String quality;
+  final ValueChanged<String> onFocus;
+  final ValueChanged<bool> onLock;
+  final ValueChanged<String> onQuality;
+
+  /// Resolution can change while recording (the caller restarts the
+  /// recording, which starts a new file). Otherwise it waits for Stop.
+  final bool qualityWhileRecording;
+
+  const CameraOptions({
+    this.qualityWhileRecording = false,
+    super.key,
+    required this.rig,
+    required this.recording,
+    required this.quality,
+    required this.onFocus,
+    required this.onLock,
+    required this.onQuality,
+  });
+
+  static const _label = TextStyle(color: Colors.white70);
+  static const _hint = TextStyle(color: Colors.white38, fontSize: 12);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = rig.lockState.value;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Focus', style: _label),
+        const SizedBox(height: 4),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'infinity', label: Text('Infinity')),
+            ButtonSegment(value: 'center', label: Text('Centre')),
+            ButtonSegment(value: 'auto', label: Text('Auto')),
+          ],
+          selected: {rig.focus},
+          onSelectionChanged: (v) => onFocus(v.first),
+        ),
+        Text(
+          {
+            'infinity': 'Whole court sharp; nobody near the lens can pull focus',
+            'center': 'One autofocus pass at the centre, then held',
+            'auto': 'Continuous autofocus: may hunt when someone passes',
+          }[rig.focus]!,
+          style: _hint,
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Lock exposure', style: _label),
+          subtitle: Text(
+            recording && state.isNotEmpty
+                ? 'Now: $state'
+                : 'Measured 2 s into every set, then held for the set',
+            style: _hint,
+          ),
+          value: rig.lockOn,
+          onChanged: onLock,
+        ),
+        const Text('Resolution', style: _label),
+        const SizedBox(height: 4),
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: '1080', label: Text('1080p')),
+            ButtonSegment(value: '720', label: Text('720p')),
+          ],
+          selected: {quality},
+          onSelectionChanged: recording && !qualityWhileRecording ? null : (v) => onQuality(v.first),
+        ),
+        Text(quality == '720' ? '6 Mbps, about 2.7 GB an hour, lighter on the device' : '12 Mbps, about 5.4 GB an hour',
+            style: _hint),
+      ],
+    );
+  }
 }

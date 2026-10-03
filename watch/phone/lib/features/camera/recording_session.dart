@@ -123,6 +123,10 @@ class RecordingSession {
   /// Called on every change worth showing.
   void Function()? onChange;
 
+  /// Called when a new file has started recording (the rig re-measures
+  /// exposure there).
+  void Function()? onFileStarted;
+
   // ── Lifecycle ───────────────────────────────────────────────────────────
   Future<void> begin() async {
     if (running) return;
@@ -182,6 +186,7 @@ class RecordingSession {
     } finally {
       _starting = false;
     }
+    onFileStarted?.call();
     onChange?.call();
   }
 
@@ -351,8 +356,8 @@ class RecordingSession {
       'video': '${f.finalName ?? nameOf(f)}.mp4',
       'role': 'corner',
       ...deviceInfo,
-      'width': 1920,
-      'height': 1080,
+      'width': deviceInfo['width'] ?? 1920,
+      'height': deviceInfo['height'] ?? 1080,
       'fps': 30,
       'stabilization': false,
       'recordStartWall': DateTime.fromMillisecondsSinceEpoch(f.zero).toIso8601String(),

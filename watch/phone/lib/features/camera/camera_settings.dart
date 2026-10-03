@@ -33,9 +33,20 @@ class CameraSettings {
   static bool get overlay => _p.getBool('camera_overlay') ?? true;
   static Future<void> setOverlay(bool v) => _p.setBool('camera_overlay', v);
 
-  /// Lock focus and exposure 2 s after recording starts.
+  /// Freeze exposure 2 s into each file (measured again for every set).
   static bool get lock => _p.getBool('camera_lock') ?? true;
   static Future<void> setLock(bool v) => _p.setBool('camera_lock', v);
+
+  /// Focus while recording: 'infinity' (whole court sharp, nothing near the
+  /// lens can pull it) | 'center' (one autofocus pass, held) | 'auto'.
+  static String get focus => _p.getString('camera_focus') ?? 'infinity';
+  static Future<void> setFocus(String v) => _p.setString('camera_focus', v);
+
+  /// '1080' | '720'. The board defaults to 720: it also runs the scoreboard.
+  static String get cornerQuality => _p.getString('camera_corner_quality') ?? '1080';
+  static Future<void> setCornerQuality(String v) => _p.setString('camera_corner_quality', v);
+  static String get boardQuality => _p.getString('camera_board_quality') ?? '720';
+  static Future<void> setBoardQuality(String v) => _p.setString('camera_board_quality', v);
 
   static bool get boardOverlay => _p.getBool('camera_board_overlay') ?? false;
   static Future<void> setBoardOverlay(bool v) => _p.setBool('camera_board_overlay', v);

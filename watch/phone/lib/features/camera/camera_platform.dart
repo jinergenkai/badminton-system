@@ -23,17 +23,29 @@ class CameraPlatform implements VideoSink {
   /// id, or null without a preview (the board recording behind its UI).
   /// [overlay] burns the score and clock into the video.
   Future<int?> open(
-      {String lens = 'back', bool preview = true, bool previewActive = true, bool overlay = true}) async {
-    final r = await _ch.invokeMethod<Map>('open',
-        {'lens': lens, 'preview': preview, 'previewActive': previewActive, 'overlay': overlay});
+      {String lens = 'back',
+      bool preview = true,
+      bool previewActive = true,
+      bool overlay = true,
+      String quality = '1080'}) async {
+    final r = await _ch.invokeMethod<Map>('open', {
+      'lens': lens,
+      'preview': preview,
+      'previewActive': previewActive,
+      'overlay': overlay,
+      'quality': quality,
+    });
     return (r?['textureId'] as num?)?.toInt();
   }
 
   /// Focus / exposure lock (the camera's own 3A locks). Returns which of
   /// the two this camera actually locked: {focus, exposure}.
-  Future<Map<String, bool>> setLock(bool on) async {
-    final r = await _ch.invokeMethod<Map>('setLock', {'on': on});
-    return {'focus': r?['focus'] == true, 'exposure': r?['exposure'] == true};
+  /// [focus] 'infinity' | 'center' | 'auto'; [exposure] freezes exposure and
+  /// white balance. Returns what the camera did: {focus: 'infinity' |
+  /// 'center' | '', exposure: bool}.
+  Future<Map<String, dynamic>> setLock(String focus, bool exposure) async {
+    final r = await _ch.invokeMethod<Map>('setLock', {'focus': focus, 'exposure': exposure});
+    return {'focus': '${r?['focus'] ?? ''}', 'exposure': r?['exposure'] == true};
   }
 
   /// Feed the preview (true) or leave it dark (false), without rebinding:

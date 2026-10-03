@@ -223,19 +223,31 @@ class _BoardRecPanelState extends State<_BoardRecPanel> {
                 await _reconfigure();
               },
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Lock focus & exposure'),
-              subtitle: Text(recording && (rig?.lockOn ?? false)
-                  ? (rig!.lockState.value.isEmpty ? 'locking…' : 'locked: ${rig.lockState.value}')
-                  : 'Locked 2 s after recording starts'),
-              value: CameraSettings.lock,
-              onChanged: (v) async {
-                await CameraSettings.setLock(v);
-                await rec.rig?.setLockOn(v);
-                rec.on.refresh();
-              },
-            ),
+            if (rig != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: CameraOptions(
+                  rig: rig,
+                  recording: recording,
+                  quality: CameraSettings.boardQuality,
+                  qualityWhileRecording: true,
+                  onFocus: (v) async {
+                    await CameraSettings.setFocus(v);
+                    await rig.setFocus(v);
+                    rec.on.refresh();
+                  },
+                  onLock: (v) async {
+                    await CameraSettings.setLock(v);
+                    await rig.setLockOn(v);
+                    rec.on.refresh();
+                  },
+                  // A new resolution needs the camera reopened: restart it.
+                  onQuality: (v) async {
+                    await CameraSettings.setBoardQuality(v);
+                    await _reconfigure();
+                  },
+                ),
+              ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Score on video'),
