@@ -17,6 +17,7 @@ import '../services/voice_clip_service.dart';
 import '../services/sound_library_service.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../features/camera/camera_link_service.dart';
+import '../features/camera/board_recorder.dart';
 
 class ScoreController extends GetxController {
   final TtsService _ttsService = Get.put(TtsService());
@@ -121,6 +122,7 @@ class ScoreController extends GetxController {
   /// has been sent (docs/camera-recording-requirements.md §4).
   String? _camMatchId;
   bool _camEnded = false;
+  Map<String, dynamic>? _camLast;
   Future<void> _dbChain = Future.value();
 
   /// The band app has spoken recently, so it is the scoreboard's authority:
@@ -144,6 +146,8 @@ class ScoreController extends GetxController {
   void onInit() {
     super.onInit();
     _loadSettings();
+    CameraLinkService.maybe?.onResync = _cameraResync;
+    BoardRecorder.maybe?.onStarted = _cameraResync;
     _ttsService.initialize().then((_) {
       _applyTeamNames(_ttsService.currentLanguage);
       // Custom hype lines rendered before they are needed, not on first play.
@@ -454,8 +458,10 @@ class ScoreController extends GetxController {
 
   // ── Corner camera ─────────────────────────────────────────────────────
   // Only queued here: the camera link never slows the band → board path.
-  void _cameraSend(String type, Map<String, dynamic> fields) =>
-      CameraLinkService.maybe?.send(type, fields);
+  void _cameraSend(String type, Map<String, dynamic> fields) {
+    CameraLinkService.maybe?.send(type, fields);
+    BoardRecorder.maybe?.feed(type, fields);
+  }
 
   Map<String, dynamic> _camEndFields(Map<String, dynamic> e, String status) => {
         'matchId': e['matchId'],
@@ -469,10 +475,26 @@ class ScoreController extends GetxController {
         'lineup': e['lu'],
       };
 
+  /// A camera started or reconnected mid-set: tell it the set again, as
+  /// joined (its start is not in that file) and with the score so far.
+  void _cameraResync() {
+    final e = _camLast;
+    if (e == null || _camMatchId == null || _camEnded) return;
+    _cameraSend('match_start', {
+      'matchId': _camMatchId,
+      'bandStartedAt': e['startedAt'],
+      'lineup': e['lu'],
+      'joined': true,
+      'scoreA': e['scoreA'],
+      'scoreB': e['scoreB'],
+    });
+  }
+
   void _cameraFromBand(Map<String, dynamic> e, String action, bool isNewRev) {
-    if (CameraLinkService.maybe == null) return;
+    if (CameraLinkService.maybe == null && BoardRecorder.maybe == null) return;
     final id = e['matchId']?.toString();
     if (id == null || id.isEmpty) return;
+    _camLast = e;
     final startedAt = (e['startedAt'] as num?)?.toInt() ?? 0;
     // A set begins when the band starts its clock (the start screen tap).
     if (id != _camMatchId && startedAt > 0) {
@@ -484,6 +506,8 @@ class ScoreController extends GetxController {
         'lineup': e['lu'],
         // Not the tap itself: the board (re)joined a set already running.
         'joined': !(action == 'match_start' || action == 'new_match'),
+        'scoreA': e['scoreA'],
+        'scoreB': e['scoreB'],
       });
     }
     if (id != _camMatchId) return;

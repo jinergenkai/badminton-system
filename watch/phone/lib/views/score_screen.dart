@@ -14,6 +14,7 @@ import 'sound_library_screen.dart';
 import '../services/phone_controls_service.dart';
 import 'utility_screen.dart';
 import '../features/camera/camera_link_service.dart';
+import '../features/camera/board_recorder.dart';
 
 class ScoreScreen extends StatefulWidget {
   const ScoreScreen({super.key});
@@ -285,21 +286,26 @@ class _ScoreScreenState extends State<ScoreScreen> {
                 }),
                 const SizedBox(width: 12),
               ],
-              // Corner camera: shown once the phone is reachable; red = recording.
-              if (CameraLinkService.maybe != null)
-                Obx(() {
-                  final l = CameraLinkService.maybe!;
-                  if (!l.connected.value) return const SizedBox.shrink();
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: _buildStatusChip(
-                      icon: l.recording ? Icons.fiber_manual_record : Icons.videocam_outlined,
-                      label: l.recording ? 'REC' : 'CAM',
-                      ok: l.recording,
-                      onTap: () => Get.to(() => const UtilityScreen()),
-                    ),
-                  );
-                }),
+              // Cameras: shown once one is in play (the corner phone linked, or
+              // this device recording); REC when any of them records.
+              Obx(() {
+                final l = CameraLinkService.maybe;
+                final own = BoardRecorder.maybe;
+                final linked = l?.connected.value ?? false;
+                final ownOn = own?.on.value ?? false;
+                if (!linked && !ownOn) return const SizedBox.shrink();
+                own?.rig?.recording.value;
+                final rec = (l?.recording ?? false) || (own?.recording ?? false);
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _buildStatusChip(
+                    icon: rec ? Icons.fiber_manual_record : Icons.videocam_outlined,
+                    label: rec ? 'REC' : 'CAM',
+                    ok: rec,
+                    onTap: () => Get.to(() => const UtilityScreen()),
+                  ),
+                );
+              }),
               _buildTopIconButton(icon: Icons.groups, onPressed: () => Get.to(() => const PlayersScreen())),
               const SizedBox(width: 12),
               _buildTopIconButton(icon: Icons.library_music, onPressed: () => Get.to(() => const SoundLibraryScreen())),

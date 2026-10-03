@@ -91,7 +91,12 @@ class CameraServer {
       }
     }, onError: (_) {});
     _sendStatus();
+    resync();
   }
+
+  /// Ask the board to tell the set in progress again: the camera started
+  /// (or reconnected) mid-set and would not know it until the next point.
+  void resync() => _send({'type': 'resync'});
 
   void _send(Map<String, dynamic> m) {
     try {

@@ -16,9 +16,20 @@ import 'services/sound_library_service.dart';
 import 'services/phone_controls_service.dart';
 import 'services/display_settings.dart';
 import 'features/camera/camera_link_service.dart';
+import 'features/camera/camera_settings.dart';
+import 'features/camera/camera_screen.dart';
+import 'features/camera/board_recorder.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await CameraSettings.load();
+
+  // Camera mode: only the camera. No database, band link, voice, music or
+  // sound library, so the corner phone spends its memory on recording.
+  if (CameraSettings.role == CameraSettings.camera) {
+    runApp(const CameraApp());
+    return;
+  }
 
   // Initialize Hive database
   await DatabaseService.initialize();
@@ -34,6 +45,10 @@ void main() async {
   await Get.putAsync(() => CameraLinkService().init());
 
   runApp(const MyApp());
+  // The board's own camera, if switched on: after the first frame, as it
+  // needs the activity (permissions, camera lifecycle).
+  final boardRec = Get.put(BoardRecorder());
+  WidgetsBinding.instance.addPostFrameCallback((_) => unawaited(boardRec.init()));
   unawaited(_dumpSettings());
   // Again whenever the app goes to the background, i.e. after tuning.
   AppLifecycleListener(onHide: () => unawaited(_dumpSettings()));
@@ -68,4 +83,18 @@ class MyApp extends StatelessWidget {
       home: const ScoreScreen(),
     );
   }
+}
+
+class CameraApp extends StatelessWidget {
+  const CameraApp({super.key});
+
+  @override
+  Widget build(BuildContext context) => GetMaterialApp(
+        title: 'Godminton camera',
+        debugShowCheckedModeBanner: false,
+        theme: Ui.theme().copyWith(
+          textTheme: ThemeData.dark().textTheme.apply(fontFamily: 'Poppins'),
+        ),
+        home: const CameraScreen(),
+      );
 }

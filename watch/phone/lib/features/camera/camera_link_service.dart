@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'camera_beacon.dart';
 import 'camera_platform.dart';
 import 'camera_server.dart';
 
@@ -19,15 +20,24 @@ import 'camera_server.dart';
 class CameraLinkService extends GetxService {
   static const _prefHost = 'camera_host';
 
-  /// Manual address; empty = the Wi-Fi gateway (the phone's hotspot).
+  /// Manual address; empty = automatic: the camera that announces itself on
+  /// the network (hotspot or shared Wi-Fi), else the Wi-Fi gateway (on the
+  /// phone's hotspot, that is the phone).
   final RxString hostOverride = ''.obs;
   final RxBool connected = false.obs;
   final RxString host = ''.obs;
+
+  /// How [host] was found: 'manual' | 'found' | 'gateway'.
+  final RxString via = ''.obs;
+  final _beacon = BeaconListener();
 
   /// Last status from the phone: recording, file, freeGB, battery, tempC.
   final RxMap<String, dynamic> remote = <String, dynamic>{}.obs;
 
   bool get recording => connected.value && remote['recording'] == true;
+
+  /// The camera asks for the set in progress (set by ScoreController).
+  void Function()? onResync;
 
   final _queue = <Map<String, dynamic>>[];
   final String _cid = Random().nextInt(1 << 32).toRadixString(36);
@@ -36,16 +46,13 @@ class CameraLinkService extends GetxService {
   Timer? _retry;
   bool _connecting = false;
 
-  /// Set when the phone app itself runs the camera server: it must not
-  /// connect to itself unless asked to (testing on one device).
-  static bool localServerRunning = false;
-
   static CameraLinkService? get maybe =>
       Get.isRegistered<CameraLinkService>() ? Get.find<CameraLinkService>() : null;
 
   Future<CameraLinkService> init() async {
     final prefs = await SharedPreferences.getInstance();
     hostOverride.value = prefs.getString(_prefHost) ?? '';
+    await _beacon.start();
     _retry = Timer.periodic(const Duration(seconds: 2), (_) => _connect());
     return this;
   }
@@ -84,12 +91,16 @@ class CameraLinkService extends GetxService {
     _connecting = true;
     try {
       var h = hostOverride.value;
+      via.value = 'manual';
       if (h.isEmpty) {
-        if (localServerRunning) {
-          host.value = '';
-          return;
+        final found = _beacon.fresh;
+        if (found != null) {
+          h = found;
+          via.value = 'found';
+        } else {
+          h = await CameraPlatform.gateway() ?? '';
+          via.value = 'gateway';
         }
-        h = await CameraPlatform.gateway() ?? '';
       }
       host.value = h;
       if (h.isEmpty) return;
@@ -135,12 +146,16 @@ class CameraLinkService extends GetxService {
       case 'status':
         remote.assignAll(m.map((k, v) => MapEntry('$k', v)));
         break;
+      case 'resync':
+        onResync?.call();
+        break;
     }
   }
 
   @override
   void onClose() {
     _retry?.cancel();
+    _beacon.stop();
     _ws?.close();
     super.onClose();
   }

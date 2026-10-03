@@ -192,6 +192,17 @@ class MainActivity : FlutterActivity() {
             val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
             when (call.method) {
                 "state" -> result.success(deviceState(am))
+                // Role switch (board <-> camera): a fresh process, so the
+                // services of the other role are not left in memory.
+                "restartApp" -> {
+                    result.success(true)
+                    val intent = packageManager.getLaunchIntentForPackage(packageName)!!
+                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    window.decorView.postDelayed({
+                        startActivity(intent)
+                        android.os.Process.killProcess(android.os.Process.myPid())
+                    }, 150)
+                }
                 "setVolumeMax" -> {
                     try {
                         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)

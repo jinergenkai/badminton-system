@@ -16,8 +16,18 @@ import android.provider.MediaStore
 import android.util.Log
 import android.util.Range
 import android.view.Surface
+import android.graphics.Color
+import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.RectF
+import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
+import androidx.camera.core.CameraEffect
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
+import androidx.camera.core.UseCaseGroup
+import androidx.camera.effects.OverlayEffect
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FallbackStrategy
 import androidx.camera.video.MediaStoreOutputOptions
@@ -66,8 +76,28 @@ class CameraRecorder(
     /** Best estimate of the wall-clock time of the current file's first frame. */
     private var startWall = Long.MAX_VALUE
     private var startEstimates = 0
+    private var lastStatusAt = 0L
 
     private var permissionResult: MethodChannel.Result? = null
+
+    // ── Score overlay, burned into the video (and the preview) ─────────────
+    private var overlay: OverlayEffect? = null
+    @Volatile private var ovA = 0
+    @Volatile private var ovB = 0
+    @Volatile private var ovShow = false
+    private val ovBox = Paint().apply { isAntiAlias = true }
+    private val ovText = Paint().apply {
+        isAntiAlias = true
+        color = Color.WHITE
+        typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+        textAlign = Paint.Align.CENTER
+    }
+    private val ovClock = Paint().apply {
+        isAntiAlias = true
+        color = Color.WHITE
+        typeface = Typeface.MONOSPACE
+    }
+    private val clockFmt = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
 
     companion object {
         const val TAG = "CameraRec"
@@ -78,7 +108,18 @@ class CameraRecorder(
     fun handle(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "requestPermissions" -> requestPermissions(result)
-            "open" -> open(result)
+            "open" -> open(
+                call.argument<String>("lens") ?: "back",
+                call.argument<Boolean>("preview") ?: true,
+                call.argument<Boolean>("overlay") ?: true,
+                result,
+            )
+            "setOverlay" -> {
+                ovA = call.argument<Int>("a") ?: 0
+                ovB = call.argument<Int>("b") ?: 0
+                ovShow = call.argument<Boolean>("show") ?: false
+                result.success(true)
+            }
             "close" -> { close(); result.success(true) }
             "start" -> start(call.argument<String>("dir")!!, call.argument<String>("name")!!, result)
             "stop" -> {
@@ -130,7 +171,7 @@ class CameraRecorder(
     }
 
     // ── Camera ─────────────────────────────────────────────────────────────
-    private fun open(result: MethodChannel.Result) {
+    private fun open(lens: String, withPreview: Boolean, withOverlay: Boolean, result: MethodChannel.Result) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             result.error("OLD_ANDROID", "Recording needs Android 10+", null); return
         }
@@ -140,17 +181,17 @@ class CameraRecorder(
             try {
                 val p = future.get()
                 provider = p
-                val tex = texture ?: textures.createSurfaceTexture().also { texture = it }
+                val tex = if (withPreview) texture ?: textures.createSurfaceTexture().also { texture = it } else null
                 // The screen is locked to landscape: the file is written
                 // upright for that, and the preview texture (raw sensor
                 // frames) is turned by the angle CameraX reports.
                 @Suppress("DEPRECATION")
                 val rotation = activity.windowManager.defaultDisplay.rotation
-                val preview = Preview.Builder().setTargetRotation(rotation).build()
-                preview.setSurfaceProvider(main) { req ->
+                val preview = if (tex == null) null else Preview.Builder().setTargetRotation(rotation).build()
+                preview?.setSurfaceProvider(main) { req ->
                     val w = req.resolution.width
                     val h = req.resolution.height
-                    val st = tex.surfaceTexture()
+                    val st = tex!!.surfaceTexture()
                     st.setDefaultBufferSize(w, h)
                     val surface = Surface(st)
                     req.provideSurface(surface, main) { surface.release() }
@@ -170,9 +211,23 @@ class CameraRecorder(
                     .setTargetRotation(rotation)
                     .build()
                 videoCapture = vc
+                val group = UseCaseGroup.Builder().addUseCase(vc)
+                if (preview != null) group.addUseCase(preview)
+                overlay?.close()
+                overlay = null
+                if (withOverlay) {
+                    val targets = CameraEffect.VIDEO_CAPTURE or (if (preview != null) CameraEffect.PREVIEW else 0)
+                    val fx = OverlayEffect(targets, 0, Handler(Looper.getMainLooper())) { t ->
+                        Log.w(TAG, "overlay: ${t.message}")
+                    }
+                    fx.setOnDrawListener { frame -> drawOverlay(frame.overlayCanvas); true }
+                    group.addEffect(fx)
+                    overlay = fx
+                }
+                val selector = if (lens == "front") CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
                 p.unbindAll()
-                p.bindToLifecycle(activity as LifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, vc)
-                result.success(mapOf("textureId" to tex.id()))
+                p.bindToLifecycle(activity as LifecycleOwner, selector, group.build())
+                result.success(mapOf("textureId" to tex?.id()))
             } catch (e: Exception) {
                 Log.e(TAG, "open failed", e)
                 result.error("OPEN_FAIL", e.message, null)
@@ -180,10 +235,52 @@ class CameraRecorder(
         }, main)
     }
 
+    /**
+     * Top-left: red and blue score boxes and the wall clock, sized from the
+     * frame height so it reads the same at any resolution. Small on purpose:
+     * the analysis looks at the court, not the corner.
+     */
+    private fun drawOverlay(c: android.graphics.Canvas) {
+        c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+        // The canvas is the shared camera stream (4:3 on the Redmi 13C); the
+        // 16:9 video is its centre band. Measured: drawn at the canvas top,
+        // the score boxes were cut off in the file. So place everything in
+        // the 16:9 band, which both the video and the preview contain.
+        val cw = c.width.toFloat()
+        val ch = c.height.toFloat()
+        val bandH = minOf(ch, cw * 9f / 16f)
+        val bandW = minOf(cw, ch * 16f / 9f)
+        val top = (ch - bandH) / 2f
+        val left = (cw - bandW) / 2f
+        val unit = bandH / 18f
+        val pad = unit * 0.5f
+        val x = left + pad
+        val y = top + pad
+        val box = unit * 1.8f
+        ovText.textSize = unit * 1.3f
+        ovClock.textSize = unit * 0.7f
+        if (ovShow) {
+            ovBox.color = Color.argb(220, 0xFF, 0x52, 0x52)
+            c.drawRoundRect(RectF(x, y, x + box, y + box), unit * 0.3f, unit * 0.3f, ovBox)
+            ovBox.color = Color.argb(220, 0x44, 0x8A, 0xFF)
+            c.drawRoundRect(RectF(x + box + pad * 0.4f, y, x + 2 * box + pad * 0.4f, y + box), unit * 0.3f, unit * 0.3f, ovBox)
+            val base = y + box / 2 - (ovText.descent() + ovText.ascent()) / 2
+            c.drawText("$ovA", x + box / 2, base, ovText)
+            c.drawText("$ovB", x + box + pad * 0.4f + box / 2, base, ovText)
+        }
+        val clockY = y + (if (ovShow) box + unit * 0.9f else unit * 0.8f)
+        ovBox.color = Color.argb(140, 0, 0, 0)
+        val w = ovClock.measureText("00:00:00")
+        c.drawRoundRect(RectF(x, clockY - unit * 0.75f, x + w + unit * 0.5f, clockY + unit * 0.25f), unit * 0.2f, unit * 0.2f, ovBox)
+        c.drawText(clockFmt.format(java.util.Date()), x + unit * 0.25f, clockY, ovClock)
+    }
+
     fun close() {
         recording?.stop()
         recording = null
         provider?.unbindAll()
+        overlay?.close()
+        overlay = null
         videoCapture = null
         texture?.release()
         texture = null
@@ -227,7 +324,12 @@ class CameraRecorder(
                         emit(mapOf("type" to "startWall", "wall" to est))
                     }
                 }
-                if (startEstimates % 30 == 0) {
+                // Status events come with every frame: forward one every 2 s.
+                // (Was `startEstimates % 30 == 0`, which stays true once the
+                // counter stops at 150: 30 messages a second into Dart, each
+                // redrawing the UI. Measured ~56 % CPU on the tablet.)
+                if (now - lastStatusAt >= 2000) {
+                    lastStatusAt = now
                     emit(mapOf("type" to "status", "durationMs" to durMs,
                         "bytes" to ev.recordingStats.numBytesRecorded))
                 }

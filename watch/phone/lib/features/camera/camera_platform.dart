@@ -19,11 +19,21 @@ class CameraPlatform implements VideoSink {
     return {'camera': r?['camera'] == true, 'audio': r?['audio'] == true};
   }
 
-  /// Binds the back camera; returns the preview's Flutter texture id.
-  Future<int> open() async {
-    final r = await _ch.invokeMethod<Map>('open');
-    return (r!['textureId'] as num).toInt();
+  /// Binds [lens] ('back' | 'front'); returns the preview's Flutter texture
+  /// id, or null without a preview (the board recording behind its UI).
+  /// [overlay] burns the score and clock into the video.
+  Future<int?> open({String lens = 'back', bool preview = true, bool overlay = true}) async {
+    final r = await _ch.invokeMethod<Map>('open', {'lens': lens, 'preview': preview, 'overlay': overlay});
+    return (r?['textureId'] as num?)?.toInt();
   }
+
+  /// What the overlay shows; [show] false hides the score (between sets).
+  Future<void> setOverlay(int a, int b, bool show) =>
+      _ch.invokeMethod('setOverlay', {'a': a, 'b': b, 'show': show});
+
+  /// Restarts the app in a fresh process (role switch).
+  static Future<void> restartApp() =>
+      const MethodChannel('com.voice_counter/device').invokeMethod('restartApp');
 
   Future<void> close() => _ch.invokeMethod('close');
 

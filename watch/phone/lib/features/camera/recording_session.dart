@@ -229,10 +229,16 @@ class RecordingSession {
           if (current!.match?.matchId != id) current!.match = null;
         }
         final nm = MatchRec(id)
-          ..startT = t
           ..lineup = _map(msg['lineup'])
-          ..bandStartedAt = _int(msg['bandStartedAt']);
-        if (msg['joined'] == true) nm.continuedFrom = 'joined';
+          ..bandStartedAt = _int(msg['bandStartedAt'])
+          ..scoreA = _int(msg['scoreA']) ?? 0
+          ..scoreB = _int(msg['scoreB']) ?? 0;
+        // Joined: the set began before this file, so its start is not here.
+        if (msg['joined'] == true) {
+          nm.continuedFrom = 'joined';
+        } else {
+          nm.startT = t;
+        }
         current!.match = nm;
         current!.events.add({'type': 'match_start', 't': t});
         break;

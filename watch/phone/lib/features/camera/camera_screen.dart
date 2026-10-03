@@ -6,152 +6,98 @@ import 'package:get/get.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../views/ui_kit.dart';
-import 'camera_link_service.dart';
+import 'camera_beacon.dart';
 import 'camera_platform.dart';
+import 'camera_rig.dart';
 import 'camera_server.dart';
-import 'recording_session.dart';
+import 'camera_settings.dart';
 
-/// Corner camera: records continuously, one file per set, driven by the
-/// tablet's match events (docs/camera-recording-requirements.md §3).
-class CameraController extends GetxController {
-  final platform = CameraPlatform();
-  late final RecordingSession session;
+/// Camera mode: this device is the corner camera and nothing else. It
+/// records continuously, one file per set, from the board's events
+/// (docs/camera-recording-requirements.md §3).
+class CornerCameraController extends GetxController {
+  late final CameraRig rig;
   late final CameraServer server;
-
-  final RxnInt textureId = RxnInt();
-  final RxBool showPreview = true.obs;
-  final RxBool recording = false.obs;
-  final RxString error = ''.obs;
-  final RxMap<String, dynamic> device = <String, dynamic>{}.obs;
-  final RxDouble previewAspect = (16 / 9).obs;
-  final RxInt previewTurns = 0.obs; // quarter turns to show the sensor upright
-  final RxInt tick = 0.obs; // redraw clock-driven text
-
-  /// Below this, recording stops: 2 GB.
-  static const minFreeBytes = 2 * 1024 * 1024 * 1024;
-
-  StreamSubscription? _events;
-  Timer? _timer;
+  final beacon = CameraBeacon();
+  final RxList<String> addresses = <String>[].obs;
+  Timer? _addr;
 
   @override
   void onInit() {
     super.onInit();
-    session = RecordingSession(
-      sink: platform,
-      now: () => DateTime.now().millisecondsSinceEpoch,
-      clock: () => server.clock,
+    rig = CameraRig(
+      role: 'corner',
+      lens: CameraSettings.cornerLens,
+      overlay: CameraSettings.overlay,
+      preview: true,
     );
-    server = CameraServer(session, _statusForTablet);
-    session.onChange = () => tick.value++;
-    server.onChange = () => tick.value++;
-    _events = platform.events.listen(_onEvent);
-    _open();
+    server = CameraServer(rig.session, _statusForBoard);
+    rig.clock = () => server.clock;
+    server.onChange = () => rig.tick.value++;
+    _start();
   }
 
-  Future<void> _open() async {
-    CameraLinkService.localServerRunning = true;
+  Future<void> _start() async {
     WakelockPlus.enable();
     await SystemChrome.setPreferredOrientations(
         [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]);
+    await rig.open();
+    beacon.name = '${rig.session.deviceInfo['device'] ?? 'camera'}';
     try {
-      final p = await platform.requestPermissions();
-      if (p['camera'] != true) {
-        error.value = 'Camera permission denied';
-        return;
-      }
-      if (p['audio'] != true) error.value = 'No microphone permission: video without sound';
-      textureId.value = await platform.open();
-      session.deviceInfo['device'] = (await platform.deviceStatus())['model'];
       await server.start();
+      await beacon.start();
     } catch (e) {
-      error.value = 'Camera: $e';
+      rig.error.value = 'Network: $e';
     }
-    _timer = Timer.periodic(const Duration(seconds: 10), (_) => _every10s());
-    _every10s();
+    _refreshAddresses();
+    _addr = Timer.periodic(const Duration(seconds: 10), (_) => _refreshAddresses());
   }
 
-  Future<void> _every10s() async {
-    try {
-      device.assignAll(await platform.deviceStatus());
-    } catch (_) {}
-    tick.value++;
-    if (recording.value) {
-      final free = (device['freeBytes'] as num?)?.toInt() ?? minFreeBytes;
-      if (free < minFreeBytes) {
-        error.value = 'Storage under 2 GB: recording stopped';
-        await stop();
-        return;
-      }
-      await session.tick();
-    }
-  }
-
-  void _onEvent(Map<String, dynamic> e) {
-    switch (e['type']) {
-      case 'startWall':
-        session.onStartWall((e['wall'] as num).toInt());
-        break;
-      case 'started':
-        session.onStartWall((e['wall'] as num).toInt());
-        break;
-      case 'finalized':
-        session.onFinalized(e['uri'] as String?, error: e['error'] as String?);
-        break;
-      case 'preview':
-        final w = (e['width'] as num).toDouble(), h = (e['height'] as num).toDouble();
-        final rot = ((e['rotation'] as num?)?.toInt() ?? 0) ~/ 90;
-        previewTurns.value = rot;
-        // Width over height as shown, after turning.
-        if (w > 0 && h > 0) previewAspect.value = rot.isOdd ? h / w : w / h;
-        break;
-    }
-    tick.value++;
-  }
+  Future<void> _refreshAddresses() async => addresses.assignAll(await CameraBeacon.myAddresses());
 
   Future<void> start() async {
-    if (textureId.value == null) return;
-    error.value = '';
-    await session.begin();
-    recording.value = true;
+    await rig.start();
+    server.resync();
     // Less heat and battery while it runs; the preview can be hidden too.
-    await platform.setDim(true);
+    await rig.platform.setDim(true);
   }
 
   Future<void> stop() async {
-    await session.end();
-    recording.value = false;
-    await platform.setDim(false);
+    await rig.stop();
+    await rig.platform.setDim(false);
   }
 
-  Future<Map<String, dynamic>> _statusForTablet() async {
-    final free = (device['freeBytes'] as num?)?.toDouble() ?? 0;
+  Future<void> setLens(String v) async {
+    await CameraSettings.setCornerLens(v);
+    rig.lens = v;
+    await rig.reopen();
+  }
+
+  Future<void> setOverlay(bool v) async {
+    await CameraSettings.setOverlay(v);
+    rig.overlay = v;
+    await rig.reopen();
+  }
+
+  Future<Map<String, dynamic>> _statusForBoard() async {
+    final free = (rig.device['freeBytes'] as num?)?.toDouble() ?? 0;
     return {
-      'recording': recording.value,
-      'file': session.current?.base,
+      'recording': rig.recording.value,
+      'file': rig.session.current?.base,
       'freeGB': (free / 1e9 * 10).round() / 10,
-      'battery': device['battery'],
-      'tempC': device['tempC'],
+      'battery': rig.device['battery'],
+      'tempC': rig.device['tempC'],
     };
-  }
-
-  /// Seconds into the current file.
-  int get fileSeconds {
-    final w = session.current?.startWall;
-    if (w == null) return 0;
-    return ((DateTime.now().millisecondsSinceEpoch - w) / 1000).floor();
   }
 
   @override
   void onClose() {
-    _timer?.cancel();
-    _events?.cancel();
-    if (recording.value) session.end();
+    _addr?.cancel();
+    beacon.stop();
     server.stop();
-    platform.close();
-    platform.setDim(false);
-    CameraLinkService.localServerRunning = false;
+    rig.close();
+    rig.platform.setDim(false);
     WakelockPlus.disable();
-    SystemChrome.setPreferredOrientations(DeviceOrientation.values);
     super.onClose();
   }
 }
@@ -161,26 +107,27 @@ class CameraScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = Get.put(CameraController());
+    final c = Get.put(CornerCameraController());
+    final rig = c.rig;
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) async {
         if (didPop) return;
-        if (c.recording.value &&
+        if (rig.recording.value &&
             !await uiConfirm(context,
                 title: 'Stop recording?', message: 'The current file is closed and saved.', confirm: 'Stop')) {
           return;
         }
-        Get.delete<CameraController>();
-        Get.back();
+        await c.stop();
+        SystemNavigator.pop();
       },
       child: Scaffold(
         backgroundColor: Colors.black,
         body: SafeArea(
           child: Row(
             children: [
-              Expanded(flex: 3, child: _preview(c)),
-              SizedBox(width: 300, child: _panel(context, c)),
+              Expanded(flex: 3, child: _preview(rig)),
+              SizedBox(width: 320, child: _panel(context, c)),
             ],
           ),
         ),
@@ -188,57 +135,58 @@ class CameraScreen extends StatelessWidget {
     );
   }
 
-  Widget _preview(CameraController c) => Obx(() {
-        final id = c.textureId.value;
-        if (id == null || !c.showPreview.value) {
+  Widget _preview(CameraRig rig) => Obx(() {
+        final id = rig.textureId.value;
+        if (id == null) {
           return Center(
-            child: Text(id == null ? 'Opening camera…' : 'Preview hidden',
+            child: Text(rig.error.value.isEmpty ? 'Opening camera…' : rig.error.value,
                 style: const TextStyle(color: Colors.white38)),
           );
         }
         return Center(
           child: AspectRatio(
-            aspectRatio: c.previewAspect.value,
-            child: RotatedBox(quarterTurns: c.previewTurns.value, child: Texture(textureId: id)),
+            aspectRatio: rig.previewAspect.value,
+            child: RotatedBox(quarterTurns: rig.previewTurns.value, child: Texture(textureId: id)),
           ),
         );
       });
 
-  Widget _panel(BuildContext context, CameraController c) => Container(
+  Widget _panel(BuildContext context, CornerCameraController c) => Container(
         color: Ui.bg,
         padding: const EdgeInsets.all(16),
         child: Obx(() {
-          c.tick.value;
-          final rec = c.recording.value;
-          final s = c.session;
+          final rig = c.rig;
+          rig.tick.value;
+          final rec = rig.recording.value;
+          final s = rig.session;
           final m = s.current?.match;
           final clock = c.server.clock;
-          final d = c.device;
-          final secs = c.fileSeconds;
+          final d = rig.device;
           String mmss(int v) => '${v ~/ 60}:${(v % 60).toString().padLeft(2, '0')}';
           final free = ((d['freeBytes'] as num?)?.toDouble() ?? 0) / 1e9;
+          final addr = c.addresses.isEmpty ? 'no network' : c.addresses.join(', ');
           return ListView(
             children: [
               Row(children: [
                 Icon(Icons.circle, size: 14, color: rec ? Colors.redAccent : Colors.white24),
                 const SizedBox(width: 8),
-                Text(rec ? 'Recording  ${mmss(secs)}' : 'Not recording',
+                Text(rec ? 'Recording  ${mmss(rig.fileSeconds)}' : 'Not recording',
                     style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               ]),
               const SizedBox(height: 12),
               _row(Icons.tablet_android, c.server.connected
-                  ? 'Tablet linked · clock ${clock.offsetMs} ms (rtt ${clock.rttMs})'
-                  : 'Tablet not linked'),
+                  ? 'Board linked · clock ${clock.offsetMs} ms (rtt ${clock.rttMs})'
+                  : 'Board not linked · this phone: $addr'),
               _row(Icons.sports_tennis,
                   m == null ? 'No set in this file' : 'Set ${m.scoreA} - ${m.scoreB}${m.ended ? ' (ended)' : ''}'),
               _row(Icons.sd_storage, '${free.toStringAsFixed(1)} GB free'),
               _row(Icons.battery_std,
                   '${d['battery'] ?? '?'}%${d['charging'] == true ? ' charging' : ''} · ${d['tempC'] ?? '?'}°C'),
               _row(Icons.movie, '${s.finished.length} file(s) saved · Download/Godminton'),
-              if (c.error.value.isNotEmpty)
+              if (rig.error.value.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text(c.error.value, style: const TextStyle(color: Colors.orangeAccent)),
+                  child: Text(rig.error.value, style: const TextStyle(color: Colors.orangeAccent)),
                 ),
               const SizedBox(height: 16),
               FilledButton.icon(
@@ -246,33 +194,47 @@ class CameraScreen extends StatelessWidget {
                     backgroundColor: rec ? Colors.redAccent : Colors.green,
                     foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(52)),
-                onPressed: c.textureId.value == null ? null : (rec ? c.stop : c.start),
+                onPressed: !rig.opened.value ? null : (rec ? c.stop : c.start),
                 icon: Icon(rec ? Icons.stop : Icons.fiber_manual_record),
                 label: Text(rec ? 'Stop' : 'Start recording'),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
-                style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white70, minimumSize: const Size.fromHeight(44)),
-                onPressed: rec ? c.session.split : null,
+                style: _outline,
+                onPressed: rec ? s.split : null,
                 icon: const Icon(Icons.content_cut),
                 label: const Text('Split file now'),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
+              // Settings: only while not recording (they rebind the camera).
+              SegmentedButton<String>(
+                segments: const [
+                  ButtonSegment(value: 'back', label: Text('Back cam')),
+                  ButtonSegment(value: 'front', label: Text('Front cam')),
+                ],
+                selected: {rig.lens},
+                onSelectionChanged: rec ? null : (v) => c.setLens(v.first),
+              ),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Score on video', style: TextStyle(color: Colors.white70)),
+                value: rig.overlay,
+                onChanged: rec ? null : c.setOverlay,
+              ),
               Row(children: [
                 Expanded(
                   child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white70),
-                    onPressed: () => c.showPreview.toggle(),
-                    child: Text(c.showPreview.value ? 'Hide preview' : 'Show preview'),
+                    style: _outline,
+                    onPressed: c.rig.platform.openHotspotSettings,
+                    child: const Text('Hotspot'),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.white70),
-                    onPressed: c.platform.openHotspotSettings,
-                    child: const Text('Hotspot'),
+                    style: _outline,
+                    onPressed: rec ? null : () => _toBoard(context),
+                    child: const Text('Board mode'),
                   ),
                 ),
               ]),
@@ -280,6 +242,20 @@ class CameraScreen extends StatelessWidget {
           );
         }),
       );
+
+  static final _outline = OutlinedButton.styleFrom(
+      foregroundColor: Colors.white70, minimumSize: const Size.fromHeight(44));
+
+  Future<void> _toBoard(BuildContext context) async {
+    if (!await uiConfirm(context,
+        title: 'Use this device as the board?',
+        message: 'The app restarts as the scoreboard.',
+        confirm: 'Restart')) {
+      return;
+    }
+    await CameraSettings.setRole(CameraSettings.board);
+    await CameraPlatform.restartApp();
+  }
 
   Widget _row(IconData icon, String text) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
