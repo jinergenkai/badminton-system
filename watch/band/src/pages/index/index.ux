@@ -20,7 +20,7 @@
            is done, so the clock of a set starts on a deliberate tap. -->
       <div class="home-area" if="{{ screen === 'home' }}">
         <div class="home-btn resume" if="{{ canResume }}" onclick="onResume">
-          <text class="home-title">RESUME</text>
+          <text class="home-title">Resume</text>
           <div class="home-row">
             <text class="home-score color-a">{{ scoreA }}</text>
             <text class="home-dash">-</text>
@@ -28,49 +28,39 @@
           </div>
         </div>
         <div class="home-btn same" if="{{ hasSame }}" onclick="onSame">
-          <text class="home-title">SAME 4</text>
+          <text class="home-title">Same 4</text>
           <text class="home-red">{{ sameRedText }}</text>
           <text class="home-blue">{{ sameBlueText }}</text>
         </div>
         <div class="home-btn pick" if="{{ hasPlayers }}" onclick="onPickPlayers">
-          <text class="home-title">PICK PLAYERS</text>
+          <text class="home-title">Pick players</text>
         </div>
         <div class="home-btn new" onclick="onNewGame">
-          <text class="home-title">NEW GAME</text>
+          <text class="home-title">New game</text>
         </div>
       </div>
 
-      <!-- IDLE: no point for a while, the set was probably left at 20-10. -->
-      <div class="mid-area" if="{{ screen === 'game' && idleOpen }}">
-        <div class="big-card idle-card">
-          <text class="card-title">NO POINT</text>
-          <text class="card-sub">for {{ idleMin }} min</text>
-          <text class="card-score">{{ scoreA }} - {{ scoreB }}</text>
-        </div>
-      </div>
-      <div class="pair-area" if="{{ screen === 'game' && idleOpen }}">
-        <div class="pair-btn grey" onclick="onPlayOn"><text class="pair-text">PLAY ON</text></div>
-        <div class="pair-btn red-btn" onclick="onEndSet"><text class="pair-text">END SET</text></div>
-      </div>
-
-      <!-- WIN: same layout as the board, so a misplaced winning tap is one
-           UNDO away, where the undo bar always is. -->
-      <div class="mid-area" if="{{ screen === 'game' && !idleOpen && (isWinnerA || isWinnerB) }}">
+      <!-- WIN: the board's layout. The card holds the result and a big Done
+           in its lower half; undo stays the bar at the bottom, where the
+           thumb already goes after a misplaced winning tap. -->
+      <div class="mid-area" if="{{ screen === 'game' && (isWinnerA || isWinnerB) }}">
         <stack class="big-card {{ isWinnerA ? 'card-a' : 'card-b' }}">
           <image src="{{ isWinnerA ? '/common/dog.png' : '/common/cat.png' }}" class="score-watermark"></image>
-          <div class="score-content">
-            <text class="card-title">{{ isWinnerA ? 'RED WINS' : 'BLUE WINS' }}</text>
-            <text class="card-score">{{ scoreA }} - {{ scoreB }}</text>
+          <div class="win-col">
+            <div class="win-top">
+              <text class="card-title">{{ isWinnerA ? 'Red wins' : 'Blue wins' }}</text>
+              <text class="card-score">{{ scoreA }} - {{ scoreB }}</text>
+            </div>
+            <div class="done-btn" onclick="onDone"><text class="done-text">Done</text></div>
           </div>
         </stack>
       </div>
-      <div class="pair-area" if="{{ screen === 'game' && !idleOpen && (isWinnerA || isWinnerB) }}">
-        <div class="pair-btn grey" onclick="onUndo"><text class="pair-text">UNDO</text></div>
-        <div class="pair-btn green-btn" onclick="onDone"><text class="pair-text">DONE</text></div>
+      <div class="undo-area" if="{{ screen === 'game' && (isWinnerA || isWinnerB) }}" onclick="onUndo">
+        <text class="undo-text">undo</text>
       </div>
 
       <!-- GAME: the scoring cards and the undo bar. -->
-      <div class="score-area" if="{{ screen === 'game' && !idleOpen && !isWinnerA && !isWinnerB }}">
+      <div class="score-area" if="{{ screen === 'game' && !isWinnerA && !isWinnerB }}">
         <!-- TEAM A (LEFT) -->
         <stack class="score-btn card-a" onclick="onScoreA" onlongpress="onQuickHypeA">
           <image src="/common/dog.png" class="score-watermark"></image>
@@ -97,7 +87,7 @@
 
       <!-- ZONE 4: UNDO (BOTTOM - 20%). On a set with no point yet it goes
            back home: the start was tapped by mistake. -->
-      <div class="undo-area" if="{{ screen === 'game' && !idleOpen && !isWinnerA && !isWinnerB }}" onclick="onUndo">
+      <div class="undo-area" if="{{ screen === 'game' && !isWinnerA && !isWinnerB }}" onclick="onUndo">
         <text class="undo-text">undo</text>
       </div>
     </div>
@@ -134,9 +124,6 @@
       // Named players for this set: { red, blue, srv, rcv, names, mode } or
       // null. Fixed from the first point; set by pages/lineup.
       lineup: null,
-      // The start-of-set question has been answered (named, skipped, or not
-      // applicable), so the lineup page must not open again for this set.
-      luDone: false,
       // Lineup of the set before this one: what "Same 4" offers.
       prevLu: null,
       // Derived from lineup + rallies on every change (refreshServe). Only
@@ -153,12 +140,10 @@
       sameRedText: '',
       sameBlueText: '',
       hasPlayers: false,
-      // Idle reminder: last time the score moved, whether this pause has
-      // already been flagged, and whether the prompt is on screen.
+      // Idle reminder: last time the score moved, and whether this pause
+      // has already buzzed.
       lastPointAt: 0,
       idleAsked: false,
-      idleOpen: false,
-      idleMin: 2,
       // Pending deferred history push (pushUnsyncedHistory).
       historyTimer: null,
       connected: false,
@@ -243,7 +228,6 @@
                 this.streakCount = s.streakCount || 0
                 this.history = s.undoHistory || []
                 this.lineup = s.lu || null
-                this.luDone = !!s.luDone
                 this.prevLu = s.prevLu || null
                 this.checkWinner()
                 this.diag('restored ' + this.matchId + ' r' + this.matchRevision + ' ' + this.scoreA + '-' + this.scoreB)
@@ -280,6 +264,8 @@
             this.refreshHome()
           }
         })
+        // Left by the old Players On/Off switch.
+        if (typeof storage.delete === 'function') storage.delete({ key: 'bc_players_on' })
       } catch (e) { this.diag('players read failed: ' + e.message) }
     },
 
@@ -328,7 +314,6 @@
         streakCount: this.streakCount,
         ralT: this.ralT,
         lu: this.lineup,
-        luDone: this.luDone,
         prevLu: this.prevLu,
         undoHistory: this.history
       }
@@ -401,7 +386,6 @@
       delete record.undoHistory
       delete record.streakTeam
       delete record.streakCount
-      delete record.luDone
       delete record.prevLu
       const list = def.matchHistory.filter((r) => r.matchId !== record.matchId)
       list.unshift(record)
@@ -493,7 +477,6 @@
       // players-off set has no lineup, so it clears "Same 4".
       this.prevLu = this.lineup
       this.lineup = null
-      this.luDone = false
       this.persistMatch()
     },
 
@@ -521,7 +504,6 @@
       this.seedServingTeam = servingTeam
       // Joined mid-set: who stands where is unknown, so no names.
       this.prevLu = null
-      this.luDone = true
       this.streakTeam = servingTeam
       this.streakCount = 1
       this.startedAt = Date.now() - (scoreA + scoreB) * 20000
@@ -593,7 +575,6 @@
       } else {
         this.lineup = null
       }
-      this.luDone = true
       this.startedAt = Date.now()
       this.matchRevision++
       this.persistMatch()
@@ -615,11 +596,7 @@
       if (lu) this.beginSet(lu, 'same')
     },
 
-    onPickPlayers() {
-      const def = this.$app && this.$app.$def
-      if (def) def.lineupOpen = true
-      router.push({ uri: 'pages/lineup' })
-    },
+    onPickPlayers() { router.push({ uri: 'pages/lineup' }) },
 
     // Set won: back home with a fresh set ready. The won set is already in
     // history; the phone clears its board as it did for NEXT MATCH.
@@ -629,19 +606,11 @@
       this.sendState('new_match')
     },
 
-    onEndSet() {
-      this.idleOpen = false
-      this.resetGame()
-    },
-
-    onPlayOn() {
-      this.idleOpen = false
-      this.markActivity()
-    },
-
     // ── Idle reminder ────────────────────────────────────────────────────
-    // A set left at 20-10 is never ended, so its record and a recording run
-    // on. No point for 2 minutes buzzes the wrist once and offers END SET.
+    // A set given up at 20-10 is never ended, so its record and a recording
+    // run on. At game point (one more rally can end the set), 2 minutes with
+    // no point buzzes the wrist twice: a hint, nothing on screen. Mid-set
+    // pauses (water, a new shuttle) never buzz.
     // Rides the clock's 30 s tick (no timer of its own), so it fires 2:00 to
     // 2:30 after the last point, and only while this page is shown: on a
     // screen that went dark it fires as the screen comes back.
@@ -650,17 +619,21 @@
       this.idleAsked = false
     },
 
+    wins(a, b) { return (a >= 21 && a - b >= 2) || a === 30 },
+
+    atGamePoint() {
+      const a = this.scoreA
+      const b = this.scoreB
+      return this.wins(a + 1, b) || this.wins(b + 1, a)
+    },
+
     checkIdle() {
       if (this.screen !== 'game' || this.idleAsked || !this.lastPointAt) return
-      if (this.isWinnerA || this.isWinnerB) return
-      if (this.scoreA === 0 && this.scoreB === 0) return
-      const idle = Date.now() - this.lastPointAt
-      if (idle < 120000) return
+      if (this.isWinnerA || this.isWinnerB || !this.atGamePoint()) return
+      if (Date.now() - this.lastPointAt < 120000) return
       this.idleAsked = true
-      this.idleMin = Math.floor(idle / 60000)
-      this.idleOpen = true
-      this.diag('idle ' + this.idleMin + ' min at ' + this.scoreA + '-' + this.scoreB)
-      this.buzz(0, 3)
+      this.diag('idle at game point ' + this.scoreA + '-' + this.scoreB)
+      this.buzz(0, 2)
     },
 
     // Who serves now, from the lineup at 0-0 and the rally log. Pure and
@@ -792,8 +765,6 @@
       this.startClock()
       this.startLinkPoll()
       this.loadAlarm()
-      const def = this.$app && this.$app.$def
-      if (def) def.lineupOpen = false
       this.applyPendingMatchCommand()
       this.refreshHome()
     },
@@ -1212,7 +1183,6 @@
       this.closeUnfinished()
       this.startFreshMatch()
       this.screen = 'home'
-      this.idleOpen = false
       this.sendState('new_match')
       this.status('Set ended')
     },
@@ -1359,7 +1329,6 @@
       if (this.matchStatus === 'completed') this.archiveCurrent('completed')
       // A point from the phone while the band shows home still counts.
       this.screen = 'game'
-      this.idleOpen = false
       this.markActivity()
       this.startCooldown()
       this.sendState(team === 'A' ? 'score_A' : 'score_B', manualHype)
@@ -1573,8 +1542,8 @@
   .home-red { height: 26px; color: #FF7A7A; font-size: 18px; font-weight: bold; }
   .home-blue { height: 26px; color: #7AAEFF; font-size: 18px; font-weight: bold; }
 
-  /* WIN / IDLE: one rounded card where the two score cards are, and two
-     buttons where the undo bar is. */
+  /* WIN: one rounded card where the two score cards are; the undo bar
+     below is the board's own. */
   .mid-area {
     flex: 1;
     width: 100%;
@@ -1587,56 +1556,48 @@
     margin: 4px;
     border-radius: 20px;
     overflow: hidden;
+  }
+
+  .win-col {
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .win-top {
+    flex: 1;
     flex-direction: column;
     justify-content: center;
     align-items: center;
   }
 
-  .idle-card { background-color: #334155; }
-
   .card-title {
-    font-size: 30px;
+    font-size: 28px;
     font-weight: bold;
     color: #FFFFFF;
-    text-align: center;
-  }
-
-  .card-sub {
-    font-size: 18px;
-    color: rgba(255, 255, 255, 0.7);
-    margin-top: 4px;
   }
 
   .card-score {
     font-size: 44px;
     font-weight: bold;
     color: #FFFFFF;
-    margin-top: 8px;
+    margin-top: 4px;
   }
 
-  .pair-area {
+  /* Lower half of the card, full width: easy to hit on the way out. */
+  .done-btn {
     width: 100%;
-    height: 100px;
-    flex-direction: row;
-    padding: 4px 12px 24px 12px;
-  }
-
-  .pair-btn {
-    flex: 1;
-    height: 100%;
-    margin: 0 4px;
-    border-radius: 20px;
+    height: 120px;
+    border-radius: 16px;
     justify-content: center;
     align-items: center;
+    background-color: rgba(15, 23, 42, 0.35);
   }
 
-  .grey { background-color: rgba(255, 255, 255, 0.15); }
-  .red-btn { background-color: #FF5252; }
-  .green-btn { background-color: #16A34A; }
-
-  .pair-text {
+  .done-text {
     color: #FFFFFF;
-    font-size: 20px;
+    font-size: 30px;
     font-weight: bold;
   }
 

@@ -4,8 +4,6 @@ export default {
   // Today's players from the phone: { v, at, list: [{ i, s, n }] } or null.
   // Persisted as bc_players_v1; loaded by the index page.
   players: null,
-  // Settings "Players" switch, persisted as bc_players_on.
-  playersOn: false,
   hypeList: [],
 
   // ── Step-0 diagnostics ────────────────────────────────────────────────

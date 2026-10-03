@@ -3,10 +3,10 @@
        starts nothing. -->
   <div class="page">
     <!-- Steps 1-4: pick one player each -->
-    <text class="title t-blue" if="{{ step === 1 }}">BLUE 1</text>
-    <text class="title t-blue" if="{{ step === 2 }}">BLUE 2</text>
-    <text class="title t-red" if="{{ step === 3 }}">RED 1</text>
-    <text class="title t-red" if="{{ step === 4 }}">RED 2</text>
+    <text class="title t-blue" if="{{ step === 1 }}">Blue 1</text>
+    <text class="title t-blue" if="{{ step === 2 }}">Blue 2</text>
+    <text class="title t-red" if="{{ step === 3 }}">Red 1</text>
+    <text class="title t-red" if="{{ step === 4 }}">Red 2</text>
     <list class="pick-list" if="{{ step >= 1 && step <= 4 }}">
       <!-- One type, identical structure: `full` is '' when it would repeat. -->
       <list-item type="pick" for="{{ rows }}" class="pick-row" onclick="onPick($idx)">
