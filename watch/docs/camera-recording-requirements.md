@@ -35,6 +35,18 @@ Trạng thái: giai đoạn 1 đã code, 2026-10-03 (`lib/features/camera/`, `Ca
   khi đang quay 1080p30: app khoảng 29% một nhân (51% nếu bật tỉ số), dịch vụ camera
   khoảng 30%, bộ mã hóa khoảng 6%.
 - **Camera trước hoặc sau** chọn riêng cho từng máy.
+- **Đổi chỗ cắt file (thay §3.3):** cắt khi **bắt đầu set** (New game / Same 4 / chọn xong
+  người trên band), không cắt 5 giây sau khi kết thúc. Mỗi file bắt đầu đúng lúc bấm start,
+  chứa set đó và đoạn nghỉ phía sau (đuôi dễ cắt bỏ). Done, Resume, End set, thoát app: không
+  cắt. Nhảy vào giữa set (`joined`) chỉ cắt nếu file đang chứa một set khác. File dưới 3 giây
+  thì không cắt. Chuyển file mất khoảng 0,5–1 giây, nên `startS` hơi âm (ví dụ −0,8): lúc bấm
+  start nằm ở cuối file trước, còn cú giao cầu đầu tiên đến sau đó vài giây.
+- **Khóa lấy nét / độ sáng** (3A lock của Camera2): sau khi bấm Start 2 giây thì lấy nét
+  giữa khung một lần rồi giữ, khóa độ sáng (AE) và cân bằng trắng (AWB); Stop thì mở. Có
+  công tắc, mặc định bật. Ống kính không lấy nét được (đa số camera trước) chỉ khóa độ sáng.
+- **Gallery:** liệt kê `Download/Godminton` của máy, nhóm theo ngày, có ảnh thu nhỏ, thời
+  lượng và tỉ số; bấm để xem bằng trình phát của máy; nhấn giữ để chọn nhiều và xóa (xóa
+  kèm `.json`).
 
 ## 1. Mục tiêu
 
