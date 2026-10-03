@@ -5,8 +5,11 @@
 class Lineup {
   final List<String> red; // [red1, red2]
   final List<String> blue; // [blue1, blue2]
-  final String srv; // first server
-  final String rcv; // first receiver
+  /// First server / receiver at 0-0. '' since the band stopped asking
+  /// (2026-10): a wrong pick spoiled every serve stat after it. Older
+  /// records still carry them.
+  final String srv;
+  final String rcv;
   final Map<String, String> short; // id -> band name
   final Map<String, String> full; // id -> full name (read aloud)
   final String mode; // 'new' | 'same'
@@ -14,8 +17,8 @@ class Lineup {
   const Lineup({
     required this.red,
     required this.blue,
-    required this.srv,
-    required this.rcv,
+    this.srv = '',
+    this.rcv = '',
     required this.short,
     required this.full,
     this.mode = 'new',
@@ -29,7 +32,6 @@ class Lineup {
     final srv = lu['srv'];
     final rcv = lu['rcv'];
     if (red is! List || blue is! List || red.length != 2 || blue.length != 2) return null;
-    if (srv is! String || rcv is! String) return null;
     final short = <String, String>{};
     final full = <String, String>{};
     final names = lu['names'];
@@ -44,13 +46,16 @@ class Lineup {
     return Lineup(
       red: red.map((e) => '$e').toList(),
       blue: blue.map((e) => '$e').toList(),
-      srv: srv,
-      rcv: rcv,
+      srv: srv is String ? srv : '',
+      rcv: rcv is String ? rcv : '',
       short: short,
       full: full,
       mode: (lu['mode'] ?? 'new').toString(),
     );
   }
+
+  /// Who served first is known: serve order and serve stats can be derived.
+  bool get hasServe => srv.isNotEmpty && rcv.isNotEmpty;
 
   List<String> pair(String team) => team == 'A' ? red : blue;
   String teamOf(String id) => red.contains(id) ? 'A' : 'B';

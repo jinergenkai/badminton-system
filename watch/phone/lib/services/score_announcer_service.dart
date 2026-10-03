@@ -104,15 +104,11 @@ class ScoreAnnouncerService extends GetxService {
     return 'en';
   }
 
-  /// [serverName], when given, is read right after the score:
-  /// "Năm – Ba, Hùng giao cầu". The match itself uses [announceServe]
-  /// instead, after the hype line.
   Future<void> announceScore(
     int teamAScore,
     int teamBScore,
-    String scoringTeam, {
-    String? serverName,
-  }) async {
+    String scoringTeam,
+  ) async {
     final int myJob = ++_currentJob;
     await _cancelInFlight();
     if (myJob != _currentJob) return;
@@ -141,31 +137,7 @@ class ScoreAnnouncerService extends GetxService {
       ];
     }
 
-    String? tail = serverName == null || serverName.isEmpty ? null : serveTail(serverName, lang);
-    // Boosted clip ready: it simply joins the file sequence. Otherwise the
-    // tail is spoken live by TTS after the files.
-    final clip = tail == null ? null : await _clip(tail);
-    if (myJob != _currentJob) return;
-    if (clip != null) {
-      files.add(clip);
-      tail = null;
-    }
-    await _playSequence(myJob, files, fallback, tail: tail);
-  }
-
-  /// "Hùng giao cầu" on its own — the match reads it after the hype line,
-  /// so the last thing heard before the serve is who serves. Completes
-  /// through the same callbacks as a score announcement.
-  Future<void> announceServe(String serverName) async {
-    final int myJob = ++_currentJob;
-    await _cancelInFlight();
-    if (myJob != _currentJob) return;
-    final text = serveTail(serverName, currentLanguage.value);
-    Future<void> speak() => _fallbackTts(() => Get.find<TtsService>().speak(text));
-    final clip = await _clip(text);
-    if (myJob != _currentJob) return;
-    if (clip == null) return speak();
-    await _playSequence(myJob, [clip], speak);
+    await _playSequence(myJob, files, fallback);
   }
 
   Future<void> announceUndo(
@@ -239,10 +211,6 @@ class ScoreAnnouncerService extends GetxService {
 
   bool _inRange(int score) => score >= 0 && score <= _maxScore;
 
-  /// "<name> giao cầu" — read after the score when the set is named.
-  static String serveTail(String name, String lang) =>
-      lang.startsWith('vi') ? '$name giao cầu' : '$name to serve';
-
   /// "<winner> thắng" — followed by the two scores as bundled number clips.
   static String winnerLine(String winnerName, String lang) =>
       lang.startsWith('vi') ? '$winnerName thắng' : '$winnerName wins';
@@ -256,9 +224,8 @@ class ScoreAnnouncerService extends GetxService {
   Future<void> _playSequence(
     int myJob,
     List<String> files,
-    Future<void> Function() onFallback, {
-    String? tail,
-  }) async {
+    Future<void> Function() onFallback,
+  ) async {
     // Pre-flight: verify every file is actually bundled. Cheaper than failing
     // mid-chain (which would leave the hype callback un-fired).
     for (final f in files) {
@@ -288,12 +255,6 @@ class ScoreAnnouncerService extends GetxService {
         await _player.play(f.startsWith('/') ? DeviceFileSource(f) : AssetSource(f));
         await done.future;
         if (myJob != _currentJob) return;
-      }
-      if (tail != null) {
-        // Spoken by TTS; its completion handler continues the hype chain
-        // exactly like the MP3 path would have.
-        await _fallbackTts(() => Get.find<TtsService>().speak(tail));
-        return;
       }
       onAnnouncementCompleted?.call();
     } catch (e) {

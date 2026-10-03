@@ -64,11 +64,7 @@ class SoundCheckService extends GetxService {
     final names = _names();
     final pair = _vi ? 'Đội đỏ, ${names[0]} và ${names[1]}' : 'Red: ${names[0]} and ${names[1]}';
     final lang = _tts.currentLanguage;
-    final phrases = [
-      ScoreAnnouncerService.serveTail(names[0], lang),
-      ScoreAnnouncerService.serveTail(names[1], lang),
-      ScoreAnnouncerService.winnerLine(pair, lang),
-    ];
+    final phrases = [ScoreAnnouncerService.winnerLine(pair, lang)];
     return [
       // Rendered first so the steps below play the boosted clips, and timed:
       // this is the real cost of a phrase on this device.
@@ -83,8 +79,6 @@ class SoundCheckService extends GetxService {
       }, Duration.zero),
       SoundCheckStep('Score (15 – 13)', () => _announcer.announceScore(15, 13, 'A'),
           const Duration(milliseconds: 2800)),
-      SoundCheckStep('Score + server name', () => _announcer.announceScore(5, 3, 'A', serverName: names[0]),
-          const Duration(milliseconds: 4200)),
       SoundCheckStep('Winner', () => _announcer.announceWinner(pair, 21, 18),
           const Duration(milliseconds: 5000)),
       SoundCheckStep('Hype voice', () => _hype.preview(), const Duration(milliseconds: 3500)),
@@ -92,8 +86,8 @@ class SoundCheckService extends GetxService {
       SoundCheckStep('Tension music', () => _music.previewTension(), const Duration(seconds: 6)),
       SoundCheckStep('Voice over music (ducking)', () async {
         _music.duck();
-        await _announcer.announceScore(7, 6, 'B', serverName: names[1]);
-      }, const Duration(milliseconds: 4200)),
+        await _announcer.announceScore(7, 6, 'B');
+      }, const Duration(milliseconds: 2800)),
       SoundCheckStep('Music comes back', () async => _music.unduck(), const Duration(milliseconds: 2500)),
       SoundCheckStep('Win / playlist music', () => _music.previewWin(), const Duration(seconds: 6)),
       ...extraSteps,

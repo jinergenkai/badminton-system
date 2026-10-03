@@ -100,7 +100,8 @@ class Match extends HiveObject {
     this.lineupMode = '',
   });
 
-  bool get isNamed => redIds.length == 2 && blueIds.length == 2 && server0.isNotEmpty;
+  /// Both pairs known. The first server only on records made before 2026-10.
+  bool get isNamed => redIds.length == 2 && blueIds.length == 2;
 
   Lineup? get lineup => isNamed
       ? Lineup(

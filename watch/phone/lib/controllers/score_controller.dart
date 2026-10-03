@@ -33,9 +33,6 @@ class ScoreController extends GetxController {
   Timer? _autoResetTimer;
   Timer? _watchConnectionPoll;
 
-  /// Server to name once the hype after this point is done.
-  String? _pendingServe;
-
   // Configurable delay before auto-starting next game after a win
   final RxInt autoResetDelay = 60.obs;
 
@@ -71,18 +68,16 @@ class ScoreController extends GetxController {
   int _lastBandRevision = -1;
   String _lastBandRallies = '';
 
-  /// Named players of the band's current set (null = unnamed) and who serves
-  /// next, both straight from the band's state messages.
+  /// Named players of the band's current set (null = unnamed), straight
+  /// from the band's state messages.
   final Rxn<Lineup> lineup = Rxn<Lineup>();
-  final RxString serverId = ''.obs;
 
-  /// Card label for a team when the set is named: "🏸Hùng · Duyên", the
-  /// shuttle marking who serves next. Null means use the team name.
+  /// Card label for a team when the set is named: "Hùng · Duyên". Null means
+  /// use the team name.
   String? labelFor(String team) {
     final lu = lineup.value;
     if (lu == null) return null;
-    final srv = serverId.value;
-    return lu.pair(team).map((id) => (id == srv ? '🏸' : '') + lu.shortOf(id)).join(' · ');
+    return lu.pair(team).map(lu.shortOf).join(' · ');
   }
 
   /// Winner as shown on the win overlay: the pair's band names when the set
@@ -109,25 +104,15 @@ class ScoreController extends GetxController {
     return '${w == 'A' ? 'Red' : 'Blue'}: ${names[0]} and ${names[1]}';
   }
 
-  /// Every phrase this lineup can need, rendered before the first point:
-  /// four "<name> giao cầu" and both winner lines.
+  /// Both winner lines of this lineup, rendered before the set can end.
   void _prepareVoiceClips(Lineup lu) {
     final clips = VoiceClipService.maybe;
     if (clips == null) return;
     final lang = _ttsService.currentLanguage;
     clips.prepareAll([
-      for (final id in [...lu.red, ...lu.blue])
-        ScoreAnnouncerService.serveTail(lu.fullOf(id), lang),
       ScoreAnnouncerService.winnerLine(_winnerSpokenFor('A'), lang),
       ScoreAnnouncerService.winnerLine(_winnerSpokenFor('B'), lang),
     ]);
-  }
-
-  /// Full name of whoever serves after [rallies], for the voice.
-  String? _serverFullName(String rallies) {
-    final lu = lineup.value;
-    if (lu == null || !_bandLive) return null;
-    return lu.fullOf(ServeEngine.current(lu, rallies).srv);
   }
   DateTime? _lastBandSeen;
   Future<void> _dbChain = Future.value();
@@ -227,15 +212,7 @@ class ScoreController extends GetxController {
     // Tension music is started HERE (not during score update) so it never
     // competes with TTS or hype for AudioFocus.
     _hypeController.onPlaybackCompleted = () {
-      // Hype done: the server's name closes the chain. Its completion comes
-      // back through playHype (nothing pending) and lands here again.
-      final serve = _pendingServe;
-      _pendingServe = null;
-      if (serve != null && !SoundCheckService.active && !isGameEnded.value) {
-        _scoreAnnouncer.announceServe(serve);
-        return;
-      }
-      // End of the talking chain (score -> hype -> server): music back up.
+      // End of the talking chain (score -> hype): music back up.
       _musicService.unduck();
       if (SoundCheckService.active) return;
       if (isGameEnded.value) {
@@ -315,12 +292,10 @@ class ScoreController extends GetxController {
       if (pv is num) PlayerService.maybe?.onBandVersion(pv.toInt());
       if (event['rallies'] != null) _lastBandRallies = event['rallies'].toString();
       final newLu = Lineup.fromBand(event['lu']);
-      final changed = newLu?.srv != lineup.value?.srv ||
-          newLu?.red.join() != lineup.value?.red.join() ||
+      final changed = newLu?.red.join() != lineup.value?.red.join() ||
           newLu?.blue.join() != lineup.value?.blue.join();
       lineup.value = newLu;
       if (changed && newLu != null) _prepareVoiceClips(newLu);
-      serverId.value = event['srv']?.toString() ?? '';
       if (bandMatchId != null && bandRevision >= 0) {
         isNewRev = !(_lastBandMatchId == bandMatchId && bandRevision <= _lastBandRevision);
         _lastBandMatchId = bandMatchId;
@@ -387,8 +362,7 @@ class ScoreController extends GetxController {
           teamBScore: newScoreB,
           stateStack: stack,
         );
-        _pendingServe = null;
-        _hypeController.handleUndo();
+            _hypeController.handleUndo();
         // Undo is almost always an immediate misclick correction — announcing
         // "undo, X Y" out loud right before the real point is noisy and gets
         // talked over. Stay silent here; only the hype voice (if any) plays.
@@ -458,8 +432,7 @@ class ScoreController extends GetxController {
           _hypeController.processScoreUpdate(oldA, oldB, newScoreA, newScoreB, manualHype: manualHype);
         }
         if (!gameState.hasWinner && isPoint) {
-          _announceScoreChange(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B',
-              serverName: _serverFullName(_lastBandRallies));
+          _announceScoreChange(newScoreA, newScoreB, action == 'score_A' ? 'A' : 'B');
         }
         // _checkTensionMusic() moved to onPlaybackCompleted — avoids AudioFocus conflict
         _checkGameEnd(fromBand: fromBand);
@@ -520,7 +493,7 @@ class ScoreController extends GetxController {
     ));
   }
 
-  void _announceScoreChange(int a, int b, String team, {String? serverName}) {
+  void _announceScoreChange(int a, int b, String team) {
     // Music mode: nothing speaks over the track. Talking across a song that is
     // already playing is exactly what kills the mood, so the whole
     // announce-then-hype chain is skipped rather than merely quietened.
@@ -529,8 +502,6 @@ class ScoreController extends GetxController {
     // Music steps aside for the whole chain; onPlaybackCompleted restores it.
     _musicService.duck();
     if (scoreAnnouncementsEnabled.value) {
-      // Score → hype → "<name> giao cầu": who serves is the last thing heard.
-      _pendingServe = serverName == null || serverName.isEmpty ? null : serverName;
       _scoreAnnouncer.announceScore(a, b, team);
     } else {
       // If score announcement is disabled, we must trigger hype manually
@@ -585,8 +556,7 @@ class ScoreController extends GetxController {
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
     if (_bandLive) _lastBandRallies += 'A';
     if (!gameState.hasWinner) {
-      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'A',
-          serverName: _serverFullName(_lastBandRallies));
+      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'A');
     }
     _checkGameEnd();
   }
@@ -611,8 +581,7 @@ class ScoreController extends GetxController {
     _hypeController.processScoreUpdate(oldA, oldB, gameState.teamAScore, gameState.teamBScore);
     if (_bandLive) _lastBandRallies += 'B';
     if (!gameState.hasWinner) {
-      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'B',
-          serverName: _serverFullName(_lastBandRallies));
+      _announceScoreChange(gameState.teamAScore, gameState.teamBScore, 'B');
     }
     _checkGameEnd();
   }
@@ -664,7 +633,6 @@ class ScoreController extends GetxController {
     final stack = List<GameState>.from(gameState.stateStack);
     final previousState = stack.removeLast();
     _gameState.value = previousState.copyWith(stateStack: stack);
-    _pendingServe = null;
     _hypeController.handleUndo();
     // Undo is almost always an immediate misclick correction — stay silent
     // instead of announcing "undo, X Y" (see matching comment above).
@@ -735,7 +703,6 @@ class ScoreController extends GetxController {
     );
     
     isGameEnded.value = false;
-    _pendingServe = null;
     _autoResetTimer?.cancel();
     _hypeController.resetState();
     _musicService.stopMusic(fadeOut: true);

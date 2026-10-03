@@ -24,7 +24,8 @@ class MatchAnalysis {
   /// Seconds each rally took; empty when timings were not recorded.
   final List<int> rallySeconds;
 
-  /// Named sets only, in lineup order: red1, red2, blue1, blue2.
+  /// Named sets with a known first server only (older records), in lineup
+  /// order: red1, red2, blue1, blue2.
   final List<PlayerLine> players;
 
   MatchAnalysis._(this.progression, this.longestStreakA, this.longestStreakB,
@@ -85,7 +86,7 @@ class MatchAnalysis {
     }
 
     final players = <PlayerLine>[];
-    if (lineup != null) {
+    if (lineup != null && lineup.hasServe) {
       final byId = <String, PlayerLine>{};
       for (final id in [...lineup.red, ...lineup.blue]) {
         final p = PlayerLine(id, lineup.teamOf(id));

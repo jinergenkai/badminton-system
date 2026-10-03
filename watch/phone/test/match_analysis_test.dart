@@ -44,4 +44,18 @@ void main() {
     expect([by['B1']!.receives, by['B2']!.receives, by['R1']!.receives, by['R2']!.receives], [1, 1, 1, 1]);
     expect(by['R2']!.receivesWon, 1); // r4 won by red while R2 received
   });
+
+  test('pairs without a first server: no serve stats, still parsed', () {
+    final named = Lineup.fromBand({
+      'red': ['R1', 'R2'],
+      'blue': ['B1', 'B2'],
+      'names': {'R1': {'s': 'a', 'n': 'A a'}},
+    });
+    expect(named, isNotNull);
+    expect(named!.hasServe, isFalse);
+    expect(named.fullOf('R1'), 'A a');
+    final m = MatchAnalysis.of(rallies: 'ABAB', rallyTimes: '', finalA: 2, finalB: 2, lineup: named);
+    expect(m.players, isEmpty);
+    expect(m.progression.last, [2, 2]);
+  });
 }
