@@ -33,6 +33,10 @@ class CameraSettings {
   static bool get overlay => _p.getBool('camera_overlay') ?? true;
   static Future<void> setOverlay(bool v) => _p.setBool('camera_overlay', v);
 
+  /// Lock focus and exposure 2 s after recording starts.
+  static bool get lock => _p.getBool('camera_lock') ?? true;
+  static Future<void> setLock(bool v) => _p.setBool('camera_lock', v);
+
   static bool get boardOverlay => _p.getBool('camera_board_overlay') ?? false;
   static Future<void> setBoardOverlay(bool v) => _p.setBool('camera_board_overlay', v);
 }

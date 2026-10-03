@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:convert';
 
 /// What the session needs from the recorder. The real one is the CameraX
@@ -79,10 +78,16 @@ class ClockInfo {
   const ClockInfo(this.offsetMs, this.samples, this.rttMs);
 }
 
-/// One recording session on the corner phone: records continuously and cuts
-/// the file 5 s after each set ends, so every file holds one whole set (with
-/// the break before it). All times are phone-clock ms; the server converts
-/// the tablet's before they get here.
+/// One recording session: records continuously and cuts the file when a set
+/// is started on the band (New game / Same 4 / players picked), so every
+/// file begins at its set's start and holds the set plus the break after
+/// it (easy to trim). Done, Resume, End set, leaving the app: no cut.
+/// All times are phone-clock ms; the server converts the tablet's before
+/// they get here.
+///
+/// The switch to a new file takes ~0.5-1 s (the old one must be finalized
+/// first), so a set's `startS` is a little below zero: the tap itself is at
+/// the end of the previous file. Serving comes seconds after the tap.
 class RecordingSession {
   final VideoSink sink;
   final int Function() now;
@@ -90,8 +95,10 @@ class RecordingSession {
   final Map<String, dynamic> deviceInfo;
   ClockInfo Function() clock;
 
-  static const endTail = Duration(seconds: 5);
   static const maxFile = Duration(minutes: 40);
+
+  /// A file younger than this is not cut for a new set (it just began).
+  static const minFile = Duration(seconds: 3);
 
   RecordingSession({
     required this.sink,
@@ -110,7 +117,6 @@ class RecordingSession {
   final _byMatch = <String, SessionFile>{};
   final finished = <SessionFile>[];
 
-  Timer? _endTimer;
   bool _starting = false;
   int? _gapFrom;
 
@@ -130,7 +136,6 @@ class RecordingSession {
   Future<void> end() async {
     if (!running) return;
     running = false;
-    _endTimer?.cancel();
     final f = current;
     current = null;
     if (f != null) {
@@ -143,7 +148,6 @@ class RecordingSession {
   /// Cut now: the next file starts as soon as this one is finalized.
   Future<void> split() async {
     if (!running) return;
-    _endTimer?.cancel();
     final old = current!;
     final next = _newFile(now());
     final m = old.match;
@@ -222,9 +226,12 @@ class RecordingSession {
       case 'match_start':
         final m = f.match;
         if (m != null && m.matchId == id) return; // repeat
-        if (m != null) {
-          // The file already has a set: finished (cut pending) or never
-          // ended. Either way the new set gets a file of its own.
+        final joined = msg['joined'] == true;
+        // A set started now gets a file starting now. A set joined mid-way
+        // (board restarted, camera started late) only gets a new file when
+        // this one already holds another set.
+        final cut = joined ? m != null : (m != null || now() - f.zero >= minFile.inMilliseconds);
+        if (cut) {
           await split();
           if (current!.match?.matchId != id) current!.match = null;
         }
@@ -234,7 +241,7 @@ class RecordingSession {
           ..scoreA = _int(msg['scoreA']) ?? 0
           ..scoreB = _int(msg['scoreB']) ?? 0;
         // Joined: the set began before this file, so its start is not here.
-        if (msg['joined'] == true) {
+        if (joined) {
           nm.continuedFrom = 'joined';
         } else {
           nm.startT = t;
@@ -271,16 +278,15 @@ class RecordingSession {
           ..bandStartedAt = _int(msg['startedAt']) ?? m.bandStartedAt
           ..bandEndedAt = _int(msg['endedAt']);
         m.winner = m.status == 'completed' ? (m.scoreA > m.scoreB ? 'A' : 'B') : null;
+        // No cut here: the file runs on through the break until the next
+        // set is started.
         current!.events.add({'type': 'match_end', 't': t});
-        _endTimer?.cancel();
-        _endTimer = Timer(endTail, () => split());
         break;
 
       case 'match_reopen':
         final m = current!.match;
         if (m != null && m.matchId == id) {
-          // Undo inside the 5 s tail: the cut has not happened yet.
-          _endTimer?.cancel();
+          // Undo of the winning point: still the same file.
           m
             ..endT = null
             ..status = 'active'

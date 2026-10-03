@@ -225,6 +225,19 @@ class _BoardRecPanelState extends State<_BoardRecPanel> {
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
+              title: const Text('Lock focus & exposure'),
+              subtitle: Text(recording && (rig?.lockOn ?? false)
+                  ? (rig!.lockState.value.isEmpty ? 'locking…' : 'locked: ${rig.lockState.value}')
+                  : 'Locked 2 s after recording starts'),
+              value: CameraSettings.lock,
+              onChanged: (v) async {
+                await CameraSettings.setLock(v);
+                await rec.rig?.setLockOn(v);
+                rec.on.refresh();
+              },
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
               title: const Text('Score on video'),
               subtitle: const Text('Costs this device about a fifth of a CPU core'),
               value: CameraSettings.boardOverlay,

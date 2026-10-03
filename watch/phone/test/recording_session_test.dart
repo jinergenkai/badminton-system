@@ -55,39 +55,75 @@ void main() {
     return jsonDecode(e.value) as Map<String, dynamic>;
   }
 
-  test('one set: cut 5 s after the end, named with id and score, times from the first frame', () {
+  test('a set started cuts the file at the tap; its end does not', () {
     fakeAsync((fa) {
       setUpSession();
       s.begin();
       fa.flushMicrotasks();
-      expect(sink.calls, ['start 2026-10-03_191502_rec.mp4']);
       s.onStartWall(t0 + 400);
       s.onStartWall(t0 + 300); // a better (earlier) estimate wins
 
+      // Warm-up before the set: the tap at +74.3 s cuts that off.
       clock = t0 + 74300;
       s.handle({'type': 'match_start', 'matchId': 'b10-1-abc123'}, clock);
+      fa.flushMicrotasks();
+      expect(sink.calls.last, 'stop');
+      s.onFinalized('vid0');
+      fa.flushMicrotasks();
+      expect(sink.names['vid0'], '2026-10-03_191502_nomatch.mp4');
+      expect(sink.calls.last, 'start 2026-10-03_191616_rec.mp4');
+      s.onStartWall(t0 + 75100); // the new file's first frame, 0.8 s after the tap
+
       clock = t0 + 92600;
       s.handle({'type': 'point', 'matchId': 'b10-1-abc123', 'team': 'A', 'scoreA': 1, 'scoreB': 0}, clock);
       clock = t0 + 1012800;
       s.handle({'type': 'match_end', 'matchId': 'b10-1-abc123', 'status': 'completed', 'scoreA': 21, 'scoreB': 18}, clock);
+      // Break after the set: still the same file, however long.
+      fa.elapse(const Duration(minutes: 5));
+      expect(sink.calls.where((c) => c == 'stop').length, 1);
+
+      clock = t0 + 1400000;
+      s.handle({'type': 'match_start', 'matchId': 'b10-2-def456'}, clock);
+      fa.flushMicrotasks();
+      s.onFinalized('vid1');
+      fa.flushMicrotasks();
+
+      expect(sink.names['vid1'], '2026-10-03_191616_abc123_21-18.mp4');
+      final j = jsonNamed('_abc123_21-18.json');
+      expect(j['match']['startS'], -0.8); // the tap is just before the file
+      expect(j['match']['endS'], 937.7);
+      expect(j['match']['winner'], 'A');
+      expect(j['events'][1], {'type': 'point', 'team': 'A', 'scoreA': 1, 'scoreB': 0, 's': 17.5});
+      expect(j['clockOffsetMs'], -132);
+      expect(s.current!.match!.matchId, 'b10-2-def456');
+    });
+  });
+
+  test('a set started right after Start recording keeps that file', () {
+    fakeAsync((fa) {
+      setUpSession();
+      s.begin();
+      fa.flushMicrotasks();
+      clock = t0 + 1500;
+      s.handle({'type': 'match_start', 'matchId': 'm1'}, clock);
       fa.flushMicrotasks();
       expect(sink.calls.where((c) => c == 'stop'), isEmpty);
+      expect(s.current!.match!.matchId, 'm1');
+    });
+  });
 
-      fa.elapse(const Duration(seconds: 5));
-      expect(sink.calls.last, 'stop');
-      s.onFinalized('vid0');
+  test('a set joined mid-way does not cut a file with no set', () {
+    fakeAsync((fa) {
+      setUpSession();
+      s.begin();
       fa.flushMicrotasks();
-
-      expect(sink.names['vid0'], '2026-10-03_191502_abc123_21-18.mp4');
-      final j = jsonNamed('_abc123_21-18.json');
-      expect(j['match']['startS'], 74.0); // 74.3 s after request, first frame at +0.3
-      expect(j['match']['endS'], 1012.5);
-      expect(j['match']['winner'], 'A');
-      expect(j['events'][1], {'type': 'point', 'team': 'A', 'scoreA': 1, 'scoreB': 0, 's': 92.3});
-      expect(j['clockOffsetMs'], -132);
-      // The next file starts right after the old one is finalized.
-      expect(sink.calls.last, startsWith('start 2026-10-03_'));
-      expect(s.current!.match, isNull);
+      clock = t0 + 60000;
+      s.handle({'type': 'match_start', 'matchId': 'm1', 'joined': true, 'scoreA': 7, 'scoreB': 5}, clock);
+      fa.flushMicrotasks();
+      expect(sink.calls.where((c) => c == 'stop'), isEmpty);
+      expect(s.current!.match!.continuedFrom, 'joined');
+      expect(s.current!.match!.scoreA, 7);
+      expect(s.jsonOf(s.current!)['match']['startS'], isNull);
     });
   });
 
@@ -105,36 +141,18 @@ void main() {
     });
   });
 
-  test('undo inside the 5 s tail cancels the cut', () {
+  test('undo of the winning point stays in the same file', () {
     fakeAsync((fa) {
       setUpSession();
       s.begin();
       fa.flushMicrotasks();
       s.handle({'type': 'match_start', 'matchId': 'm1'}, clock);
       s.handle({'type': 'match_end', 'matchId': 'm1', 'status': 'completed', 'scoreA': 21, 'scoreB': 3}, clock);
-      fa.elapse(const Duration(seconds: 2));
+      fa.elapse(const Duration(seconds: 30));
       s.handle({'type': 'match_reopen', 'matchId': 'm1'}, clock);
-      fa.elapse(const Duration(seconds: 10));
+      fa.elapse(const Duration(minutes: 2));
       expect(sink.calls.where((c) => c == 'stop'), isEmpty);
       expect(s.current!.match!.ended, isFalse);
-    });
-  });
-
-  test('undo after the cut marks the old file reopened and carries the set on', () {
-    fakeAsync((fa) {
-      setUpSession();
-      s.begin();
-      fa.flushMicrotasks();
-      s.handle({'type': 'match_start', 'matchId': 'm1'}, clock);
-      s.handle({'type': 'match_end', 'matchId': 'm1', 'status': 'completed', 'scoreA': 21, 'scoreB': 19}, clock);
-      fa.elapse(const Duration(seconds: 5));
-      s.onFinalized('vid0');
-      fa.flushMicrotasks();
-      s.handle({'type': 'match_reopen', 'matchId': 'm1'}, clock);
-      fa.flushMicrotasks();
-      expect(jsonNamed('_m1_21-19.json')['match']['reopened'], isTrue);
-      expect(s.current!.match!.matchId, 'm1');
-      expect(s.current!.match!.continuedFrom, 'reopened');
     });
   });
 

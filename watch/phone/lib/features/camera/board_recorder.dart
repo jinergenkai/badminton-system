@@ -39,7 +39,7 @@ class BoardRecorder extends GetxService {
             // Bound but dark: fed only while Utility shows it.
             preview: true,
             previewActive: false,
-          );
+          )..lockOn = CameraSettings.lock;
       rig = r;
       if (!r.opened.value && !await r.open()) return;
       await r.start();

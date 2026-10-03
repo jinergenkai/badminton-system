@@ -50,6 +50,12 @@ class CameraRig with WidgetsBindingObserver {
   final RxInt previewTurns = 0.obs;
   final RxInt tick = 0.obs;
 
+  /// Lock focus / exposure while recording (CameraSettings.lock), and what
+  /// the camera managed to lock, for the screen.
+  bool lockOn = true;
+  final RxString lockState = ''.obs;
+  Timer? _lockTimer;
+
   /// Below this, recording stops: 2 GB.
   static const minFreeBytes = 2 * 1024 * 1024 * 1024;
 
@@ -113,12 +119,34 @@ class CameraRig with WidgetsBindingObserver {
     error.value = '';
     await session.begin();
     recording.value = true;
+    // Let auto exposure and focus settle on the court first.
+    _lockTimer?.cancel();
+    if (lockOn) _lockTimer = Timer(const Duration(seconds: 2), () => applyLock(true));
   }
 
   Future<void> stop() async {
     if (!recording.value) return;
+    _lockTimer?.cancel();
     await session.end();
     recording.value = false;
+    await applyLock(false);
+  }
+
+  Future<void> applyLock(bool on) async {
+    if (!opened.value) return;
+    try {
+      final r = await platform.setLock(on);
+      lockState.value = !on
+          ? ''
+          : [if (r['focus'] == true) 'focus', if (r['exposure'] == true) 'exposure'].join(' + ');
+      if (on && lockState.value.isEmpty) lockState.value = 'not supported';
+    } catch (_) {}
+  }
+
+  /// The switch was flipped: takes effect now if recording.
+  Future<void> setLockOn(bool v) async {
+    lockOn = v;
+    if (recording.value) await applyLock(v);
   }
 
   @override

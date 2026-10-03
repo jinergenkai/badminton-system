@@ -23,7 +23,16 @@ import android.graphics.RectF
 import android.graphics.Typeface
 import android.os.Handler
 import android.os.Looper
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CaptureRequest
+import androidx.camera.camera2.interop.Camera2CameraControl
+import androidx.camera.camera2.interop.Camera2CameraInfo
+import androidx.camera.camera2.interop.CaptureRequestOptions
+import androidx.camera.camera2.interop.ExperimentalCamera2Interop
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraEffect
+import androidx.camera.core.FocusMeteringAction
+import androidx.camera.core.SurfaceOrientedMeteringPointFactory
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.core.UseCaseGroup
@@ -81,6 +90,7 @@ class CameraRecorder(
     // Preview: bound always (so turning it on needs no rebind), but only
     // fed frames while someone looks at it — the board keeps its camera
     // preview dark behind the scoreboard.
+    private var boundCamera: Camera? = null
     private var previewUseCase: Preview? = null
     private var previewProvider: Preview.SurfaceProvider? = null
 
@@ -121,6 +131,7 @@ class CameraRecorder(
                 call.argument<Boolean>("previewActive") ?: true,
                 result,
             )
+            "setLock" -> setLock(call.argument<Boolean>("on") ?: false, result)
             "setPreviewActive" -> {
                 val on = call.argument<Boolean>("on") ?: false
                 previewUseCase?.setSurfaceProvider(main, if (on) previewProvider else null)
@@ -156,6 +167,10 @@ class CameraRecorder(
                 }.start()
             }
             "openVideo" -> result.success(openVideo(call.argument<String>("uri")!!))
+            "deleteVideos" -> {
+                val uris = call.argument<List<String>>("uris") ?: emptyList()
+                Thread { val n = deleteVideos(uris); main.execute { result.success(n) } }.start()
+            }
             "gateway" -> result.success(gateway())
             "openHotspot" -> {
                 // No public constant for the tethering page; fall back to
@@ -252,7 +267,7 @@ class CameraRecorder(
                 }
                 val selector = if (lens == "front") CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
                 p.unbindAll()
-                p.bindToLifecycle(activity as LifecycleOwner, selector, group.build())
+                boundCamera = p.bindToLifecycle(activity as LifecycleOwner, selector, group.build())
                 result.success(mapOf("textureId" to tex?.id()))
             } catch (e: Exception) {
                 Log.e(TAG, "open failed", e)
@@ -304,6 +319,7 @@ class CameraRecorder(
     fun close() {
         recording?.stop()
         recording = null
+        boundCamera = null
         provider?.unbindAll()
         overlay?.close()
         overlay = null
@@ -402,6 +418,53 @@ class CameraRecorder(
         null
     }
 
+    // ── Focus / exposure lock ──────────────────────────────────────────────
+    /**
+     * The phone's own Camera2 3A locks: focus held where it is (one AF pass
+     * at the centre, then no auto-cancel), exposure and white balance
+     * frozen. A player walking past the lens then neither refocuses nor
+     * darkens the frame. Off: back to continuous auto. Fixed-focus lenses
+     * (most front cameras) only get the exposure lock.
+     * Replies {focus, exposure}: which of the two this camera could lock.
+     */
+    @androidx.annotation.OptIn(ExperimentalCamera2Interop::class)
+    private fun setLock(on: Boolean, result: MethodChannel.Result) {
+        val cam = boundCamera ?: run { result.success(mapOf("focus" to false, "exposure" to false)); return }
+        val c2 = Camera2CameraControl.from(cam.cameraControl)
+        val info = Camera2CameraInfo.from(cam.cameraInfo)
+        val aeLock = info.getCameraCharacteristic(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE) == true
+        val awbLock = info.getCameraCharacteristic(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE) == true
+        val afModes = info.getCameraCharacteristic(CameraCharacteristics.CONTROL_AF_AVAILABLE_MODES)
+        val hasAf = afModes != null && afModes.any { it == CaptureRequest.CONTROL_AF_MODE_AUTO }
+        if (!on) {
+            c2.clearCaptureRequestOptions()
+            cam.cameraControl.cancelFocusAndMetering()
+            result.success(mapOf("focus" to false, "exposure" to false))
+            return
+        }
+        fun lockExposure() {
+            val o = CaptureRequestOptions.Builder()
+            if (aeLock) o.setCaptureRequestOption(CaptureRequest.CONTROL_AE_LOCK, true)
+            if (awbLock) o.setCaptureRequestOption(CaptureRequest.CONTROL_AWB_LOCK, true)
+            c2.setCaptureRequestOptions(o.build())
+        }
+        if (hasAf) {
+            val point = SurfaceOrientedMeteringPointFactory(1f, 1f).createPoint(0.5f, 0.5f)
+            val action = FocusMeteringAction.Builder(point, FocusMeteringAction.FLAG_AF)
+                .disableAutoCancel()
+                .build()
+            val f = cam.cameraControl.startFocusAndMetering(action)
+            f.addListener({
+                lockExposure()
+                val focused = try { f.get().isFocusSuccessful } catch (e: Exception) { false }
+                result.success(mapOf("focus" to focused, "exposure" to aeLock))
+            }, main)
+        } else {
+            lockExposure()
+            result.success(mapOf("focus" to false, "exposure" to aeLock))
+        }
+    }
+
     // ── Gallery ────────────────────────────────────────────────────────────
     /**
      * Every finished video under Download/Godminton, newest first. A file
@@ -463,6 +526,33 @@ class CameraRecorder(
     } catch (e: Exception) {
         Log.w(TAG, "thumbnail: ${e.message}")
         null
+    }
+
+    /**
+     * Deletes each video and the .json of the same name next to it. Only
+     * files this app recorded can be deleted (MediaStore ownership), which
+     * is all the gallery lists. Returns how many videos went.
+     */
+    private fun deleteVideos(uris: List<String>): Int {
+        val r = activity.contentResolver
+        var n = 0
+        for (s in uris) {
+            try {
+                val uri = android.net.Uri.parse(s)
+                var name: String? = null
+                var dir: String? = null
+                r.query(uri, arrayOf(MediaStore.MediaColumns.DISPLAY_NAME, MediaStore.MediaColumns.RELATIVE_PATH),
+                    null, null, null)?.use { c -> if (c.moveToFirst()) { name = c.getString(0); dir = c.getString(1) } }
+                if (r.delete(uri, null, null) > 0) n++
+                val base = name?.substringBeforeLast('.') ?: continue
+                r.delete(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                    "${MediaStore.MediaColumns.DISPLAY_NAME} = ? AND ${MediaStore.MediaColumns.RELATIVE_PATH} = ?",
+                    arrayOf("$base.json", dir))
+            } catch (e: Exception) {
+                Log.w(TAG, "delete $s: ${e.message}")
+            }
+        }
+        return n
     }
 
     /** Plays [uri] in the phone's own video player. */

@@ -29,6 +29,13 @@ class CameraPlatform implements VideoSink {
     return (r?['textureId'] as num?)?.toInt();
   }
 
+  /// Focus / exposure lock (the camera's own 3A locks). Returns which of
+  /// the two this camera actually locked: {focus, exposure}.
+  Future<Map<String, bool>> setLock(bool on) async {
+    final r = await _ch.invokeMethod<Map>('setLock', {'on': on});
+    return {'focus': r?['focus'] == true, 'exposure': r?['exposure'] == true};
+  }
+
   /// Feed the preview (true) or leave it dark (false), without rebinding:
   /// recording goes on either way.
   Future<void> setPreviewActive(bool on) => _ch.invokeMethod('setPreviewActive', {'on': on});
@@ -80,6 +87,10 @@ class CameraPlatform implements VideoSink {
 
   static Future<Uint8List?> thumbnail(String uri, {int width = 320}) =>
       _ch.invokeMethod<Uint8List>('thumbnail', {'uri': uri, 'width': width});
+
+  /// Deletes the videos and their .json files; returns how many went.
+  static Future<int> deleteVideos(List<String> uris) async =>
+      await _ch.invokeMethod<int>('deleteVideos', {'uris': uris}) ?? 0;
 
   /// Plays it in the system video player.
   static Future<bool> openVideo(String uri) async =>
