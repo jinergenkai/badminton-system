@@ -1,20 +1,7 @@
 <template>
-  <!-- Opened by the index page at the start of a set while Players is on.
-       Swiping back out of it counts as Skip: the set is played unnamed. -->
+  <!-- Opened from the start screen (PICK PLAYERS). Swiping back out of it
+       starts nothing. -->
   <div class="page">
-    <!-- Step 0: how to start -->
-    <text class="title" if="{{ step === 0 }}">PLAYERS</text>
-    <!-- First, so the phone board can be lined up with the court before
-         anyone is put on a colour. Stays on this page. -->
-    <div class="swap" if="{{ step === 0 }}" onclick="onSwap"><text class="swap-text">SWAP SIDE</text></div>
-    <div class="big new" if="{{ step === 0 }}" onclick="onNew"><text class="big-text">NEW</text></div>
-    <div class="big same" if="{{ step === 0 && hasSame }}" onclick="onSame">
-      <text class="same-title">SAME 4</text>
-      <text class="same-red">{{ sameRedText }}</text>
-      <text class="same-blue">{{ sameBlueText }}</text>
-    </div>
-    <div class="skip" if="{{ step === 0 }}" onclick="onSkip"><text class="skip-text">SKIP</text></div>
-
     <!-- Steps 1-4: pick one player each -->
     <text class="title t-blue" if="{{ step === 1 }}">BLUE 1</text>
     <text class="title t-blue" if="{{ step === 2 }}">BLUE 2</text>
@@ -34,25 +21,17 @@
 
 <script>
   import router from '@system.router'
-  import interconnect from '@system.interconnect'
-  import prompt from '@system.prompt'
 
   export default {
     private: {
-      step: 0,
-      hasSame: false,
-      sameRedText: '',
-      sameBlueText: '',
+      step: 1,
       rows: [],
       // Working state. Declared here, not assigned ad hoc on `this`: the
       // framework only keeps what is declared (see the Sound page bug).
       all: [],
       names: {},
       blue: [],
-      red: [],
-      sameRed: [],
-      sameBlue: [],
-      mode: 'new'
+      red: []
     },
 
     onInit() {
@@ -62,20 +41,7 @@
       for (let i = 0; i < all.length; i++) names[all[i].i] = { s: all[i].s, n: all[i].n }
       this.all = all
       this.names = names
-      const last = def && def.lastLineup
-      // Same 4 only if all four are still on today's list.
-      if (last && last.red && last.blue) {
-        const ids = last.red.concat(last.blue)
-        let ok = true
-        for (let i = 0; i < ids.length; i++) { if (!this.names[ids[i]]) ok = false }
-        if (ok) {
-          this.hasSame = true
-          this.sameRed = last.red.slice()
-          this.sameBlue = last.blue.slice()
-          this.sameRedText = this.short(last.red[0]) + ' · ' + this.short(last.red[1])
-          this.sameBlueText = this.short(last.blue[0]) + ' · ' + this.short(last.blue[1])
-        }
-      }
+      this.buildRows()
     },
 
     short(id) { return (this.names[id] && this.names[id].s) || '?' },
@@ -91,35 +57,6 @@
       this.rows = rows
     },
 
-    onNew() {
-      this.step = 1
-      this.buildRows()
-    },
-
-    onSame() {
-      this.red = this.sameRed.slice()
-      this.blue = this.sameBlue.slice()
-      this.mode = 'same'
-      this.finish()
-    },
-
-    // Same stateless trigger as Settings > Swap Side: only the phone flips.
-    onSwap() {
-      const connect = interconnect.instance()
-      if (!connect) { prompt.showToast({ message: 'Phone not reachable' }); return }
-      connect.send({
-        data: { action: 'swap_sides' },
-        success: function () { prompt.showToast({ message: 'Swapped on phone' }) },
-        fail: function () { prompt.showToast({ message: 'Phone not reachable' }) }
-      })
-    },
-
-    onSkip() {
-      const def = this.$app && this.$app.$def
-      if (def) def.pendingMatchCommand = { action: 'skip_lineup' }
-      router.back()
-    },
-
     onPick(idx) {
       const row = this.rows[idx]
       if (!row) return
@@ -129,7 +66,6 @@
         this.step = this.step + 1
         this.buildRows()
       } else {
-        this.mode = 'new'
         this.finish()
       }
     },
@@ -145,8 +81,7 @@
           red: this.red.slice(),
           blue: this.blue.slice(),
           // Name snapshot: records stay readable after renames/removals.
-          names: names,
-          mode: this.mode
+          names: names
         }
       }
       router.back()
@@ -159,18 +94,6 @@
   .title { width: 100%; height: 52px; color: #FFFFFF; font-size: 24px; font-weight: bold; text-align: center; }
   .t-blue { color: #448AFF; }
   .t-red { color: #FF5252; }
-  /* Step 0 fits one screen: title 52 + swap 68 + new 96 + same 128 + skip 80. */
-  .swap { width: 100%; height: 60px; margin-top: 8px; justify-content: center; align-items: center; border-radius: 14px; border-width: 2px; border-color: #FBBF24; }
-  .swap-text { color: #FBBF24; font-size: 20px; font-weight: bold; }
-  .big { width: 100%; margin-top: 8px; flex-direction: column; justify-content: center; align-items: center; border-radius: 18px; }
-  .new { height: 88px; background-color: #16A34A; }
-  .same { height: 120px; background-color: #334155; }
-  .big-text { color: #FFFFFF; font-size: 26px; font-weight: bold; }
-  .same-title { height: 34px; color: #FFFFFF; font-size: 24px; font-weight: bold; }
-  .same-red { height: 26px; color: #FF7A7A; font-size: 19px; font-weight: bold; }
-  .same-blue { height: 26px; color: #7AAEFF; font-size: 19px; font-weight: bold; }
-  .skip { width: 100%; height: 72px; margin-top: 8px; justify-content: center; align-items: center; border-radius: 14px; background-color: rgba(255,255,255,0.08); }
-  .skip-text { color: #CBD5E1; font-size: 22px; font-weight: bold; }
   .pick-list { width: 100%; height: 410px; }
   .pick-row { width: 100%; height: 76px; margin-bottom: 8px; padding: 6px 14px; flex-direction: column; justify-content: center; background-color: rgba(255,255,255,0.08); border-radius: 14px; }
   .pick-short { color: #FFFFFF; font-size: 26px; font-weight: bold; height: 34px; }

@@ -39,16 +39,12 @@
         <text class="item-text">History</text>
       </list-item>
 
-      <list-item type="setting" class="item" onclick="onPlayersToggle">
-        <text class="item-text">{{ playersOn ? 'Players: On' : 'Players: Off' }}</text>
-      </list-item>
-
       <list-item type="setting" class="item" onclick="onPlayerList">
         <text class="item-text">Player List</text>
       </list-item>
 
       <list-item type="setting" class="item danger" onclick="onReset">
-        <text class="item-text">Reset Match</text>
+        <text class="item-text">End Set</text>
       </list-item>
 
       <list-item type="setting" class="item" onclick="onDiag">
@@ -69,8 +65,7 @@
       connected: false,
       scoreA: 0,
       scoreB: 0,
-      phoneBlank: false,
-      playersOn: false
+      phoneBlank: false
     },
 
     // ── Step-0 diagnostics ───────────────────────────────────────────────
@@ -85,7 +80,6 @@
       this.diag('onShow')
       const def = this.$app && this.$app.$def
       this.phoneBlank = !!(def && def.phoneBlank)
-      this.playersOn = !!(def && def.playersOn)
     },
     // Worth noticing in the log: this page never attaches an onmessage
     // handler, so while it is up the app's single receive slot is whatever
@@ -180,17 +174,6 @@
       router.back()
     },
 
-    // Band-only switch: the band is where a match starts, so the band decides
-    // whether it asks for players.
-    onPlayersToggle() {
-      const def = this.$app && this.$app.$def
-      const on = !this.playersOn
-      this.playersOn = on
-      if (def) def.playersOn = on
-      storage.set({ key: 'bc_players_on', value: on ? '1' : '' })
-      prompt.showToast({ message: on ? 'Players on' : 'Players off' })
-    },
-
     onPlayerList() { router.push({ uri: 'pages/players' }) },
 
     onSetScore() { router.push({ uri: 'pages/seed_score' }) },
@@ -199,7 +182,7 @@
     onReset() {
       const def = this.$app && this.$app.$def
       if (def) def.pendingMatchCommand = { action: 'new_match' }
-      prompt.showToast({ message: 'Starting new match...' })
+      prompt.showToast({ message: 'Set ended' })
       router.back()
     }
   }

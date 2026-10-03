@@ -16,12 +16,65 @@
         <text class="log-text">{{ statusText }}</text>
       </div>
 
-      <!-- ZONE 2 & 3: SCORES (MIDDLE - 60%) -->
-      <div class="score-area">
+      <!-- HOME: how this set starts. Shown on every launch, and after a set
+           is done, so the clock of a set starts on a deliberate tap. -->
+      <div class="home-area" if="{{ screen === 'home' }}">
+        <div class="home-btn resume" if="{{ canResume }}" onclick="onResume">
+          <text class="home-title">RESUME</text>
+          <div class="home-row">
+            <text class="home-score color-a">{{ scoreA }}</text>
+            <text class="home-dash">-</text>
+            <text class="home-score color-b">{{ scoreB }}</text>
+          </div>
+        </div>
+        <div class="home-btn same" if="{{ hasSame }}" onclick="onSame">
+          <text class="home-title">SAME 4</text>
+          <text class="home-red">{{ sameRedText }}</text>
+          <text class="home-blue">{{ sameBlueText }}</text>
+        </div>
+        <div class="home-btn pick" if="{{ hasPlayers }}" onclick="onPickPlayers">
+          <text class="home-title">PICK PLAYERS</text>
+        </div>
+        <div class="home-btn new" onclick="onNewGame">
+          <text class="home-title">NEW GAME</text>
+        </div>
+      </div>
+
+      <!-- IDLE: no point for a while, the set was probably left at 20-10. -->
+      <div class="mid-area" if="{{ screen === 'game' && idleOpen }}">
+        <div class="big-card idle-card">
+          <text class="card-title">NO POINT</text>
+          <text class="card-sub">for {{ idleMin }} min</text>
+          <text class="card-score">{{ scoreA }} - {{ scoreB }}</text>
+        </div>
+      </div>
+      <div class="pair-area" if="{{ screen === 'game' && idleOpen }}">
+        <div class="pair-btn grey" onclick="onPlayOn"><text class="pair-text">PLAY ON</text></div>
+        <div class="pair-btn red-btn" onclick="onEndSet"><text class="pair-text">END SET</text></div>
+      </div>
+
+      <!-- WIN: same layout as the board, so a misplaced winning tap is one
+           UNDO away, where the undo bar always is. -->
+      <div class="mid-area" if="{{ screen === 'game' && !idleOpen && (isWinnerA || isWinnerB) }}">
+        <stack class="big-card {{ isWinnerA ? 'card-a' : 'card-b' }}">
+          <image src="{{ isWinnerA ? '/common/dog.png' : '/common/cat.png' }}" class="score-watermark"></image>
+          <div class="score-content">
+            <text class="card-title">{{ isWinnerA ? 'RED WINS' : 'BLUE WINS' }}</text>
+            <text class="card-score">{{ scoreA }} - {{ scoreB }}</text>
+          </div>
+        </stack>
+      </div>
+      <div class="pair-area" if="{{ screen === 'game' && !idleOpen && (isWinnerA || isWinnerB) }}">
+        <div class="pair-btn grey" onclick="onUndo"><text class="pair-text">UNDO</text></div>
+        <div class="pair-btn green-btn" onclick="onDone"><text class="pair-text">DONE</text></div>
+      </div>
+
+      <!-- GAME: the scoring cards and the undo bar. -->
+      <div class="score-area" if="{{ screen === 'game' && !idleOpen && !isWinnerA && !isWinnerB }}">
         <!-- TEAM A (LEFT) -->
         <stack class="score-btn card-a" onclick="onScoreA" onlongpress="onQuickHypeA">
           <image src="/common/dog.png" class="score-watermark"></image>
-          <div class="score-content {{ isWinnerA ? 'winner-glow' : '' }}">
+          <div class="score-content">
             <text class="score-text">{{ scoreA }}</text>
           </div>
           <!-- Streak badge: yellow square rotated 45deg, centred on the card's
@@ -29,50 +82,24 @@
                leaving a downward wedge. Label is a separate un-rotated layer. -->
           <div class="streak-tri" if="{{ streakTeam === 'A' && streakCount > 0 }}"></div>
           <text class="streak-text" if="{{ streakTeam === 'A' && streakCount > 0 }}">x{{ streakCount }}</text>
-          <!-- Who serves, from which court (only when players are named). -->
-          <text class="serve-name" if="{{ serveTeam === 'A' }}">{{ serveName }}</text>
-          <text class="serve-court" if="{{ serveTeam === 'A' }}">{{ serveCourt }}</text>
         </stack>
 
         <!-- TEAM B (RIGHT) -->
         <stack class="score-btn card-b" onclick="onScoreB" onlongpress="onQuickHypeB">
           <image src="/common/cat.png" class="score-watermark"></image>
-          <div class="score-content {{ isWinnerB ? 'winner-glow' : '' }}">
+          <div class="score-content">
             <text class="score-text">{{ scoreB }}</text>
           </div>
           <div class="streak-tri" if="{{ streakTeam === 'B' && streakCount > 0 }}"></div>
           <text class="streak-text" if="{{ streakTeam === 'B' && streakCount > 0 }}">x{{ streakCount }}</text>
-          <text class="serve-name" if="{{ serveTeam === 'B' }}">{{ serveName }}</text>
-          <text class="serve-court" if="{{ serveTeam === 'B' }}">{{ serveCourt }}</text>
         </stack>
       </div>
 
-      <!-- ZONE 4: UNDO (BOTTOM - 20%) -->
-      <div class="undo-area" onclick="onUndo">
+      <!-- ZONE 4: UNDO (BOTTOM - 20%). On a set with no point yet it goes
+           back home: the start was tapped by mistake. -->
+      <div class="undo-area" if="{{ screen === 'game' && !idleOpen && !isWinnerA && !isWinnerB }}" onclick="onUndo">
         <text class="undo-text">undo</text>
       </div>
-    </div>
-
-    <!-- WIN OVERLAY -->
-    <div class="win-overlay" if="{{ isWinnerA || isWinnerB }}">
-      <stack class="win-container">
-        <div class="win-backdrop"></div>
-        <div class="win-content">
-          <image src="{{ isWinnerA ? '/common/dog.png' : '/common/cat.png' }}" class="win-mascot"></image>
-          <text class="win-title">WINNER</text>
-          <text class="win-team {{ isWinnerA ? 'color-a' : 'color-b' }}">{{ isWinnerA ? 'TEAM A' : 'TEAM B' }}</text>
-
-          <div class="win-actions">
-            <div class="win-btn undo-btn" onclick="onUndo">
-              <text class="btn-text">UNDO WIN</text>
-            </div>
-            <div class="win-btn reset-btn" onclick="resetGame">
-              <text class="btn-text">NEXT MATCH</text>
-            </div>
-          </div>
-
-        </div>
-      </stack>
     </div>
   </stack>
 </template>
@@ -112,10 +139,26 @@
       luDone: false,
       // Lineup of the set before this one: what "Same 4" offers.
       prevLu: null,
-      // Derived from lineup + rallies on every change (refreshServe).
+      // Derived from lineup + rallies on every change (refreshServe). Only
+      // sets from before 2026-10 have a first server; kept for their state.
       serveTeam: '',
       serveName: '',
       serveCourt: '',
+      // 'home' (choose how to start) | 'game' (board, win, idle prompt).
+      // Every launch opens on home, even with a set half played.
+      screen: 'home',
+      // Home buttons (refreshHome).
+      canResume: false,
+      hasSame: false,
+      sameRedText: '',
+      sameBlueText: '',
+      hasPlayers: false,
+      // Idle reminder: last time the score moved, whether this pause has
+      // already been flagged, and whether the prompt is on screen.
+      lastPointAt: 0,
+      idleAsked: false,
+      idleOpen: false,
+      idleMin: 2,
       // Pending deferred history push (pushUnsyncedHistory).
       historyTimer: null,
       connected: false,
@@ -234,13 +277,7 @@
             if (raw && !def.players) {
               try { def.players = JSON.parse(raw) } catch (e) {}
             }
-          }
-        })
-        storage.get({
-          key: 'bc_players_on',
-          success: (v) => {
-            def.playersOn = (v === '1')
-            this.maybeAskLineup()
+            this.refreshHome()
           }
         })
       } catch (e) { this.diag('players read failed: ' + e.message) }
@@ -259,6 +296,7 @@
         })
       } catch (e) { this.diag('players save threw: ' + e.message) }
       this.diag('players v' + def.players.v + ' n=' + list.length)
+      this.refreshHome()
       this.status('Players synced: ' + list.length)
     },
 
@@ -266,7 +304,7 @@
       if (!this.matchId) this.matchId = this.newMatchId()
       this.stateLoaded = true
       this.refreshServe()
-      this.maybeAskLineup()
+      this.refreshHome()
       if (this.connected) {
         this.sendState('band_ready')
         this.pushUnsyncedHistory()
@@ -298,6 +336,7 @@
 
     persistMatch() {
       this.refreshServe()
+      this.refreshHome()
       if (!this.stateLoaded) return
       try {
         storage.set({
@@ -489,6 +528,8 @@
       this.checkWinner()
       this.matchRevision++
       this.persistMatch()
+      this.screen = 'game'
+      this.markActivity()
       this.sendState('seed_score')
       this.status('Score set')
     },
@@ -501,44 +542,125 @@
       if (c.action === 'seed_score') this.applySeed(c.scoreA, c.scoreB, c.servingTeam)
       else if (c.action === 'new_match') this.resetGame()
       else if (c.action === 'publish_state') this.sendState('manual_state')
-      else if (c.action === 'set_lineup') this.applyLineup(c.lu)
-      else if (c.action === 'skip_lineup') this.skipLineup()
+      else if (c.action === 'set_lineup') this.beginSet(c.lu, 'new')
     },
 
-    // ── Players / lineup ─────────────────────────────────────────────────
-    // Asked once per set, at 0-0, only while Players is on and the band holds
-    // at least four names.
-    maybeAskLineup() {
+    // ── Home: how a set starts ───────────────────────────────────────────
+    // A set's clock (startedAt) starts on the tap that begins it, not on the
+    // first point: the first rally gets a duration, and a recording knows
+    // when play began.
+    sameLineup() {
+      // The set on the band if it has names and points, else the one before.
+      const lu = (this.lineup && (this.scoreA || this.scoreB)) ? this.lineup : this.prevLu
+      if (!lu || !lu.red || !lu.blue) return null
       const def = this.$app && this.$app.$def
-      if (!def || !def.playersOn || !this.stateLoaded || this.luDone) return
-      if (this.scoreA !== 0 || this.scoreB !== 0 || this.rallies) return
-      if (def.lineupOpen) return
-      const n = (def.players && def.players.list) ? def.players.list.length : 0
-      if (n < 4) { this.status('Players: need 4 on list'); return }
-      def.lastLineup = this.prevLu
-      def.lineupOpen = true
-      setTimeout(() => { router.push({ uri: 'pages/lineup' }) }, 50)
+      const list = (def && def.players && def.players.list) || []
+      const on = {}
+      for (let i = 0; i < list.length; i++) on[list[i].i] = true
+      const ids = lu.red.concat(lu.blue)
+      for (let i = 0; i < ids.length; i++) { if (!on[ids[i]]) return null }
+      return lu
     },
 
-    applyLineup(lu) {
-      // A point scored meanwhile (phone command) means the set has started
-      // without names; a lineup can no longer be placed on it truthfully.
-      if (!lu || this.rallies || this.scoreA !== 0 || this.scoreB !== 0) {
-        this.skipLineup()
-        return
+    refreshHome() {
+      const def = this.$app && this.$app.$def
+      const n = (def && def.players && def.players.list) ? def.players.list.length : 0
+      this.canResume = this.matchStatus === 'active' && (this.scoreA > 0 || this.scoreB > 0)
+      this.hasPlayers = n >= 4
+      const lu = this.hasPlayers ? this.sameLineup() : null
+      this.hasSame = !!lu
+      if (lu) {
+        const nm = (id) => (lu.names && lu.names[id] && lu.names[id].s) || '?'
+        this.sameRedText = nm(lu.red[0]) + ' · ' + nm(lu.red[1])
+        this.sameBlueText = nm(lu.blue[0]) + ' · ' + nm(lu.blue[1])
       }
-      this.lineup = lu
+    },
+
+    // Starts a set now. Whatever is on the band is closed first: an
+    // unfinished set as `stopped`, a won one is already in history.
+    beginSet(lu, mode) {
+      const reset = this.scoreA > 0 || this.scoreB > 0 || this.startedAt > 0 ||
+        this.matchStatus !== 'active'
+      if (reset) {
+        this.closeUnfinished()
+        this.startFreshMatch()
+      }
+      if (lu) {
+        const names = {}
+        const ids = lu.red.concat(lu.blue)
+        for (let i = 0; i < ids.length; i++) names[ids[i]] = lu.names && lu.names[ids[i]]
+        this.lineup = { red: lu.red.slice(), blue: lu.blue.slice(), names: names, mode: mode }
+      } else {
+        this.lineup = null
+      }
       this.luDone = true
+      this.startedAt = Date.now()
       this.matchRevision++
       this.persistMatch()
-      this.sendState('lineup')
-      this.status('Players set')
+      this.screen = 'game'
+      this.markActivity()
+      this.sendState(reset ? 'new_match' : 'match_start')
+      this.status(lu ? 'Players set - go' : 'Go')
     },
 
-    skipLineup() {
-      this.lineup = null
-      this.luDone = true
-      this.persistMatch()
+    onResume() {
+      this.screen = 'game'
+      this.markActivity()
+    },
+
+    onNewGame() { this.beginSet(null) },
+
+    onSame() {
+      const lu = this.sameLineup()
+      if (lu) this.beginSet(lu, 'same')
+    },
+
+    onPickPlayers() {
+      const def = this.$app && this.$app.$def
+      if (def) def.lineupOpen = true
+      router.push({ uri: 'pages/lineup' })
+    },
+
+    // Set won: back home with a fresh set ready. The won set is already in
+    // history; the phone clears its board as it did for NEXT MATCH.
+    onDone() {
+      this.startFreshMatch()
+      this.screen = 'home'
+      this.sendState('new_match')
+    },
+
+    onEndSet() {
+      this.idleOpen = false
+      this.resetGame()
+    },
+
+    onPlayOn() {
+      this.idleOpen = false
+      this.markActivity()
+    },
+
+    // ── Idle reminder ────────────────────────────────────────────────────
+    // A set left at 20-10 is never ended, so its record and a recording run
+    // on. No point for 2 minutes buzzes the wrist once and offers END SET.
+    // Rides the clock's 30 s tick (no timer of its own), so it fires 2:00 to
+    // 2:30 after the last point, and only while this page is shown: on a
+    // screen that went dark it fires as the screen comes back.
+    markActivity() {
+      this.lastPointAt = Date.now()
+      this.idleAsked = false
+    },
+
+    checkIdle() {
+      if (this.screen !== 'game' || this.idleAsked || !this.lastPointAt) return
+      if (this.isWinnerA || this.isWinnerB) return
+      if (this.scoreA === 0 && this.scoreB === 0) return
+      const idle = Date.now() - this.lastPointAt
+      if (idle < 120000) return
+      this.idleAsked = true
+      this.idleMin = Math.floor(idle / 60000)
+      this.idleOpen = true
+      this.diag('idle ' + this.idleMin + ' min at ' + this.scoreA + '-' + this.scoreB)
+      this.buzz(0, 3)
     },
 
     // Who serves now, from the lineup at 0-0 and the rally log. Pure and
@@ -671,11 +793,9 @@
       this.startLinkPoll()
       this.loadAlarm()
       const def = this.$app && this.$app.$def
-      const fromLineup = !!(def && def.lineupOpen)
       if (def) def.lineupOpen = false
       this.applyPendingMatchCommand()
-      if (fromLineup && !this.luDone) this.skipLineup()
-      else this.maybeAskLineup()
+      this.refreshHome()
     },
 
     setupConnect() {
@@ -942,6 +1062,7 @@
       const m = d.getMinutes()
       this.clockText = (h < 10 ? '0' + h : '' + h) + ':' + (m < 10 ? '0' + m : '' + m)
       this.checkAlarm(h * 60 + m)
+      this.checkIdle()
     },
 
     /**
@@ -976,12 +1097,12 @@
 
       this.status('TIME UP - take your stuff')
       this.diag('reminder fired at ' + this.clockText)
-      this.buzz(0)
+      this.buzz(0, 6)
     },
 
-    // Six bursts a second apart: one buzz is easy to miss mid-rally.
-    buzz(n) {
-      if (n >= 6) return
+    // Bursts a second apart: one buzz is easy to miss mid-rally.
+    buzz(n, total) {
+      if (n >= total) return
       try {
         if (vibrator && typeof vibrator.vibrate === 'function') {
           vibrator.vibrate({ mode: 'long' })
@@ -990,7 +1111,7 @@
         this.diag('vibrate threw: ' + e.message)
         return
       }
-      setTimeout(() => { this.buzz(n + 1) }, 1000)
+      setTimeout(() => { this.buzz(n + 1, total) }, 1000)
     },
 
     // ── History & streak ─────────────────────────────────────────────────
@@ -1090,9 +1211,10 @@
       // message sent back-to-back with `new_match` (that one tended to drop).
       this.closeUnfinished()
       this.startFreshMatch()
+      this.screen = 'home'
+      this.idleOpen = false
       this.sendState('new_match')
-      this.status('New match')
-      this.maybeAskLineup()
+      this.status('Set ended')
     },
 
     openSettings() {
@@ -1180,7 +1302,18 @@
     // Shared by the band button and phone commands. Returns false when there
     // is nothing to undo.
     doUndo() {
-      if (this.history.length === 0) return false
+      if (this.history.length === 0) {
+        // Started by mistake, no point yet: back to the start screen.
+        if (this.screen === 'game' && this.scoreA === 0 && this.scoreB === 0 && this.startedAt) {
+          this.startedAt = 0
+          this.lineup = null
+          this.persistMatch()
+          this.screen = 'home'
+          this.sendState('state_reply')
+          return true
+        }
+        return false
+      }
       const lastState = this.history.pop()
       this.scoreA = lastState.a
       this.scoreB = lastState.b
@@ -1197,6 +1330,7 @@
       this.removeArchivedCurrent()
       this.matchRevision++
       this.persistMatch()
+      this.markActivity()
       this.startCooldown()
       this.sendState('undo')
       return true
@@ -1223,6 +1357,10 @@
       this.matchRevision++
       this.persistMatch()
       if (this.matchStatus === 'completed') this.archiveCurrent('completed')
+      // A point from the phone while the band shows home still counts.
+      this.screen = 'game'
+      this.idleOpen = false
+      this.markActivity()
       this.startCooldown()
       this.sendState(team === 'A' ? 'score_A' : 'score_B', manualHype)
       return true
@@ -1369,30 +1507,7 @@
   /* Sits across the wide part of the wedge; the descender ends up over the card
      itself, which is why it is white rather than dark. Fixed width + centre
      alignment so x1 and x12 stay put instead of drifting with the digit count. */
-  /* Server label at the bottom of the serving card. Only left/bottom work
-     for absolute children of <stack> (docs/watch-ui-gotchas.md). */
-  .serve-name {
-    position: absolute;
-    bottom: 26px;
-    align-self: center;
-    width: 86px;
-    height: 24px;
-    text-align: center;
-    font-size: 18px;
-    font-weight: bold;
-    color: #FFFFFF;
-  }
 
-  .serve-court {
-    position: absolute;
-    bottom: 8px;
-    align-self: center;
-    width: 86px;
-    height: 18px;
-    text-align: center;
-    font-size: 13px;
-    color: rgba(255, 255, 255, 0.85);
-  }
 
   .streak-text {
     position: absolute;
@@ -1420,75 +1535,111 @@
     font-weight: bold;
   }
 
-  /* WIN OVERLAY */
-  .win-overlay {
+  /* HOME: one column of full-width buttons where the cards and undo bar
+     are on the board. Height budget (520 - 138 top): four 78px buttons. */
+  .home-area {
+    flex: 1;
     width: 100%;
-    height: 100%;
-  }
-
-  .win-container {
-    width: 100%;
-    height: 100%;
-  }
-
-  .win-backdrop {
-    width: 100%;
-    height: 100%;
-    background-color: rgba(15, 23, 42, 0.98);
-  }
-
-  .win-content {
-    width: 100%;
-    height: 100%;
     flex-direction: column;
-    align-items: center;
     justify-content: center;
-    padding: 24px;
+    padding: 8px 12px 16px 12px;
   }
 
-  .win-mascot {
-    width: 130px;
-    height: 130px;
-    object-fit: contain;
-    margin-bottom: 8px;
+  .home-btn {
+    width: 100%;
+    height: 78px;
+    margin-top: 8px;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 20px;
   }
 
-  .win-title {
-    color: rgba(255, 255, 255, 0.5);
+  .resume { background-color: #334155; height: 86px; }
+  .same { background-color: #334155; height: 96px; }
+  .pick { background-color: rgba(255, 255, 255, 0.08); }
+  .new { background-color: #16A34A; }
+
+  .home-title {
+    height: 30px;
     font-size: 22px;
     font-weight: bold;
+    color: #FFFFFF;
   }
 
-  .win-team {
-    font-size: 38px;
-    font-weight: 900;
-    margin-bottom: 24px;
-  }
+  .home-row { flex-direction: row; align-items: center; height: 40px; }
+  .home-score { font-size: 34px; font-weight: bold; }
+  .home-dash { font-size: 28px; color: rgba(255, 255, 255, 0.5); margin: 0 10px; }
+  .home-red { height: 26px; color: #FF7A7A; font-size: 18px; font-weight: bold; }
+  .home-blue { height: 26px; color: #7AAEFF; font-size: 18px; font-weight: bold; }
 
-  .color-a { color: #FF5252; }
-  .color-b { color: #448AFF; }
-
-  .win-actions {
-    flex-direction: column;
+  /* WIN / IDLE: one rounded card where the two score cards are, and two
+     buttons where the undo bar is. */
+  .mid-area {
+    flex: 1;
     width: 100%;
-    align-items: center;
+    padding: 8px;
   }
 
-  .win-btn {
-    width: 170px;
-    height: 54px;
-    border-radius: 27px;
+  .big-card {
+    flex: 1;
+    height: 100%;
+    margin: 4px;
+    border-radius: 20px;
+    overflow: hidden;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    margin-bottom: 12px;
   }
 
-  .reset-btn { background-color: #FF5252; }
-  .undo-btn { background-color: rgba(255, 255, 255, 0.15); border: 1px solid rgba(255, 255, 255, 0.3); }
+  .idle-card { background-color: #334155; }
 
-  .btn-text {
+  .card-title {
+    font-size: 30px;
+    font-weight: bold;
     color: #FFFFFF;
+    text-align: center;
+  }
+
+  .card-sub {
     font-size: 18px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 4px;
+  }
+
+  .card-score {
+    font-size: 44px;
+    font-weight: bold;
+    color: #FFFFFF;
+    margin-top: 8px;
+  }
+
+  .pair-area {
+    width: 100%;
+    height: 100px;
+    flex-direction: row;
+    padding: 4px 12px 24px 12px;
+  }
+
+  .pair-btn {
+    flex: 1;
+    height: 100%;
+    margin: 0 4px;
+    border-radius: 20px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .grey { background-color: rgba(255, 255, 255, 0.15); }
+  .red-btn { background-color: #FF5252; }
+  .green-btn { background-color: #16A34A; }
+
+  .pair-text {
+    color: #FFFFFF;
+    font-size: 20px;
     font-weight: bold;
   }
+
+  .color-a { color: #FF7A7A; }
+  .color-b { color: #7AAEFF; }
 </style>
