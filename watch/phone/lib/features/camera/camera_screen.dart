@@ -33,6 +33,7 @@ class CornerCameraController extends GetxController {
     );
     server = CameraServer(rig.session, _statusForBoard);
     rig.clock = () => server.clock;
+    server.onEvent = rig.live;
     server.onChange = () => rig.tick.value++;
     _start();
   }
@@ -126,7 +127,7 @@ class CameraScreen extends StatelessWidget {
         body: SafeArea(
           child: Row(
             children: [
-              Expanded(flex: 3, child: _preview(rig)),
+              Expanded(flex: 3, child: Center(child: CameraPreviewBox(rig))),
               SizedBox(width: 320, child: _panel(context, c)),
             ],
           ),
@@ -134,22 +135,6 @@ class CameraScreen extends StatelessWidget {
       ),
     );
   }
-
-  Widget _preview(CameraRig rig) => Obx(() {
-        final id = rig.textureId.value;
-        if (id == null) {
-          return Center(
-            child: Text(rig.error.value.isEmpty ? 'Opening camera…' : rig.error.value,
-                style: const TextStyle(color: Colors.white38)),
-          );
-        }
-        return Center(
-          child: AspectRatio(
-            aspectRatio: rig.previewAspect.value,
-            child: RotatedBox(quarterTurns: rig.previewTurns.value, child: Texture(textureId: id)),
-          ),
-        );
-      });
 
   Widget _panel(BuildContext context, CornerCameraController c) => Container(
         color: Ui.bg,

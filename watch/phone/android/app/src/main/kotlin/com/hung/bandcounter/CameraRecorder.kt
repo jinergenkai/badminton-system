@@ -78,6 +78,12 @@ class CameraRecorder(
     private var startEstimates = 0
     private var lastStatusAt = 0L
 
+    // Preview: bound always (so turning it on needs no rebind), but only
+    // fed frames while someone looks at it — the board keeps its camera
+    // preview dark behind the scoreboard.
+    private var previewUseCase: Preview? = null
+    private var previewProvider: Preview.SurfaceProvider? = null
+
     private var permissionResult: MethodChannel.Result? = null
 
     // ── Score overlay, burned into the video (and the preview) ─────────────
@@ -112,8 +118,14 @@ class CameraRecorder(
                 call.argument<String>("lens") ?: "back",
                 call.argument<Boolean>("preview") ?: true,
                 call.argument<Boolean>("overlay") ?: true,
+                call.argument<Boolean>("previewActive") ?: true,
                 result,
             )
+            "setPreviewActive" -> {
+                val on = call.argument<Boolean>("on") ?: false
+                previewUseCase?.setSurfaceProvider(main, if (on) previewProvider else null)
+                result.success(previewUseCase != null)
+            }
             "setOverlay" -> {
                 ovA = call.argument<Int>("a") ?: 0
                 ovB = call.argument<Int>("b") ?: 0
@@ -171,7 +183,8 @@ class CameraRecorder(
     }
 
     // ── Camera ─────────────────────────────────────────────────────────────
-    private fun open(lens: String, withPreview: Boolean, withOverlay: Boolean, result: MethodChannel.Result) {
+    private fun open(lens: String, withPreview: Boolean, withOverlay: Boolean, previewActive: Boolean,
+                     result: MethodChannel.Result) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             result.error("OLD_ANDROID", "Recording needs Android 10+", null); return
         }
@@ -188,7 +201,7 @@ class CameraRecorder(
                 @Suppress("DEPRECATION")
                 val rotation = activity.windowManager.defaultDisplay.rotation
                 val preview = if (tex == null) null else Preview.Builder().setTargetRotation(rotation).build()
-                preview?.setSurfaceProvider(main) { req ->
+                val provider = Preview.SurfaceProvider { req ->
                     val w = req.resolution.width
                     val h = req.resolution.height
                     val st = tex!!.surfaceTexture()
@@ -200,6 +213,9 @@ class CameraRecorder(
                             "rotation" to info.rotationDegrees))
                     }
                 }
+                previewUseCase = preview
+                previewProvider = provider
+                if (previewActive) preview?.setSurfaceProvider(main, provider)
                 val recorder = Recorder.Builder()
                     .setQualitySelector(QualitySelector.from(Quality.FHD,
                         FallbackStrategy.lowerQualityOrHigherThan(Quality.FHD)))

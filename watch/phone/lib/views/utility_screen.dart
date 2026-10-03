@@ -4,6 +4,7 @@ import 'package:get/get.dart';
 import '../features/camera/board_recorder.dart';
 import '../features/camera/camera_link_service.dart';
 import '../features/camera/camera_platform.dart';
+import '../features/camera/camera_rig.dart';
 import '../features/camera/camera_settings.dart';
 import 'ui_kit.dart';
 
@@ -127,9 +128,40 @@ class _LinkPanelState extends State<_LinkPanel> {
   }
 }
 
-class _BoardRecPanel extends StatelessWidget {
+class _BoardRecPanel extends StatefulWidget {
   final BoardRecorder rec;
   const _BoardRecPanel(this.rec);
+
+  @override
+  State<_BoardRecPanel> createState() => _BoardRecPanelState();
+}
+
+class _BoardRecPanelState extends State<_BoardRecPanel> {
+  BoardRecorder get rec => widget.rec;
+
+  @override
+  void initState() {
+    super.initState();
+    // The preview is fed only while this panel is on screen.
+    rec.rig?.setPreviewActive(true);
+  }
+
+  @override
+  void dispose() {
+    rec.rig?.setPreviewActive(false);
+    super.dispose();
+  }
+
+  Future<void> _enable(bool v) async {
+    await rec.enable(v);
+    if (v) await rec.rig?.setPreviewActive(true);
+  }
+
+  Future<void> _reconfigure() async {
+    rec.on.refresh();
+    await rec.reconfigure();
+    await rec.rig?.setPreviewActive(true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -146,16 +178,27 @@ class _BoardRecPanel extends StatelessWidget {
           children: [
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Record with this device\'s camera'),
+              title: const Text("Record with this device's camera"),
               subtitle: Text(on
                   ? (recording
                       ? 'Recording · ${rig!.session.finished.length} file(s) saved · Download/Godminton'
                       : 'Starting…')
                   : 'One file per set, behind the scoreboard. Adds load to this device.'),
               value: on,
-              onChanged: (v) => rec.enable(v),
+              onChanged: _enable,
             ),
             if (err.isNotEmpty) Text(err, style: const TextStyle(color: Colors.orangeAccent)),
+            if (on && rig != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: CameraPreviewBox(rig),
+                  ),
+                ),
+              ),
             const SizedBox(height: 8),
             SegmentedButton<String>(
               segments: const [
@@ -165,8 +208,7 @@ class _BoardRecPanel extends StatelessWidget {
               selected: {CameraSettings.boardLens},
               onSelectionChanged: (v) async {
                 await CameraSettings.setBoardLens(v.first);
-                rec.on.refresh();
-                await rec.reconfigure();
+                await _reconfigure();
               },
             ),
             SwitchListTile(
@@ -176,8 +218,7 @@ class _BoardRecPanel extends StatelessWidget {
               value: CameraSettings.boardOverlay,
               onChanged: (v) async {
                 await CameraSettings.setBoardOverlay(v);
-                rec.on.refresh();
-                await rec.reconfigure();
+                await _reconfigure();
               },
             ),
           ],

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'camera_platform.dart';
@@ -18,6 +18,10 @@ class CameraRig with WidgetsBindingObserver {
   String lens;
   bool overlay;
   final bool preview;
+
+  /// Whether the preview is fed right now (the board keeps it dark unless
+  /// its preview is on screen).
+  bool previewActive;
   ClockInfo Function() clock;
 
   CameraRig({
@@ -25,6 +29,7 @@ class CameraRig with WidgetsBindingObserver {
     required this.lens,
     required this.overlay,
     required this.preview,
+    this.previewActive = true,
     ClockInfo Function()? clock,
   }) : clock = clock ?? (() => const ClockInfo(0, 0, 0));
 
@@ -51,12 +56,16 @@ class CameraRig with WidgetsBindingObserver {
   StreamSubscription? _events;
   Timer? _timer;
   bool _resumeOnShow = false;
-  String _overlayKey = '';
+
+  /// What the burned-in score shows. Follows the board's events whether or
+  /// not a file is being recorded, so the preview shows it before Start.
+  int _liveA = 0, _liveB = 0;
+  bool _liveShow = false;
 
   Future<bool> open() async {
     _events ??= platform.events.listen(_onEvent);
     WidgetsBinding.instance.addObserver(this);
-    session.onChange = _changed;
+    session.onChange = () => tick.value++;
     try {
       final p = await platform.requestPermissions();
       if (p['camera'] != true) {
@@ -64,7 +73,9 @@ class CameraRig with WidgetsBindingObserver {
         return false;
       }
       if (p['audio'] != true) error.value = 'No microphone permission: video without sound';
-      textureId.value = await platform.open(lens: lens, preview: preview, overlay: overlay);
+      textureId.value = await platform.open(
+          lens: lens, preview: preview, previewActive: previewActive, overlay: overlay);
+      _pushOverlay();
       opened.value = true;
       final st = await platform.deviceStatus();
       session.deviceInfo['device'] = st['model'];
@@ -102,8 +113,6 @@ class CameraRig with WidgetsBindingObserver {
     error.value = '';
     await session.begin();
     recording.value = true;
-    _overlayKey = '';
-    _changed();
   }
 
   Future<void> stop() async {
@@ -158,15 +167,35 @@ class CameraRig with WidgetsBindingObserver {
     tick.value++;
   }
 
-  /// Overlay follows the set in the current file.
-  void _changed() {
-    tick.value++;
-    if (!overlay) return;
-    final m = session.current?.match;
-    final key = m == null ? '-' : '${m.scoreA}:${m.scoreB}';
-    if (key == _overlayKey) return;
-    _overlayKey = key;
-    platform.setOverlay(m?.scoreA ?? 0, m?.scoreB ?? 0, m != null).catchError((_) {});
+  /// A match event (from the board over Wi-Fi, or straight from this
+  /// board): updates the burned-in score.
+  void live(Map<String, dynamic> m) {
+    int? n(dynamic v) => v is num ? v.toInt() : null;
+    switch (m['type']) {
+      case 'match_start':
+      case 'point':
+      case 'undo':
+        _liveA = n(m['scoreA']) ?? (m['type'] == 'match_start' ? 0 : _liveA);
+        _liveB = n(m['scoreB']) ?? (m['type'] == 'match_start' ? 0 : _liveB);
+        _liveShow = true;
+        break;
+      case 'match_end':
+        // The final score stays up until the next set starts.
+        _liveA = n(m['scoreA']) ?? _liveA;
+        _liveB = n(m['scoreB']) ?? _liveB;
+        break;
+    }
+    _pushOverlay();
+  }
+
+  void _pushOverlay() {
+    if (!overlay || !opened.value) return;
+    platform.setOverlay(_liveA, _liveB, _liveShow).catchError((_) {});
+  }
+
+  Future<void> setPreviewActive(bool on) async {
+    previewActive = on;
+    if (opened.value) await platform.setPreviewActive(on).catchError((_) {});
   }
 
   /// Seconds into the current file.
@@ -175,4 +204,40 @@ class CameraRig with WidgetsBindingObserver {
     if (w == null) return 0;
     return ((DateTime.now().millisecondsSinceEpoch - w) / 1000).floor();
   }
+}
+
+/// The camera's preview cropped to what is recorded: the 16:9 centre of the
+/// sensor's (usually 4:3) frame. The burned-in score then sits in the
+/// corner here exactly as it does in the file.
+class CameraPreviewBox extends StatelessWidget {
+  final CameraRig rig;
+  const CameraPreviewBox(this.rig, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Obx(() {
+        final id = rig.textureId.value;
+        if (id == null) {
+          return AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Center(
+              child: Text(rig.error.value.isEmpty ? 'Opening camera…' : rig.error.value,
+                  style: const TextStyle(color: Colors.white38)),
+            ),
+          );
+        }
+        final a = rig.previewAspect.value;
+        return AspectRatio(
+          aspectRatio: 16 / 9,
+          child: ClipRect(
+            child: FittedBox(
+              fit: BoxFit.cover,
+              child: SizedBox(
+                width: 1000 * a,
+                height: 1000,
+                child: RotatedBox(quarterTurns: rig.previewTurns.value, child: Texture(textureId: id)),
+              ),
+            ),
+          ),
+        );
+      });
 }

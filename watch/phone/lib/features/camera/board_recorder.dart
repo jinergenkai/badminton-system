@@ -4,8 +4,8 @@ import 'camera_rig.dart';
 import 'camera_settings.dart';
 
 /// The board recording with its own camera, behind the scoreboard
-/// (docs/camera-recording-requirements.md §6). No preview: the board keeps
-/// the whole screen. Match events come straight from ScoreController, on
+/// (docs/camera-recording-requirements.md §6). Its preview is shown only in
+/// Utility, and fed only then: the board keeps the whole screen. Match events come straight from ScoreController, on
 /// this device's clock, so there is no link and no offset.
 ///
 /// Off by default: it adds a video encoder to the tablet that also runs the
@@ -36,7 +36,9 @@ class BoardRecorder extends GetxService {
             role: 'front',
             lens: CameraSettings.boardLens,
             overlay: CameraSettings.boardOverlay,
-            preview: false,
+            // Bound but dark: fed only while Utility shows it.
+            preview: true,
+            previewActive: false,
           );
       rig = r;
       if (!r.opened.value && !await r.open()) return;
@@ -58,7 +60,10 @@ class BoardRecorder extends GetxService {
   /// A match event from the band, as sent to the corner camera.
   void feed(String type, Map<String, dynamic> fields) {
     final r = rig;
-    if (r == null || !r.recording.value) return;
-    r.session.handle({'type': type, ...fields}, DateTime.now().millisecondsSinceEpoch).catchError((_) {});
+    if (r == null) return;
+    final m = {'type': type, ...fields};
+    r.live(m);
+    if (!r.recording.value) return;
+    r.session.handle(m, DateTime.now().millisecondsSinceEpoch).catchError((_) {});
   }
 }

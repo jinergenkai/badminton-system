@@ -29,6 +29,9 @@ class CameraServer {
 
   /// Shown on the camera screen.
   String? clientName;
+
+  /// Every match event, recording or not (the burned-in score follows it).
+  void Function(Map<String, dynamic>)? onEvent;
   bool get connected => _ws != null;
   void Function()? onChange;
 
@@ -143,6 +146,7 @@ class CameraServer {
     if (!_seen.add(key)) return;
     if (_seen.length > 2000) _seen.remove(_seen.first);
     final t = (m['t'] as num?)?.toInt() ?? t3;
+    onEvent?.call(m);
     await session.handle(m, t - clock.offsetMs);
   }
 }

@@ -22,10 +22,16 @@ class CameraPlatform implements VideoSink {
   /// Binds [lens] ('back' | 'front'); returns the preview's Flutter texture
   /// id, or null without a preview (the board recording behind its UI).
   /// [overlay] burns the score and clock into the video.
-  Future<int?> open({String lens = 'back', bool preview = true, bool overlay = true}) async {
-    final r = await _ch.invokeMethod<Map>('open', {'lens': lens, 'preview': preview, 'overlay': overlay});
+  Future<int?> open(
+      {String lens = 'back', bool preview = true, bool previewActive = true, bool overlay = true}) async {
+    final r = await _ch.invokeMethod<Map>('open',
+        {'lens': lens, 'preview': preview, 'previewActive': previewActive, 'overlay': overlay});
     return (r?['textureId'] as num?)?.toInt();
   }
+
+  /// Feed the preview (true) or leave it dark (false), without rebinding:
+  /// recording goes on either way.
+  Future<void> setPreviewActive(bool on) => _ch.invokeMethod('setPreviewActive', {'on': on});
 
   /// What the overlay shows; [show] false hides the score (between sets).
   Future<void> setOverlay(int a, int b, bool show) =>
