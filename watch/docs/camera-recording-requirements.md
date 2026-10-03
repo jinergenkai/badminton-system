@@ -41,9 +41,16 @@ Trạng thái: giai đoạn 1 đã code, 2026-10-03 (`lib/features/camera/`, `Ca
   cắt. Nhảy vào giữa set (`joined`) chỉ cắt nếu file đang chứa một set khác. File dưới 3 giây
   thì không cắt. Chuyển file mất khoảng 0,5–1 giây, nên `startS` hơi âm (ví dụ −0,8): lúc bấm
   start nằm ở cuối file trước, còn cú giao cầu đầu tiên đến sau đó vài giây.
-- **Khóa lấy nét / độ sáng** (3A lock của Camera2): sau khi bấm Start 2 giây thì lấy nét
-  giữa khung một lần rồi giữ, khóa độ sáng (AE) và cân bằng trắng (AWB); Stop thì mở. Có
-  công tắc, mặc định bật. Ống kính không lấy nét được (đa số camera trước) chỉ khóa độ sáng.
+- **Lấy nét** (chọn được): *Vô cực* (mặc định: tắt tự lấy nét, ống kính đặt ở vô cực; với
+  sân nhìn từ 3–15 m thì cả sân đều nét, người đi sát ống kính cũng không kéo nét đi được) /
+  *Giữa khung* (lấy nét một lần ở giữa rồi giữ) / *Tự động*. Ống kính không lấy nét được (đa
+  số camera trước) thì bỏ qua phần này.
+- **Khóa độ sáng** (AE + AWB lock, có công tắc, mặc định bật): **mỗi file mới** (tức mỗi set)
+  được đo lại 2 giây đầu rồi khóa suốt set. Ánh sáng sân thay đổi giữa buổi vẫn được cập nhật
+  theo từng set; người mặc áo sáng đứng sát lúc đo chỉ ảnh hưởng một set.
+- **Độ phân giải** chọn riêng cho từng máy: 1080p (12 Mbps, khoảng 5,4 GB/giờ) hoặc 720p
+  (6 Mbps, khoảng 2,7 GB/giờ). Điện thoại camera mặc định 1080p (Redmi 13C tối đa 1080p30),
+  tablet mặc định 720p. JSON ghi kích thước thật của file, đọc lại sau khi quay xong.
 - **Gallery:** liệt kê `Download/Godminton` của máy, nhóm theo ngày, có ảnh thu nhỏ, thời
   lượng và tỉ số; bấm để xem bằng trình phát của máy; nhấn giữ để chọn nhiều và xóa (xóa
   kèm `.json`).
