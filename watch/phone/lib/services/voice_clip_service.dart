@@ -17,24 +17,23 @@ import 'wav_gain.dart';
 /// which Android may clear):
 ///   raw/<key>.wav   what the TTS engine produced — the slow part (0.5–2 s
 ///                   on a weak tablet), so it is made once per line+language
-///   out/<key>_<boost>.wav   raw → processSpeech (level-matched to the MP3s)
-///                   × Name boost. Cheap to redo, so a boost change only
-///                   clears this layer.
+///   out/<key>_<proc>.wav   raw → processSpeech: the same loudness as the
+///                   MP3s. Cheap to redo, so a change in the processing only
+///                   bumps [_proc] and leaves the raw renders.
 ///
 /// A line that is not rendered yet is spoken live by the caller this time,
 /// and rendered in the background for the next.
 class VoiceClipService extends GetxService {
-  static const _prefBoost = 'tts_boost';
-
-  /// Bump when the processing changes, so old renders are not reused.
+  /// Bump when synthesis changes: raw renders are keyed by it.
   static const _version = 'v2';
+
+  /// Bump when processSpeech changes: only out/ is redone.
+  /// p3 (2026-10-03): LUFS target + clean limiter; Name boost removed — it
+  /// was what made TTS crackle on court.
+  static const _proc = 'p3';
 
   /// Evict least-recently-used files above this.
   static const _maxBytes = 40 * 1024 * 1024;
-
-  /// Extra gain after level-matching. 1.0 = as loud as the score MP3s.
-  final RxDouble boost = 1.4.obs; // default tuned on court
-  static const double maxBoost = 4.0;
 
   /// ms the last real synthesis took (0 while everything came from disk):
   /// the number that says whether the tablet keeps up.
@@ -51,7 +50,7 @@ class VoiceClipService extends GetxService {
 
   Future<VoiceClipService> init() async {
     final prefs = await SharedPreferences.getInstance();
-    boost.value = (((prefs.getDouble(_prefBoost) ?? 1.4) * 10).round() / 10).clamp(0.0, maxBoost);
+    await prefs.remove('tts_boost');
     final base = await getApplicationSupportDirectory();
     _raw = Directory('${base.path}/tts_cache/raw')..createSync(recursive: true);
     _out = Directory('${base.path}/tts_cache/out')..createSync(recursive: true);
@@ -62,24 +61,13 @@ class VoiceClipService extends GetxService {
       // Left by a short-lived build that boosted MP3s at play time.
       final gain = Directory('${base.path}/gain_cache');
       if (gain.existsSync()) gain.deleteSync(recursive: true);
+      // Processed with an older chain.
+      for (final f in _out!.listSync().whereType<File>()) {
+        if (!f.path.endsWith('_$_proc.wav')) f.deleteSync();
+      }
     } catch (_) {}
     unawaited(_evict());
     return this;
-  }
-
-  Future<void> setBoost(double v) async {
-    boost.value = ((v * 10).round() / 10).clamp(0.0, maxBoost);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setDouble(_prefBoost, boost.value);
-    // Every processed file was made at the old level; raw renders stay.
-    final out = _out;
-    if (out != null) {
-      for (final f in out.listSync().whereType<File>()) {
-        try {
-          f.deleteSync();
-        } catch (_) {}
-      }
-    }
   }
 
   String _lang() => _tts.currentLanguage.toLowerCase();
@@ -87,9 +75,7 @@ class VoiceClipService extends GetxService {
   String _key(String text) =>
       md5.convert(utf8.encode('$_version|${_lang()}|${text.trim()}')).toString();
 
-  String _boostTag() => (boost.value * 100).round().toString();
-
-  File? _outFile(String key) => _out == null ? null : File('${_out!.path}/${key}_${_boostTag()}.wav');
+  File? _outFile(String key) => _out == null ? null : File('${_out!.path}/${key}_$_proc.wav');
   File? _rawFile(String key) => _raw == null ? null : File('${_raw!.path}/$key.wav');
 
   /// Path of a playable file for [text] right now, or null. Uses the raw
@@ -164,7 +150,7 @@ class VoiceClipService extends GetxService {
   Future<String?> _process(File raw, File out) async {
     try {
       final bytes = await raw.readAsBytes();
-      final processed = processSpeech(bytes, boost: boost.value);
+      final processed = processSpeech(bytes);
       final tmp = File('${out.path}.part');
       await tmp.writeAsBytes(processed ?? bytes, flush: true);
       await tmp.rename(out.path);

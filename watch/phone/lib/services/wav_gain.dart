@@ -3,16 +3,26 @@ import 'dart:typed_data';
 
 /// Loudness for TTS output, in pure Dart.
 ///
-/// Android TTS writes 16-bit PCM WAV. PCM is just numbers, so "louder than
-/// 100%" is a multiply — with a soft limiter above the knee so the boosted
-/// peaks round off instead of clipping hard. Leading/trailing silence is
-/// trimmed too: it only delays the words.
+/// Android TTS writes 16-bit PCM WAV. The chain is the one
+/// tools/normalize_voice.py runs on the bundled MP3s, with the same numbers,
+/// so a TTS line spliced between two recorded clips sounds as loud as they
+/// do:
+///   trim → compress (-28 dB, 6:1) → gain to [kTargetLufs] → peak limiter
+///   at -0.5 dBFS (look-ahead, so it turns the gain down instead of bending
+///   the wave: no crackle).
 ///
-/// Both entry points return null for anything that is not 16-bit PCM WAV;
+/// Every entry point returns null for anything that is not 16-bit PCM WAV;
 /// the caller then plays the file as it is.
 
-/// Plain gain + soft limit.
-Uint8List? boostWav(Uint8List bytes, double gain, {double knee = 0.7, double silence = 0.01}) {
+/// Loudness of every voice clip, integrated LUFS (EBU R128). Kept in step
+/// with TARGET_LUFS in tools/normalize_voice.py.
+const double kTargetLufs = -10.0;
+
+/// Peak ceiling: -0.5 dBFS, as the MP3s' limiter.
+const double kCeiling = 0.944;
+
+/// Plain gain, peaks held under [kCeiling] by the limiter.
+Uint8List? boostWav(Uint8List bytes, double gain, {double silence = 0.01}) {
   final pcm = _Pcm.parse(bytes);
   if (pcm == null) return null;
   final x = pcm.trimmed(silence);
@@ -20,37 +30,38 @@ Uint8List? boostWav(Uint8List bytes, double gain, {double knee = 0.7, double sil
   for (var i = 0; i < x.length; i++) {
     x[i] *= gain;
   }
-  _softLimit(x, knee);
+  _limit(x, pcm.channels, pcm.rate);
   return pcm.write(x);
 }
 
-/// The same treatment the bundled MP3s get from tools/normalize_voice.py, so
-/// a TTS line sits at the level of the recorded ones:
-///   trim → compress (-20 dB, 3:1) → gain to [targetDb] mean → × [boost]
-///   → soft limit.
-/// At [boost] 1.0 a line matches the score clips; above it is extra, and
-/// far above it the limiter saturates — audible crackle, allowed on purpose.
+/// The bundled clips' treatment, landing on [targetLufs]. [boost] is extra
+/// gain on top (1.0 = as loud as the clips); the limiter keeps it clean.
 Uint8List? processSpeech(Uint8List bytes,
-    {double boost = 1.0, double targetDb = -10, double knee = 0.7, double silence = 0.01}) {
+    {double boost = 1.0, double targetLufs = kTargetLufs, double silence = 0.01}) {
   final pcm = _Pcm.parse(bytes);
   if (pcm == null) return null;
   final x = pcm.trimmed(silence);
   if (x == null) return null;
-  _compress(x, pcm.channels, pcm.rate);
-  final rms = rmsOf(x);
-  if (rms > 0) {
+  final ch = pcm.channels, sr = pcm.rate;
+  _compress(x, ch, sr);
+  final target = targetLufs + 20 * math.log(boost <= 0 ? 1e-6 : boost) / math.ln10;
+  // A few rounds: the limiter takes a little back from the loudest lines
+  // (measured: 1 dB short after one round on a peaky one).
+  for (var round = 0; round < 5; round++) {
+    final l = lufsOf(x, ch, sr);
+    if (l == null) break;
+    if (round > 0 && (target - l).abs() <= 0.3) break;
     // Capped: a near-silent render would otherwise be pushed into noise.
-    final makeup = math.min(math.pow(10, targetDb / 20) / rms, 30.0);
+    final g = math.min(math.pow(10, (target - l) / 20).toDouble(), 100.0);
     for (var i = 0; i < x.length; i++) {
-      x[i] *= makeup * boost;
+      x[i] *= g;
     }
+    _limit(x, ch, sr);
   }
-  _softLimit(x, knee);
   return pcm.write(x);
 }
 
-/// Root mean square of samples in -1..1; 20·log10 of it is what ffmpeg's
-/// volumedetect calls mean_volume.
+/// Root mean square of samples in -1..1.
 double rmsOf(List<double> x) {
   if (x.isEmpty) return 0;
   var sum = 0.0;
@@ -60,10 +71,85 @@ double rmsOf(List<double> x) {
   return math.sqrt(sum / x.length);
 }
 
+/// Integrated loudness (ITU-R BS.1770 / EBU R128) of interleaved samples:
+/// K-weighting, 400 ms blocks at 75 % overlap, absolute and relative gates.
+/// A clip shorter than one block is measured as one block. Null for silence.
+double? lufsOf(Float64List x, int ch, int sr) {
+  final frames = x.length ~/ ch;
+  if (frames == 0) return null;
+  // Per-channel K-weighted squares.
+  final sq = Float64List(frames);
+  for (var c = 0; c < ch; c++) {
+    final y = _kWeight(x, ch, c, sr);
+    for (var f = 0; f < frames; f++) {
+      sq[f] += y[f] * y[f];
+    }
+  }
+  final block = (sr * 0.4).round();
+  final hop = block ~/ 4;
+  final z = <double>[];
+  if (frames <= block) {
+    var s = 0.0;
+    for (final v in sq) {
+      s += v;
+    }
+    z.add(s / frames);
+  } else {
+    for (var start = 0; start + block <= frames; start += hop) {
+      var s = 0.0;
+      for (var f = start; f < start + block; f++) {
+        s += sq[f];
+      }
+      z.add(s / block);
+    }
+  }
+  double loud(double v) => -0.691 + 10 * math.log(v) / math.ln10;
+  final abs = [for (final v in z) if (v > 0 && loud(v) > -70) v];
+  if (abs.isEmpty) return null;
+  final rel = loud(abs.reduce((a, b) => a + b) / abs.length) - 10;
+  final gated = [for (final v in abs) if (loud(v) > rel) v];
+  return loud(gated.reduce((a, b) => a + b) / gated.length);
+}
+
+/// BS.1770 K-weighting of channel [c]: high shelf (+4 dB above ~1.7 kHz)
+/// then a high-pass at ~38 Hz, coefficients for any sample rate.
+Float64List _kWeight(Float64List x, int ch, int c, int sr) {
+  final frames = x.length ~/ ch;
+  var k = math.tan(math.pi * 1681.974450955533 / sr);
+  const q1 = 0.7071752369554196;
+  final vh = math.pow(10, 3.999843853973347 / 20).toDouble();
+  final vb = math.pow(vh, 0.4996667741545416).toDouble();
+  var a0 = 1 + k / q1 + k * k;
+  final b = [(vh + vb * k / q1 + k * k) / a0, 2 * (k * k - vh) / a0, (vh - vb * k / q1 + k * k) / a0];
+  final a = [2 * (k * k - 1) / a0, (1 - k / q1 + k * k) / a0];
+  k = math.tan(math.pi * 38.13547087602444 / sr);
+  const q2 = 0.5003270373238773;
+  a0 = 1 + k / q2 + k * k;
+  final a2 = [2 * (k * k - 1) / a0, (1 - k / q2 + k * k) / a0];
+  final out = Float64List(frames);
+  var x1 = 0.0, x2 = 0.0, y1 = 0.0, y2 = 0.0; // shelf state
+  var u1 = 0.0, u2 = 0.0, w1 = 0.0, w2 = 0.0; // high-pass state
+  for (var f = 0; f < frames; f++) {
+    final v = x[f * ch + c];
+    final y = b[0] * v + b[1] * x1 + b[2] * x2 - a[0] * y1 - a[1] * y2;
+    x2 = x1;
+    x1 = v;
+    y2 = y1;
+    y1 = y;
+    final w = y - 2 * u1 + u2 - a2[0] * w1 - a2[1] * w2;
+    u2 = u1;
+    u1 = y;
+    w2 = w1;
+    w1 = w;
+    out[f] = w;
+  }
+  return out;
+}
+
 /// Feed-forward compressor on the frame peak, like ffmpeg's acompressor
-/// (threshold -20 dB, ratio 3, attack 5 ms, release 60 ms).
+/// with the MP3s' "loud" profile (-28 dB, 6:1, attack 3 ms, release 60 ms).
 void _compress(Float64List x, int ch, int sr,
-    {double thresholdDb = -20, double ratio = 3, double attackMs = 5, double releaseMs = 60}) {
+    {double thresholdDb = -28, double ratio = 6, double attackMs = 3, double releaseMs = 60}) {
   final t = math.pow(10, thresholdDb / 20).toDouble();
   final a = math.exp(-1 / (sr * attackMs / 1000));
   final r = math.exp(-1 / (sr * releaseMs / 1000));
@@ -82,23 +168,47 @@ void _compress(Float64List x, int ch, int sr,
   }
 }
 
-/// tanh bend above [knee]: continuous at the knee, approaches 1.0, never
-/// exceeds it.
-void _softLimit(Float64List x, double knee) {
-  final range = 1.0 - knee;
-  for (var i = 0; i < x.length; i++) {
-    final v = x[i];
-    final a = v.abs();
-    if (a <= knee) continue;
-    final bent = knee + range * _tanh((a - knee) / range);
-    x[i] = v.isNegative ? -bent : bent;
+/// Look-ahead peak limiter, like ffmpeg's alimiter: the gain ramps down over
+/// [attackMs] before a peak, is held for [holdMs], then recovers over
+/// [releaseMs], so no sample exceeds [ceiling] and the waveform itself is
+/// never bent. The hold is longer than one cycle of the lowest voice
+/// (~80 Hz = 12.5 ms): recovering between two peaks of the same cycle would
+/// wobble the gain inside the wave, which is heard as crackle.
+void _limit(Float64List x, int ch, int sr,
+    {double ceiling = kCeiling, double attackMs = 5, double holdMs = 20, double releaseMs = 80}) {
+  final frames = x.length ~/ ch;
+  if (frames == 0) return;
+  final need = Float64List(frames);
+  for (var f = 0; f < frames; f++) {
+    var peak = 0.0;
+    for (var c = 0; c < ch; c++) {
+      peak = math.max(peak, x[f * ch + c].abs());
+    }
+    need[f] = peak > ceiling ? ceiling / peak : 1.0;
   }
-}
-
-double _tanh(double x) {
-  if (x > 20) return 1.0;
-  final e = math.exp(2 * x);
-  return (e - 1) / (e + 1);
+  // Backwards: start turning down attackMs ahead of each peak, linearly.
+  final step = 1 / math.max(1, sr * attackMs / 1000);
+  for (var f = frames - 2; f >= 0; f--) {
+    need[f] = math.min(need[f], need[f + 1] + step);
+  }
+  // Forwards: hold, then come back up slowly, never above what is needed.
+  final r = math.exp(-1 / (sr * releaseMs / 1000));
+  final holdFrames = (sr * holdMs / 1000).round();
+  var g = need[0];
+  var hold = 0;
+  for (var f = 0; f < frames; f++) {
+    if (need[f] <= g) {
+      g = need[f];
+      hold = holdFrames;
+    } else if (hold > 0) {
+      hold--;
+    } else {
+      g = math.min(need[f], 1 - (1 - g) * r);
+    }
+    for (var c = 0; c < ch; c++) {
+      x[f * ch + c] *= g;
+    }
+  }
 }
 
 class _Pcm {

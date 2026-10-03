@@ -49,12 +49,24 @@ void main() {
     expect(samplesOf(out).every((s) => (s - 2000).abs() <= 1), isTrue);
   });
 
-  test('loud peaks bend below full scale instead of clipping', () {
+  test('loud peaks are turned down to the ceiling, never clipped', () {
     final out = boostWav(wav([30000, -30000, 20000]), 2.0, silence: 0)!;
     final s = samplesOf(out);
-    expect(s.every((v) => v.abs() < 32767), isTrue);
+    expect(s.every((v) => v.abs() <= (kCeiling * 32767).ceil()), isTrue);
     expect(s[0] > 0 && s[1] < 0, isTrue);
-    expect(s[0] >= s[2], isTrue); // order of loudness kept
+  });
+
+  test('limiter turns the gain down, it does not bend the wave', () {
+    // A pure tone pushed 4x over full scale stays a clean sine: every
+    // sample of a cycle in the held part scales by the same factor.
+    final tone = [for (var i = 0; i < 16000; i++) (0.9 * 32767 * math.sin(2 * math.pi * 200 * i / 16000)).round()];
+    final s = samplesOf(boostWav(wav(tone), 4.0, silence: 0)!);
+    final mid = 8000; // well inside the held part
+    final ratios = [
+      for (var i = mid; i < mid + 80; i++)
+        if (tone[i].abs() > 3000) s[i] / tone[i]
+    ];
+    expect(ratios.reduce(math.max) - ratios.reduce(math.min), lessThan(0.01));
   });
 
   test('leading and trailing silence are trimmed (20 ms kept)', () {
@@ -74,20 +86,24 @@ void main() {
           (i ~/ 1600).isEven ? (amp * 32767 * math.sin(2 * math.pi * 220 * i / 16000)).round() : 0
       ];
 
-  double dbOf(Uint8List out) =>
-      20 * math.log(rmsOf([for (final s in samplesOf(out)) s / 32768.0])) / math.ln10;
+  double lufsOfWav(Uint8List out) =>
+      lufsOf(Float64List.fromList([for (final s in samplesOf(out)) s / 32768.0]), 1, 16000)!;
 
-  test('processSpeech: quiet and loud renders land at the same level', () {
-    final quiet = dbOf(processSpeech(wav(speechLike(0.05)))!);
-    final loud = dbOf(processSpeech(wav(speechLike(0.9)))!);
-    expect(quiet, closeTo(-10, 1.5));
-    expect(loud, closeTo(-10, 1.5));
+  test('lufsOf: a mono 1 kHz sine at -20 dBFS peak reads -23 LUFS', () {
+    // BS.1770 reference: sine RMS is -3 dB below its peak; K-weighting and
+    // the -0.691 offset cancel at 1 kHz.
+    final x = Float64List.fromList(
+        [for (var i = 0; i < 48000 * 2; i++) 0.1 * math.sin(2 * math.pi * 1000 * i / 48000)]);
+    expect(lufsOf(x, 1, 48000), closeTo(-23.0, 0.2));
   });
 
-  test('processSpeech: boost is extra gain on top, never past full scale', () {
-    final base = dbOf(processSpeech(wav(speechLike(0.2)))!);
-    final boosted = processSpeech(wav(speechLike(0.2)), boost: 4.0)!;
-    expect(dbOf(boosted), greaterThan(base + 3));
-    expect(samplesOf(boosted).every((v) => v.abs() <= 32767), isTrue);
+  test('processSpeech: quiet and loud renders land on the target', () {
+    expect(lufsOfWav(processSpeech(wav(speechLike(0.05)))!), closeTo(kTargetLufs, 0.6));
+    expect(lufsOfWav(processSpeech(wav(speechLike(0.9)))!), closeTo(kTargetLufs, 0.6));
+  });
+
+  test('processSpeech: peaks stay at the ceiling', () {
+    final s = samplesOf(processSpeech(wav(speechLike(0.9)), boost: 2.0)!);
+    expect(s.every((v) => v.abs() <= (kCeiling * 32767).ceil()), isTrue);
   });
 }

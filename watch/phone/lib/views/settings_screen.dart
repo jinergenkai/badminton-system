@@ -4,7 +4,6 @@ import '../services/music_service.dart';
 import '../services/audio_settings.dart';
 import '../services/tts_service.dart';
 import '../services/sound_check_service.dart';
-import '../services/voice_clip_service.dart';
 import '../services/display_settings.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
@@ -79,7 +78,6 @@ class SettingsScreen extends StatelessWidget {
     final hype = Get.find<HypeVoiceController>();
     final music = Get.find<MusicService>();
     final score = Get.find<ScoreController>();
-    final clips = VoiceClipService.maybe;
     final check = Get.isRegistered<SoundCheckService>()
         ? Get.find<SoundCheckService>()
         : Get.put(SoundCheckService());
@@ -162,17 +160,6 @@ class SettingsScreen extends StatelessWidget {
           audio.masterVolume, Colors.amber, () => audio.setMaster(audio.masterVolume.value)),
       _volume('Voice (all)', 'Every spoken line: score, names, winner',
           tts.volume, Colors.amber, tts.saveVolumePreference),
-      if (clips != null)
-        _volume(
-            'Name boost (TTS)',
-            'TTS lines only (names, winner, custom hype), on top of Voice. '
-                '100% = as loud as the recorded clips; past 200% it crackles',
-            clips.boost,
-            Colors.amberAccent,
-            () => clips.setBoost(clips.boost.value),
-            max: VoiceClipService.maxBoost,
-            // 10% steps: each level is a set of files in the cache.
-            divisions: (VoiceClipService.maxBoost * 10).round()),
       _volume('Hype', 'Streak and highlight voices', hype.volume, Colors.cyanAccent,
           hype.savePreferences),
       _volume('Tension music', 'When both teams reach the threshold below',

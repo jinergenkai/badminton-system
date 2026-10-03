@@ -7,8 +7,13 @@ targets without compressing twice.
 Per clip:
   1. trim leading/trailing silence (shorter, snappier score calls)
   2. compress (speech has gaps; music does not - density is what reads as loud)
-  3. gain to a target mean level, measured on the compressed clip
-  4. limit peaks to -1.5 dBFS so the gain never clips
+  3. gain to one loudness target, in LUFS (EBU R128: what the ear hears,
+     not the plain mean), measured on the compressed clip
+  4. limit peaks to -0.5 dBFS so the gain never clips
+
+Every voice set has the same target and profile: a score call, a hype line
+and a TTS line (lib/services/wav_gain.dart, same numbers) are spliced one
+after another, so any difference between them is heard as a jump.
 
 Usage:  python tools/normalize_voice.py            (from bandcounter-flutter/)
         python tools/normalize_voice.py --dry-run  (report only)
@@ -25,6 +30,8 @@ settings below change, tracked in audio_src/.normalized.json.
 
 Measured before this existed (mean / max dB): score vi -11.7..-13.7 / -1.4,
 score en -17.2, hype -13.9..-19.5, bundled music -10.1..-13.5.
+With the old mean-dB targets (2026-10-03, LUFS): score vi -9.8..-7.1,
+score en -11.6..-8.7, hype -9.7..-6.8, female pack -9.9..-7.3.
 """
 import hashlib
 import json
@@ -36,14 +43,18 @@ import sys
 
 FFMPEG = os.environ.get('FFMPEG') or shutil.which('ffmpeg') or 'ffmpeg'
 
-# (source dir under audio_src, output dir, target mean dB, profile)
-# Score calls get the loud profile: they have to cut through music and are
-# heard a hundred times a match; hype and music stay as they were.
+# One loudness for every voice (integrated LUFS). Kept in step with
+# kTargetLufs in lib/services/wav_gain.dart.
+# -9 was tried: the English score set tops out near -10.8 under the -0.5 dBFS
+# ceiling (sharp consonants), so it stayed quieter than the rest.
+TARGET_LUFS = -10.0
+
+# (source dir under audio_src, output dir, target LUFS, profile)
 SETS = [
-    ('score/vi', 'assets/audio/score/vi', -5.0, 'loud'),
-    ('score/en', 'assets/audio/score/en', -5.0, 'loud'),
-    ('hype', 'assets/audio/hype', -10.0, 'normal'),
-    ('hype/female_pack', 'assets/audio/hype/female_pack', -10.0, 'normal'),
+    ('score/vi', 'assets/audio/score/vi', TARGET_LUFS, 'loud'),
+    ('score/en', 'assets/audio/score/en', TARGET_LUFS, 'loud'),
+    ('hype', 'assets/audio/hype', TARGET_LUFS, 'loud'),
+    ('hype/female_pack', 'assets/audio/hype/female_pack', TARGET_LUFS, 'loud'),
 ]
 
 TRIM = ('silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03,'
@@ -74,16 +85,40 @@ def mean_max(path, pre_filter=''):
     return (float(mean.group(1)) if mean else None, float(peak.group(1)) if peak else None)
 
 
+def lufs(path, pre_filter=''):
+    """Integrated loudness (EBU R128), or None for silence / too short."""
+    # Looped 4x: R128 measures in 400 ms blocks, so a 0.3 s number clip
+    # would read as silence and a 0.6 s one from barely two blocks.
+    af = (pre_filter + ',' if pre_filter else '') + 'ebur128'
+    out = subprocess.run([FFMPEG, '-hide_banner', '-nostats', '-stream_loop', '3', '-i', path, '-af', af,
+                          '-f', 'null', '-'], capture_output=True, text=True).stderr
+    m = re.search(r'I:\s+(-?[\d.]+) LUFS', out[out.rfind('Summary:'):])
+    v = float(m.group(1)) if m else None
+    return v if v is not None and v > -70 else None
+
+
 def process(src, dst, target, profile='normal'):
     compress, limit = PROFILES[profile]
     base = TRIM + ',' + compress
-    m, _ = mean_max(src, base)
+    m = lufs(src, base)
     if m is None:
         return None
     gain = target - m
-    chain = f'{base},volume={gain:.1f}dB,{limit}'
-    subprocess.run([FFMPEG, '-hide_banner', '-loglevel', 'error', '-y', '-i', src,
-                    '-af', chain, '-c:a', 'libmp3lame', '-b:a', '128k', dst], check=True)
+
+    def render(g):
+        chain = f'{base},volume={g:.2f}dB,{limit}'
+        subprocess.run([FFMPEG, '-hide_banner', '-loglevel', 'error', '-y', '-i', src,
+                        '-af', chain, '-c:a', 'libmp3lame', '-b:a', '128k', dst], check=True)
+
+    render(gain)
+    # The limiter takes back a little on the loudest clips: up to two
+    # correction passes land them on the target too.
+    for _ in range(2):
+        got = lufs(dst)
+        if got is None or abs(target - got) <= 0.3:
+            break
+        gain += target - got
+        render(gain)
     return gain
 
 
@@ -104,7 +139,7 @@ def louder_db():
 
 def fingerprint(src, target, profile):
     h = hashlib.sha1(open(src, 'rb').read())
-    h.update(f'{TRIM}|{PROFILES[profile]}|{target}|128k'.encode())
+    h.update(f'{TRIM}|{PROFILES[profile]}|{target}|lufs3|128k'.encode())
     return h.hexdigest()
 
 
@@ -147,7 +182,8 @@ def main():
             stamps[key] = fp
             done += 1
             a = mean_max(dst)
-            print(f'{sub + "/" + name:44} {b[0]:6.1f}/{b[1]:6.1f} {gain:+6.1f} {a[0]:6.1f}/{a[1]:6.1f}')
+            print(f'{sub + "/" + name:44} {b[0]:6.1f}/{b[1]:6.1f} {gain:+6.1f} {a[0]:6.1f}/{a[1]:6.1f}'
+                  f'  {lufs(dst) or 0:6.1f} LUFS')
     if not dry:
         with open(STAMP, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(stamps, f, indent=1, sort_keys=True)
