@@ -16,7 +16,25 @@ Trạng thái: giai đoạn 1 đã code, 2026-10-03 (`lib/features/camera/`, `Ca
 - **Chưa khóa lấy nét / phơi sáng.**
 - `match_end` cho set kết thúc bằng End set đến từ bản ghi `match_record` (status `stopped`).
 - JSON có thêm: `startWallEstimated`, `continuedFrom` (`joined` / `split` / `reopened`),
-  `ralT`, `bandStartedAt`, `bandEndedAt`, `recorderError`.
+  `ralT`, `bandStartedAt`, `bandEndedAt`, `recorderError`, `lens`.
+
+### Thêm sau lượt đầu (2026-10-03)
+- **Chế độ máy.** Utility → *Use this device as the corner camera*: app khởi động lại và chỉ
+  mở camera. Không chạy database, band, TTS, nhạc hay thư viện âm thanh. Nút *Board mode*
+  trên màn camera để chuyển lại. Đo RAM ở chế độ camera: khoảng 214 MB PSS, đã gồm bộ đệm camera.
+- **Tự tìm camera.** Điện thoại phát UDP 8766 mỗi 2 giây, tablet nối vào máy vừa phát.
+  Chạy được cả qua hotspot lẫn khi chung Wi-Fi; nếu không thấy tín hiệu thì dùng gateway
+  (trường hợp hotspot). Ô địa chỉ chỉ dùng khi Wi-Fi chặn broadcast; màn camera có hiện IP.
+- **Camera bắt đầu quay giữa set:** gửi `resync`, bảng điểm báo lại set đang chơi
+  (`joined`, kèm tỉ số).
+- **Tỉ số chèn thẳng vào video** (CameraX `OverlayEffect`): ô đỏ/xanh và giờ ở góc trên trái,
+  chỉ vẽ trong dải 16:9 của khung cảm biến 4:3. Điện thoại camera: mặc định bật. Tablet:
+  mặc định tắt (+22% CPU).
+- **Tablet tự quay** (giai đoạn 2): Utility → *Record on this device too*. Không có preview,
+  sự kiện lấy thẳng trong app (không cần đổi giờ), `role: "front"`. Đo trên tablet sân,
+  khi đang quay 1080p30: app khoảng 29% một nhân (51% nếu bật tỉ số), dịch vụ camera
+  khoảng 30%, bộ mã hóa khoảng 6%.
+- **Camera trước hoặc sau** chọn riêng cho từng máy.
 
 ## 1. Mục tiêu
 
