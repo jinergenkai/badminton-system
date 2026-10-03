@@ -100,6 +100,9 @@ class CameraPlatform implements VideoSink {
   static Future<Uint8List?> thumbnail(String uri, {int width = 320}) =>
       _ch.invokeMethod<Uint8List>('thumbnail', {'uri': uri, 'width': width});
 
+  @override
+  Future<void> discard(String uri) => deleteVideos([uri]);
+
   /// Deletes the videos and their .json files; returns how many went.
   static Future<int> deleteVideos(List<String> uris) async =>
       await _ch.invokeMethod<int>('deleteVideos', {'uris': uris}) ?? 0;

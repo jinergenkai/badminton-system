@@ -193,7 +193,9 @@ class _BoardRecPanelState extends State<_BoardRecPanel> {
               title: const Text("Record with this device's camera"),
               subtitle: Text(on
                   ? (recording
-                      ? 'Recording · ${rig!.session.finished.length} file(s) saved · Download/Godminton'
+                      ? 'Recording · ${rig!.session.finished.length} file(s) saved'
+                          '${rig.session.discarded > 0 ? ', ${rig.session.discarded} under 30 s dropped' : ''}'
+                          ' · Download/Godminton'
                       : 'Starting…')
                   : 'Front camera, one file per set, behind the scoreboard. Adds load to this device.'),
               value: on,

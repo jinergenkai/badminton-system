@@ -16,6 +16,11 @@ class FakeSink implements VideoSink {
   @override
   Future<void> stop() async => calls.add('stop');
 
+  final discarded = <String>[];
+
+  @override
+  Future<void> discard(String uri) async => discarded.add(uri);
+
   @override
   Future<bool> rename(String uri, String name) async {
     names[uri] = name;
@@ -203,6 +208,34 @@ void main() {
       expect(j['gaps'], [
         {'fromS': 300.0, 'toS': 312.5, 'reason': 'ws_disconnected'}
       ]);
+    });
+  });
+
+  test('a file under 30 s is deleted, not saved', () {
+    fakeAsync((fa) {
+      setUpSession();
+      s.begin();
+      fa.flushMicrotasks();
+      clock = t0 + 10000;
+      s.handle({'type': 'match_start', 'matchId': 'm1'}, clock); // cuts the 10 s warm-up
+      fa.flushMicrotasks();
+      s.onFinalized('vid0', durationMs: 10000);
+      fa.flushMicrotasks();
+      expect(sink.discarded, ['vid0']);
+      expect(sink.names.containsKey('vid0'), isFalse); // no rename, no json
+      expect(s.discarded, 1);
+      expect(s.finished, isEmpty);
+      // The next file still starts.
+      expect(sink.calls.last, startsWith('start '));
+
+      // A real set: kept.
+      clock = t0 + 900000;
+      s.end();
+      fa.flushMicrotasks();
+      s.onFinalized('vid1', durationMs: 890000);
+      fa.flushMicrotasks();
+      expect(sink.names['vid1'], endsWith('_m1_0-0.mp4'));
+      expect(s.finished.length, 1);
     });
   });
 }

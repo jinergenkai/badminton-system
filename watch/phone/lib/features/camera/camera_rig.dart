@@ -209,7 +209,10 @@ class CameraRig with WidgetsBindingObserver {
           session.deviceInfo['width'] = w;
           session.deviceInfo['height'] = h;
         }
-        session.onFinalized(e['uri'] as String?, error: e['error'] as String?).catchError((_) {});
+        session
+            .onFinalized(e['uri'] as String?,
+                error: e['error'] as String?, durationMs: (e['durationMs'] as num?)?.toInt())
+            .catchError((_) {});
         break;
       case 'preview':
         final w = (e['width'] as num).toDouble(), h = (e['height'] as num).toDouble();

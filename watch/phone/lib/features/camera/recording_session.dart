@@ -14,6 +14,9 @@ abstract class VideoSink {
 
   /// Creates Download/[dir]/[name] or overwrites [uri]; returns the uri.
   Future<String?> writeText(String dir, String name, String text, {String? uri});
+
+  /// Deletes a finished file that is not kept.
+  Future<void> discard(String uri);
 }
 
 /// The match a file holds (one per file; docs/camera-recording-requirements.md §5).
@@ -99,6 +102,13 @@ class RecordingSession {
 
   /// A file younger than this is not cut for a new set (it just began).
   static const minFile = Duration(seconds: 3);
+
+  /// Files shorter than this are deleted, not saved: the stubs left by
+  /// restarting a set a few times between games.
+  static const minKeep = Duration(seconds: 30);
+
+  /// How many short files were dropped this session (for the screen).
+  int discarded = 0;
 
   RecordingSession({
     required this.sink,
@@ -197,13 +207,18 @@ class RecordingSession {
     if (f.startWall == null || wall < f.startWall!) f.startWall = wall;
   }
 
-  Future<void> onFinalized(String? uri, {String? error}) async {
+  Future<void> onFinalized(String? uri, {String? error, int? durationMs}) async {
     if (_closing.isEmpty) return;
     final f = _closing.removeAt(0);
     f.uri = uri;
     f.error = error;
-    await _writeOut(f);
-    finished.add(f);
+    if (uri != null && durationMs != null && durationMs < minKeep.inMilliseconds) {
+      await sink.discard(uri);
+      discarded++;
+    } else {
+      await _writeOut(f);
+      finished.add(f);
+    }
     if (running && current != null) await _startCurrent();
     onChange?.call();
   }

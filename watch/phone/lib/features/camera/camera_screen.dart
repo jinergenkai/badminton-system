@@ -189,7 +189,8 @@ class CameraScreen extends StatelessWidget {
               _row(Icons.sd_storage, '${free.toStringAsFixed(1)} GB free'),
               _row(Icons.battery_std,
                   '${d['battery'] ?? '?'}%${d['charging'] == true ? ' charging' : ''} · ${d['tempC'] ?? '?'}°C'),
-              _row(Icons.movie, '${s.finished.length} file(s) saved · Download/Godminton'),
+              _row(Icons.movie,
+                  '${s.finished.length} file(s) saved${s.discarded > 0 ? ', ${s.discarded} under 30 s dropped' : ''} · Download/Godminton'),
               if (rig.error.value.isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
