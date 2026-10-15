@@ -1,0 +1,15 @@
+{
+  "branches": [
+    "sport_san_cau_long_tan_binh"
+  ],
+  "days_window": 21,
+  "weekdays_only": false,
+  "interval_min": 30,
+  "delay_sec": 2.5,
+  "fetch_schedule_month": true,
+  "fetch_lock_yards": true,
+  "fetch_cores_once": true,
+  "fetch_branch": true,
+  "fetch_core_types": true,
+  "fetch_products": false
+}
