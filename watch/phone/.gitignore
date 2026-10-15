@@ -15,6 +15,11 @@ migrate_working_dir/
 # Environment variables
 .env
 
+# Nhạc nền có bản quyền — giữ ở máy, KHÔNG đưa lên git (repo public, tránh DMCA).
+# App tự nhận mọi .mp3/.m4a/.aac thả vào assets/audio/music/ (xem README.md trong đó).
+assets/audio/music/*
+!assets/audio/music/README.md
+
 # IntelliJ related
 *.iml
 *.ipr
