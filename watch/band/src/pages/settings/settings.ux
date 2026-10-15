@@ -1,0 +1,256 @@
+<template>
+  <div class="settings-page">
+    <div class="header">
+      <text class="title">Settings</text>
+    </div>
+
+    <list class="settings-list">
+      <!-- Ordered by how often each is reached mid-match. No "Back" item:
+           the edge swipe already goes back. -->
+      <list-item type="setting" class="item" onclick="onSwapSides">
+        <text class="item-text">Swap side</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onPhoneScreen">
+        <text class="item-text">{{ phoneBlank ? 'Wake phone' : 'Blank phone' }}</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onMediaControl">
+        <text class="item-text">Media</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onSound">
+        <text class="item-text">Sound</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onSetScore">
+        <text class="item-text">Set score</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onSync">
+        <text class="item-text">Sync score</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onAlarm">
+        <text class="item-text">Remind</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onHistory">
+        <text class="item-text">History</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onKeepOn">
+        <text class="item-text">{{ keepOn ? 'Screen always on' : 'Screen auto off' }}</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onPlayerList">
+        <text class="item-text">Player list</text>
+      </list-item>
+
+      <list-item type="setting" class="item danger" onclick="onReset">
+        <text class="item-text">End set</text>
+      </list-item>
+
+      <list-item type="setting" class="item" onclick="onDiag">
+        <text class="item-text">Develop</text>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import router from '@system.router'
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+  import storage from '@system.storage'
+
+  export default {
+    protected: {
+      connected: false,
+      scoreA: 0,
+      scoreB: 0,
+      phoneBlank: false,
+      keepOn: false
+    },
+
+    // ── Step-0 diagnostics ───────────────────────────────────────────────
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('settings', msg)
+    },
+
+    onInit() { this.diag('onInit') },
+    onReady() { this.diag('onReady') },
+    onShow() {
+      this.diag('onShow')
+      const def = this.$app && this.$app.$def
+      this.phoneBlank = !!(def && def.phoneBlank)
+      this.keepOn = !!(def && def.keepOn)
+    },
+    // Worth noticing in the log: this page never attaches an onmessage
+    // handler, so while it is up the app's single receive slot is whatever
+    // the previous page left behind — possibly null.
+    onHide() { this.diag('onHide') },
+    onDestroy() { this.diag('onDestroy') },
+
+    // Every send from this page goes through here so failures are visible.
+    sendRaw(payload, toast) {
+      const connect = interconnect.instance()
+      if (!connect) {
+        this.diag('send SKIPPED (no instance): ' + payload.action)
+        return
+      }
+      const self = this
+      connect.send({
+        data: payload,
+        success: function () {
+          self.diag('send ok: ' + payload.action)
+        },
+        fail: function (data, code) {
+          const def = self.$app && self.$app.$def
+          if (def) def.sendFailCount++
+          self.diag('send FAIL: ' + payload.action + ' code=' + code +
+            ' d=' + JSON.stringify(data))
+        }
+      })
+      if (toast) prompt.showToast({ message: toast })
+    },
+
+    onSound() {
+      router.push({ uri: "pages/sound" })
+    },
+
+    onAlarm() {
+      router.push({
+        uri: 'pages/alarm'
+      })
+    },
+
+    onDiag() {
+      router.push({
+        uri: 'pages/diag'
+      })
+    },
+
+    onMediaControl() {
+      router.push({
+        uri: 'pages/media_list'
+      })
+    },
+
+    // Stateless trigger. The watch never tracks whether sides are swapped —
+    // its red button is always score_A and its blue button always score_B.
+    // Only the phone flips, because the phone is the scoreboard everyone
+    // watches and it has to line up with the actual court. With no phone
+    // paired this does nothing, which is expected.
+    onSwapSides() {
+      this.sendRaw({ action: 'swap_sides' }, 'Swapped sides on phone')
+      router.back()
+    },
+
+    // Explicit on/off, not a toggle: a resend can never flip it the wrong way.
+    // The state only changes once the band has actually handed it over.
+    onPhoneScreen() {
+      const blank = !this.phoneBlank
+      const connect = interconnect.instance()
+      if (!connect) { prompt.showToast({ message: 'Phone not reachable' }); return }
+      const self = this
+      connect.send({
+        data: { action: 'phone_screen', blank: blank },
+        success: function () {
+          const def = self.$app && self.$app.$def
+          if (def) def.phoneBlank = blank
+          self.diag('send ok: phone_screen ' + blank)
+          prompt.showToast({ message: blank ? 'Phone blanked' : 'Phone awake' })
+          router.back()
+        },
+        fail: function (data, code) {
+          self.diag('send FAIL: phone_screen code=' + code)
+          prompt.showToast({ message: 'Phone not reachable' })
+        }
+      })
+    },
+
+    onSync() {
+      // The Band owns score state. A manual sync now asks the phone to refresh
+      // from the Band instead of asking for an old phone snapshot.
+      const def = this.$app && this.$app.$def
+      if (def) def.pendingMatchCommand = { action: 'publish_state' }
+      prompt.showToast({ message: 'Sending current score...' })
+      router.back()
+    },
+
+    // Applied by the board when it is back on screen (it only holds the
+    // screen on while a set is shown).
+    onKeepOn() {
+      const def = this.$app && this.$app.$def
+      const on = !this.keepOn
+      this.keepOn = on
+      if (def) def.keepOn = on
+      storage.set({ key: 'bc_keep_on', value: on ? '1' : '' })
+      prompt.showToast({ message: on ? 'Screen stays on during a set' : 'Screen times out' })
+    },
+
+    onPlayerList() { router.push({ uri: 'pages/players' }) },
+
+    onSetScore() { router.push({ uri: 'pages/seed_score' }) },
+    onHistory() { router.push({ uri: 'pages/match_history' }) },
+
+    onReset() {
+      const def = this.$app && this.$app.$def
+      if (def) def.pendingMatchCommand = { action: 'new_match' }
+      prompt.showToast({ message: 'Set ended' })
+      router.back()
+    }
+  }
+</script>
+
+<style>
+  .settings-page {
+    flex-direction: column;
+    background-color: #0F172A;
+    padding: 20px;
+  }
+
+  .header {
+    height: 80px;
+    justify-content: center;
+    align-items: center;
+    border-bottom-width: 1px;
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .title {
+    color: #FFFFFF;
+    font-size: 32px;
+    font-weight: bold;
+  }
+
+  .settings-list {
+    flex: 1;
+    width: 100%;
+  }
+
+  .item {
+    width: 100%;
+    height: 100px;
+    margin-top: 20px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 15px;
+    justify-content: center;
+    padding-left: 30px;
+  }
+
+  .danger {
+    background-color: rgba(255, 82, 82, 0.1);
+  }
+
+  /* Fixed width + explicit left alignment: labels start flush at the
+     item's padding whatever their length. */
+  .item-text {
+    width: 100%;
+    text-align: left;
+    color: #FFFFFF;
+    font-size: 28px;
+  }
+</style>

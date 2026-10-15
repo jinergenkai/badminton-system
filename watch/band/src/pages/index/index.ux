@@ -1,0 +1,1643 @@
+<template>
+  <stack class="root-stack">
+    <!-- MAIN GAME UI -->
+    <div class="container">
+      <!-- ZONE 1: SETTINGS (TOP - 20%) -->
+      <div class="settings-area" onclick="openSettings">
+        <div class="status-indicator {{ connected ? 'online' : 'offline' }}"></div>
+        <text class="settings-label">Settings & sync</text>
+        <div class="progress-bar">
+          <div class="progress-inner" style="width: {{ cooldownProgress }}%"></div>
+        </div>
+        <!-- Clock and reminder share a line: "02:36 / 04:00". -->
+        <text class="clock-text">{{ clockText }}{{ alarmAt ? ' / ' + alarmAt : '' }}</text>
+        <!-- Status log. Always present so its space is reserved and nothing
+             below it shifts when a message comes and goes. -->
+        <text class="log-text">{{ statusText }}</text>
+      </div>
+
+      <!-- HOME: how this set starts. Shown on every launch, and after a set
+           is done, so the clock of a set starts on a deliberate tap. -->
+      <div class="home-area" if="{{ screen === 'home' }}">
+        <div class="home-btn resume" if="{{ canResume }}" onclick="onResume">
+          <text class="home-title">Resume</text>
+          <div class="home-row">
+            <text class="home-score color-a">{{ scoreA }}</text>
+            <text class="home-dash">-</text>
+            <text class="home-score color-b">{{ scoreB }}</text>
+          </div>
+        </div>
+        <div class="home-btn same" if="{{ hasSame }}" onclick="onSame">
+          <text class="home-title">Same 4</text>
+          <text class="home-red">{{ sameRedText }}</text>
+          <text class="home-blue">{{ sameBlueText }}</text>
+        </div>
+        <div class="home-btn pick" if="{{ hasPlayers }}" onclick="onPickPlayers">
+          <text class="home-title">Pick players</text>
+        </div>
+        <div class="home-btn new" onclick="onNewGame">
+          <text class="home-title">New game</text>
+        </div>
+      </div>
+
+      <!-- WIN: the board's layout. The card holds the result and a big Done
+           in its lower half; undo stays the bar at the bottom, where the
+           thumb already goes after a misplaced winning tap. -->
+      <div class="mid-area" if="{{ screen === 'game' && (isWinnerA || isWinnerB) }}">
+        <stack class="big-card {{ isWinnerA ? 'card-a' : 'card-b' }}">
+          <image src="{{ isWinnerA ? '/common/dog.png' : '/common/cat.png' }}" class="score-watermark"></image>
+          <div class="win-col">
+            <div class="win-top">
+              <text class="card-title">{{ isWinnerA ? 'Red wins' : 'Blue wins' }}</text>
+              <text class="card-score">{{ scoreA }} - {{ scoreB }}</text>
+            </div>
+            <div class="done-btn" onclick="onDone"><text class="done-text">Done</text></div>
+          </div>
+        </stack>
+      </div>
+      <div class="undo-area" if="{{ screen === 'game' && (isWinnerA || isWinnerB) }}" onclick="onUndo">
+        <text class="undo-text">undo</text>
+      </div>
+
+      <!-- GAME: the scoring cards and the undo bar. -->
+      <div class="score-area" if="{{ screen === 'game' && !isWinnerA && !isWinnerB }}">
+        <!-- TEAM A (LEFT) -->
+        <stack class="score-btn card-a" onclick="onScoreA" onlongpress="onQuickHypeA">
+          <image src="/common/dog.png" class="score-watermark"></image>
+          <div class="score-content">
+            <text class="score-text">{{ scoreA }}</text>
+          </div>
+          <!-- Streak badge: yellow square rotated 45deg, centred on the card's
+               top edge. The card's overflow:hidden clips everything above it,
+               leaving a downward wedge. Label is a separate un-rotated layer. -->
+          <div class="streak-tri" if="{{ streakTeam === 'A' && streakCount > 0 }}"></div>
+          <text class="streak-text" if="{{ streakTeam === 'A' && streakCount > 0 }}">x{{ streakCount }}</text>
+        </stack>
+
+        <!-- TEAM B (RIGHT) -->
+        <stack class="score-btn card-b" onclick="onScoreB" onlongpress="onQuickHypeB">
+          <image src="/common/cat.png" class="score-watermark"></image>
+          <div class="score-content">
+            <text class="score-text">{{ scoreB }}</text>
+          </div>
+          <div class="streak-tri" if="{{ streakTeam === 'B' && streakCount > 0 }}"></div>
+          <text class="streak-text" if="{{ streakTeam === 'B' && streakCount > 0 }}">x{{ streakCount }}</text>
+        </stack>
+      </div>
+
+      <!-- ZONE 4: UNDO (BOTTOM - 20%). On a set with no point yet it goes
+           back home: the start was tapped by mistake. -->
+      <div class="undo-area" if="{{ screen === 'game' && !isWinnerA && !isWinnerB }}" onclick="onUndo">
+        <text class="undo-text">undo</text>
+      </div>
+    </div>
+  </stack>
+</template>
+
+<script>
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+  import router from '@system.router'
+  import app from '@system.app'
+  import storage from '@system.storage'
+  import vibrator from '@system.vibrator'
+  import brightness from '@system.brightness'
+
+  export default {
+    private: {
+      scoreA: 0,
+      scoreB: 0,
+      history: [],
+      // Durable match state. `history` above is only the short undo stack;
+      // completed matches live separately in app storage.
+      matchId: '',
+      matchRevision: 0,
+      startedAt: 0,
+      endedAt: 0,
+      matchStatus: 'active',
+      seededScoreA: -1,
+      seededScoreB: -1,
+      seedServingTeam: '',
+      rallies: '',
+      // Seconds from startedAt at which each rally ended, comma separated.
+      ralT: '',
+      stateLoaded: false,
+      // Named players for this set: { red, blue, srv, rcv, names, mode } or
+      // null. Fixed from the first point; set by pages/lineup.
+      lineup: null,
+      // Lineup of the set before this one: what "Same 4" offers.
+      prevLu: null,
+      // Derived from lineup + rallies on every change (refreshServe). Only
+      // sets from before 2026-10 have a first server; kept for their state.
+      serveTeam: '',
+      serveName: '',
+      serveCourt: '',
+      // 'home' (choose how to start) | 'game' (board, win, idle prompt).
+      // Every launch opens on home, even with a set half played.
+      screen: 'home',
+      // Home buttons (refreshHome).
+      canResume: false,
+      hasSame: false,
+      sameRedText: '',
+      sameBlueText: '',
+      hasPlayers: false,
+      // Idle reminder: last time the score moved, and whether this pause
+      // has already buzzed.
+      lastPointAt: 0,
+      idleAsked: false,
+      // What was last asked of the screen (Settings "Screen always on").
+      keepOnApplied: false,
+      // Pending deferred history push (pushUnsyncedHistory).
+      historyTimer: null,
+      connected: false,
+      isConnecting: false,
+      connect: null,
+      isLocked: false,
+      cooldownProgress: 0,
+      cooldownTimer: null,
+      isWinnerA: false,
+      isWinnerB: false,
+      lastLongPressTime: 0, // Flag to prevent double trigger
+      // Consecutive-points streak, owned by the watch so it works with no phone.
+      // '' = nobody has scored yet in this match.
+      streakTeam: '',
+      streakCount: 0,
+      clockText: '--:--',
+      clockTimer: null,
+      linkTimer: null,
+      linkFast: true,
+      statusText: "",
+      statusTimer: null,
+      alarmFired: false,
+      // Display only — the alarm itself lives in the watch's Clock app.
+      alarmAt: '',
+    },
+
+    // ── Durable, Band-owned match state ──────────────────────────────────
+    // The Band is the authority for an active game. Phone traffic is a mirror
+    // or an explicit command, never a stale snapshot that can overwrite this.
+    matchStorageKey() { return 'bc_active_match_v2' },
+    matchHistoryKey() { return 'bc_match_history_v2' },
+
+    newMatchId() {
+      const def = this.$app && this.$app.$def
+      const install = (def && def.bandInstallId) || 'band'
+      return install + '-' + Date.now() + '-' + Math.floor(Math.random() * 100000)
+    },
+
+    ensureInstallId() {
+      const def = this.$app && this.$app.$def
+      if (!def || def.bandInstallId) return
+      try {
+        storage.get({
+          key: 'bc_install_id_v1',
+          success: (value) => {
+            def.bandInstallId = value || ('b10-' + Date.now() + '-' + Math.floor(Math.random() * 100000))
+            if (!value) storage.set({ key: 'bc_install_id_v1', value: def.bandInstallId })
+          },
+          fail: () => {
+            def.bandInstallId = 'b10-' + Date.now() + '-' + Math.floor(Math.random() * 100000)
+          }
+        })
+      } catch (e) { this.diag('install id failed: ' + e.message) }
+    },
+
+    // Nothing is sent to the phone until this has finished: an early onopen
+    // would otherwise publish 0-0 with no matchId and wipe the phone board.
+    loadMatchState() {
+      this.ensureInstallId()
+      this.loadHistory()
+      this.loadPlayers()
+      try {
+        storage.get({
+          key: this.matchStorageKey(),
+          success: (raw) => {
+            if (raw) {
+              try {
+                const s = JSON.parse(raw)
+                this.scoreA = s.scoreA || 0
+                this.scoreB = s.scoreB || 0
+                this.matchId = s.matchId || ''
+                this.matchRevision = s.revision || 0
+                this.startedAt = s.startedAt || 0
+                this.endedAt = s.endedAt || 0
+                this.matchStatus = s.status || 'active'
+                this.seededScoreA = s.seededScoreA === undefined ? -1 : s.seededScoreA
+                this.seededScoreB = s.seededScoreB === undefined ? -1 : s.seededScoreB
+                this.seedServingTeam = s.seedServingTeam || ''
+                this.rallies = s.rallies || ''
+                this.ralT = s.ralT || ''
+                this.streakTeam = s.streakTeam || ''
+                this.streakCount = s.streakCount || 0
+                this.history = s.undoHistory || []
+                this.lineup = s.lu || null
+                this.prevLu = s.prevLu || null
+                this.checkWinner()
+                this.diag('restored ' + this.matchId + ' r' + this.matchRevision + ' ' + this.scoreA + '-' + this.scoreB)
+              } catch (e) { this.diag('active parse failed: ' + e.message) }
+            }
+            this.onStateLoaded()
+          },
+          fail: () => { this.onStateLoaded() }
+        })
+      } catch (e) {
+        this.diag('active read failed: ' + e.message)
+        this.onStateLoaded()
+      }
+    },
+
+    // ── Today's players (from the phone) ─────────────────────────────────
+    playersVersion() {
+      const def = this.$app && this.$app.$def
+      return (def && def.players && def.players.v) || 0
+    },
+
+    loadPlayers() {
+      const def = this.$app && this.$app.$def
+      if (!def || def.playersLoaded) return
+      def.playersLoaded = true
+      try {
+        storage.get({
+          key: 'bc_players_v1',
+          success: (raw) => {
+            // A list that arrived while this read was in flight is newer.
+            if (raw && !def.players) {
+              try { def.players = JSON.parse(raw) } catch (e) {}
+            }
+            this.refreshHome()
+          }
+        })
+        storage.get({
+          key: 'bc_keep_on',
+          success: (v) => {
+            def.keepOn = (v === '1')
+            this.applyKeepOn()
+          }
+        })
+        // Left by the old Players On/Off switch.
+        if (typeof storage.delete === 'function') storage.delete({ key: 'bc_players_on' })
+      } catch (e) { this.diag('players read failed: ' + e.message) }
+    },
+
+    storePlayers(msg) {
+      const def = this.$app && this.$app.$def
+      if (!def) return
+      const list = Array.isArray(msg.list) ? msg.list : []
+      def.players = { v: msg.v || 0, at: Date.now(), list: list }
+      try {
+        storage.set({
+          key: 'bc_players_v1',
+          value: JSON.stringify(def.players),
+          fail: (data, code) => this.diag('players save FAIL ' + code)
+        })
+      } catch (e) { this.diag('players save threw: ' + e.message) }
+      this.diag('players v' + def.players.v + ' n=' + list.length)
+      this.refreshHome()
+      this.status('Players synced: ' + list.length)
+    },
+
+    onStateLoaded() {
+      if (!this.matchId) this.matchId = this.newMatchId()
+      this.stateLoaded = true
+      this.refreshServe()
+      this.refreshHome()
+      if (this.connected) {
+        this.sendState('band_ready')
+        this.pushUnsyncedHistory()
+      }
+    },
+
+    activeSnapshot() {
+      return {
+        matchId: this.matchId,
+        revision: this.matchRevision,
+        scoreA: this.scoreA,
+        scoreB: this.scoreB,
+        startedAt: this.startedAt,
+        endedAt: this.endedAt,
+        status: this.matchStatus,
+        seededScoreA: this.seededScoreA,
+        seededScoreB: this.seededScoreB,
+        seedServingTeam: this.seedServingTeam,
+        rallies: this.rallies,
+        streakTeam: this.streakTeam,
+        streakCount: this.streakCount,
+        ralT: this.ralT,
+        lu: this.lineup,
+        prevLu: this.prevLu,
+        undoHistory: this.history
+      }
+    },
+
+    persistMatch() {
+      this.refreshServe()
+      this.refreshHome()
+      if (!this.stateLoaded) return
+      try {
+        storage.set({
+          key: this.matchStorageKey(),
+          value: JSON.stringify(this.activeSnapshot()),
+          fail: (data, code) => this.diag('active save FAIL ' + code)
+        })
+      } catch (e) { this.diag('active save threw: ' + e.message) }
+    },
+
+    // ── Last-20 history ──────────────────────────────────────────────────
+    // Kept in app memory ($def.matchHistory) and written through to storage,
+    // so win → undo in quick succession cannot interleave two read-modify-
+    // write cycles on storage and resurrect a record.
+    loadHistory() {
+      const def = this.$app && this.$app.$def
+      if (!def || def.matchHistory) return
+      def.matchHistory = []
+      try {
+        storage.get({
+          key: this.matchHistoryKey(),
+          success: (raw) => {
+            let stored = []
+            try { stored = raw ? JSON.parse(raw) : [] } catch (e) { stored = [] }
+            // Anything archived before the read returned is newer: keep it.
+            const fresh = def.matchHistory
+            for (let i = 0; i < stored.length; i++) {
+              let dup = false
+              for (let j = 0; j < fresh.length; j++) {
+                if (fresh[j].matchId === stored[i].matchId) { dup = true; break }
+              }
+              if (!dup) fresh.push(stored[i])
+            }
+            def.matchHistory = fresh.slice(0, 20)
+            this.diag('history loaded ' + def.matchHistory.length)
+          }
+        })
+      } catch (e) { this.diag('history read failed: ' + e.message) }
+    },
+
+    saveHistory() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.matchHistory) return
+      try {
+        storage.set({
+          key: this.matchHistoryKey(),
+          value: JSON.stringify(def.matchHistory),
+          fail: (data, code) => this.diag('history save FAIL ' + code)
+        })
+      } catch (e) { this.diag('history save threw: ' + e.message) }
+    },
+
+    archiveCurrent(status) {
+      const def = this.$app && this.$app.$def
+      if (!def) return
+      if (this.scoreA === 0 && this.scoreB === 0) return
+      if (!def.matchHistory) def.matchHistory = []
+      const record = this.activeSnapshot()
+      record.status = status
+      record.endedAt = this.endedAt || Date.now()
+      record.syncedRev = -1
+      delete record.undoHistory
+      delete record.streakTeam
+      delete record.streakCount
+      delete record.prevLu
+      const list = def.matchHistory.filter((r) => r.matchId !== record.matchId)
+      list.unshift(record)
+      def.matchHistory = list.slice(0, 20)
+      this.saveHistory()
+      this.pushUnsyncedHistory()
+    },
+
+    removeArchivedCurrent() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.matchHistory) return
+      const before = def.matchHistory.length
+      def.matchHistory = def.matchHistory.filter((r) => r.matchId !== this.matchId)
+      if (def.matchHistory.length !== before) this.saveHistory()
+    },
+
+    // ── Offline history → phone ──────────────────────────────────────────
+    // Event driven, never on a timer: runs when the link comes up and right
+    // after a set is archived. One record per message; the next goes only
+    // after the phone acks the previous one, so nothing is ever sent in a
+    // burst. With nothing unsynced this sends nothing at all.
+    //
+    // Always deferred. Every caller has just sent a state message, and two
+    // large messages back to back lose the second one: with a lineup on
+    // board the winning `score_X` (~650 B) never reached the phone right
+    // after the `match_record` (~600 B), so the phone never showed the win.
+    // Seen in logcat; the smaller unnamed pair happened to survive.
+    pushUnsyncedHistory(delay) {
+      if (this.historyTimer) clearTimeout(this.historyTimer)
+      this.historyTimer = setTimeout(() => {
+        this.historyTimer = null
+        this.pushNextRecord()
+      }, delay === undefined ? 1200 : delay)
+    },
+
+    pushNextRecord() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.matchHistory || !this.connected || !this.stateLoaded) return
+      if (def.historyInFlight && Date.now() - def.historyInFlight < 5000) return
+      let next = null
+      for (let i = def.matchHistory.length - 1; i >= 0; i--) {
+        const r = def.matchHistory[i]
+        if (r.syncedRev !== r.revision) { next = r; break }
+      }
+      if (!next) { def.historyInFlight = 0; return }
+      def.historyInFlight = Date.now()
+      // Flat, like every other message: MainActivity converts only the top
+      // level of the JSON, and a nested object cannot cross the EventChannel.
+      const msg = { action: 'match_record', source: 'band' }
+      for (const k in next) { if (k !== 'syncedRev') msg[k] = next[k] }
+      this.sendRaw(msg, null, true)
+    },
+
+    onMatchAck(matchId, revision) {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.matchHistory) return
+      let changed = false
+      for (let i = 0; i < def.matchHistory.length; i++) {
+        const r = def.matchHistory[i]
+        if (r.matchId === matchId && r.revision === revision && r.syncedRev !== revision) {
+          r.syncedRev = revision
+          changed = true
+        }
+      }
+      def.historyInFlight = 0
+      if (changed) this.saveHistory()
+      // Nothing else is in flight right after an ack: the next can go sooner.
+      this.pushUnsyncedHistory(300)
+    },
+
+    startFreshMatch() {
+      this.scoreA = 0
+      this.scoreB = 0
+      this.history = []
+      this.rallies = ''
+      this.ralT = ''
+      this.startedAt = 0
+      this.endedAt = 0
+      this.matchStatus = 'active'
+      this.seededScoreA = -1
+      this.seededScoreB = -1
+      this.seedServingTeam = ''
+      this.clearStreak()
+      this.isWinnerA = false
+      this.isWinnerB = false
+      this.matchId = this.newMatchId()
+      this.matchRevision = 0
+      // Only the set immediately before counts: a skipped, seeded or
+      // players-off set has no lineup, so it clears "Same 4".
+      this.prevLu = this.lineup
+      this.lineup = null
+      this.persistMatch()
+    },
+
+    // Close a non-empty unfinished set as `stopped`. A completed set was
+    // archived at its winning point and must not be overwritten.
+    closeUnfinished() {
+      if (this.scoreA === 0 && this.scoreB === 0) return
+      if (this.matchStatus === 'completed') return
+      this.endedAt = Date.now()
+      this.matchStatus = 'stopped'
+      this.matchRevision++
+      this.archiveCurrent('stopped')
+    },
+
+    applySeed(scoreA, scoreB, servingTeam) {
+      // A seed is honest about what is unknown: earlier rallies cannot be
+      // reconstructed from a scoreboard, so only later rallies are logged.
+      // The serving team *is* known, and is shown as a streak of 1.
+      this.closeUnfinished()
+      this.startFreshMatch()
+      this.scoreA = scoreA
+      this.scoreB = scoreB
+      this.seededScoreA = scoreA
+      this.seededScoreB = scoreB
+      this.seedServingTeam = servingTeam
+      // Joined mid-set: who stands where is unknown, so no names.
+      this.prevLu = null
+      this.streakTeam = servingTeam
+      this.streakCount = 1
+      this.startedAt = Date.now() - (scoreA + scoreB) * 20000
+      this.checkWinner()
+      this.matchRevision++
+      this.persistMatch()
+      this.setScreen('game')
+      this.markActivity()
+      this.sendState('seed_score')
+      this.status('Score set')
+    },
+
+    applyPendingMatchCommand() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.pendingMatchCommand) return
+      const c = def.pendingMatchCommand
+      def.pendingMatchCommand = null
+      if (c.action === 'seed_score') this.applySeed(c.scoreA, c.scoreB, c.servingTeam)
+      else if (c.action === 'new_match') this.resetGame()
+      else if (c.action === 'publish_state') this.sendState('manual_state')
+      else if (c.action === 'set_lineup') this.beginSet(c.lu, 'new')
+    },
+
+    // ── Home: how a set starts ───────────────────────────────────────────
+    // A set's clock (startedAt) starts on the tap that begins it, not on the
+    // first point: the first rally gets a duration, and a recording knows
+    // when play began.
+    sameLineup() {
+      // The set on the band if it has names and points, else the one before.
+      const lu = (this.lineup && (this.scoreA || this.scoreB)) ? this.lineup : this.prevLu
+      if (!lu || !lu.red || !lu.blue) return null
+      const def = this.$app && this.$app.$def
+      const list = (def && def.players && def.players.list) || []
+      const on = {}
+      for (let i = 0; i < list.length; i++) on[list[i].i] = true
+      const ids = lu.red.concat(lu.blue)
+      for (let i = 0; i < ids.length; i++) { if (!on[ids[i]]) return null }
+      return lu
+    },
+
+    refreshHome() {
+      const def = this.$app && this.$app.$def
+      const n = (def && def.players && def.players.list) ? def.players.list.length : 0
+      this.canResume = this.matchStatus === 'active' && (this.scoreA > 0 || this.scoreB > 0)
+      this.hasPlayers = n >= 4
+      const lu = this.hasPlayers ? this.sameLineup() : null
+      this.hasSame = !!lu
+      if (lu) {
+        const nm = (id) => (lu.names && lu.names[id] && lu.names[id].s) || '?'
+        this.sameRedText = nm(lu.red[0]) + ' · ' + nm(lu.red[1])
+        this.sameBlueText = nm(lu.blue[0]) + ' · ' + nm(lu.blue[1])
+      }
+    },
+
+    // Starts a set now. Whatever is on the band is closed first: an
+    // unfinished set as `stopped`, a won one is already in history.
+    beginSet(lu, mode) {
+      const reset = this.scoreA > 0 || this.scoreB > 0 || this.startedAt > 0 ||
+        this.matchStatus !== 'active'
+      if (reset) {
+        this.closeUnfinished()
+        this.startFreshMatch()
+      }
+      if (lu) {
+        const names = {}
+        const ids = lu.red.concat(lu.blue)
+        for (let i = 0; i < ids.length; i++) names[ids[i]] = lu.names && lu.names[ids[i]]
+        this.lineup = { red: lu.red.slice(), blue: lu.blue.slice(), names: names, mode: mode }
+      } else {
+        this.lineup = null
+      }
+      this.startedAt = Date.now()
+      this.matchRevision++
+      this.persistMatch()
+      this.setScreen('game')
+      this.markActivity()
+      this.sendState(reset ? 'new_match' : 'match_start')
+      this.status(lu ? 'Players set - go' : 'Go')
+    },
+
+    setScreen(v) {
+      this.screen = v
+      this.applyKeepOn()
+    },
+
+    // Settings "Screen always on": held only while a set is on screen, so the
+    // start screen and every other page still dim as usual. Costs battery
+    // (the screen is the band's biggest draw), hence off by default.
+    applyKeepOn() {
+      const def = this.$app && this.$app.$def
+      const want = !!(def && def.keepOn) && this.screen === 'game'
+      if (want === this.keepOnApplied) return
+      this.keepOnApplied = want
+      try {
+        brightness.setKeepScreenOn({
+          keepScreenOn: want,
+          fail: (data, code) => this.diag('keepScreenOn FAIL ' + code)
+        })
+      } catch (e) { this.diag('keepScreenOn threw: ' + e.message) }
+    },
+
+    onResume() {
+      this.setScreen('game')
+      this.markActivity()
+    },
+
+    onNewGame() { this.beginSet(null) },
+
+    onSame() {
+      const lu = this.sameLineup()
+      if (lu) this.beginSet(lu, 'same')
+    },
+
+    onPickPlayers() { router.push({ uri: 'pages/lineup' }) },
+
+    // Set won: back home with a fresh set ready. The won set is already in
+    // history; the phone clears its board as it did for NEXT MATCH.
+    onDone() {
+      this.startFreshMatch()
+      this.setScreen('home')
+      this.sendState('new_match')
+    },
+
+    // ── Idle reminder ────────────────────────────────────────────────────
+    // A set given up at 20-10 is never ended, so its record and a recording
+    // run on. At game point (one more rally can end the set), 2 minutes with
+    // no point buzzes the wrist twice: a hint, nothing on screen. Mid-set
+    // pauses (water, a new shuttle) never buzz.
+    // Rides the clock's 30 s tick (no timer of its own), so it fires 2:00 to
+    // 2:30 after the last point, and only while this page is shown: on a
+    // screen that went dark it fires as the screen comes back.
+    markActivity() {
+      this.lastPointAt = Date.now()
+      this.idleAsked = false
+    },
+
+    wins(a, b) { return (a >= 21 && a - b >= 2) || a === 30 },
+
+    atGamePoint() {
+      const a = this.scoreA
+      const b = this.scoreB
+      return this.wins(a + 1, b) || this.wins(b + 1, a)
+    },
+
+    checkIdle() {
+      if (this.screen !== 'game' || this.idleAsked || !this.lastPointAt) return
+      if (this.isWinnerA || this.isWinnerB || !this.atGamePoint()) return
+      if (Date.now() - this.lastPointAt < 120000) return
+      this.idleAsked = true
+      this.diag('idle at game point ' + this.scoreA + '-' + this.scoreB)
+      this.buzz(0, 2)
+    },
+
+    // Who serves now, from the lineup at 0-0 and the rally log. Pure and
+    // recomputed on every change, so undo needs no bookkeeping.
+    //   - The serving side wins: its two players swap courts, same server.
+    //   - The receiving side wins: it gets the serve, nobody moves; its
+    //     server is whoever stands in the court matching its own score
+    //     (even = right, odd = left).
+    //   - The receiver stands in the same-named court, diagonally opposite.
+    computeServe(lu, rallies) {
+      if (!lu || !lu.red || !lu.blue || !lu.srv || !lu.rcv) return null
+      const pairOf = (t) => (t === 'A' ? lu.red : lu.blue)
+      const partner = (t, id) => (pairOf(t)[0] === id ? pairOf(t)[1] : pairOf(t)[0])
+      const s0 = lu.red.indexOf(lu.srv) >= 0 ? 'A' : 'B'
+      const r0 = s0 === 'A' ? 'B' : 'A'
+      const right = {}
+      const left = {}
+      right[s0] = lu.srv
+      left[s0] = partner(s0, lu.srv)
+      right[r0] = lu.rcv
+      left[r0] = partner(r0, lu.rcv)
+      let serving = s0
+      let a = 0
+      let b = 0
+      for (let i = 0; i < rallies.length; i++) {
+        const w = rallies.charAt(i)
+        if (w === 'A') a++
+        else b++
+        if (w === serving) {
+          const t = right[w]
+          right[w] = left[w]
+          left[w] = t
+        } else {
+          serving = w
+        }
+      }
+      const own = serving === 'A' ? a : b
+      const court = own % 2 === 0 ? 'R' : 'L'
+      const other = serving === 'A' ? 'B' : 'A'
+      return {
+        team: serving,
+        court: court,
+        srv: court === 'R' ? right[serving] : left[serving],
+        rcv: court === 'R' ? right[other] : left[other]
+      }
+    },
+
+    refreshServe() {
+      const sv = this.computeServe(this.lineup, this.rallies)
+      if (!sv) {
+        this.serveTeam = ''
+        this.serveName = ''
+        this.serveCourt = ''
+        return
+      }
+      const nm = this.lineup.names && this.lineup.names[sv.srv]
+      this.serveTeam = sv.team
+      this.serveName = (nm && nm.s) || '?'
+      this.serveCourt = sv.court === 'R' ? 'RIGHT' : 'LEFT'
+    },
+
+    loadAlarm() {
+      const def = this.$app && this.$app.$def
+      if (def && def.alarmAt) {
+        this.alarmAt = def.alarmAt
+        this.alarmFired = (def.alarmFiredFor === def.alarmAt)
+        return
+      }
+      try {
+        storage.get({
+          key: 'alarmAt',
+          success: (data) => {
+            if (!data) return
+            this.alarmAt = data
+            if (def) def.alarmAt = data
+            // Whether this particular time has already gone off, so reopening
+            // the app inside the window does not buzz again.
+            storage.get({
+              key: 'alarmFiredFor',
+              success: (fired) => {
+                this.alarmFired = (fired === data)
+                if (def) def.alarmFiredFor = fired || ''
+              }
+            })
+          }
+        })
+      } catch (e) {
+        this.diag('storage.get threw: ' + e.message)
+      }
+    },
+
+    // Reads as a log line under the clock rather than a box over the score.
+    // Cleared after a few seconds so a stale message never looks current.
+    status(msg) {
+      this.statusText = msg
+      if (this.statusTimer) clearTimeout(this.statusTimer)
+      this.statusTimer = setTimeout(() => {
+        this.statusText = ""
+        this.statusTimer = null
+      }, 3000)
+    },
+
+    // ── Step-0 diagnostics ───────────────────────────────────────────────
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('index', msg)
+    },
+
+    onInit() {
+      this.diag('onInit')
+      // Keep instance but don't set listeners yet
+      this.connect = interconnect.instance()
+      this.diag('instance=' + (this.connect ? 'ok' : 'NULL'))
+      this.updateClock()
+      this.loadMatchState()
+    },
+
+    onReady() {
+      this.diag('onReady')
+    },
+
+    onDestroy() {
+      this.diag('onDestroy')
+    },
+
+    onShow() {
+      this.diag('onShow')
+      this.setupConnect()
+      this.startClock()
+      this.startLinkPoll()
+      this.loadAlarm()
+      this.applyPendingMatchCommand()
+      this.refreshHome()
+      this.applyKeepOn()
+    },
+
+    setupConnect() {
+      if (!this.connect) return
+      this.diag('setupConnect: attaching handlers')
+
+      this.connect.onopen = (data) => {
+        const def = this.$app && this.$app.$def
+        if (def) def.openCount++
+        this.diag('onopen')
+        this.connected = true
+        this.isConnecting = false
+        // A link opening is not permission for the phone to overwrite the
+        // Band. Publish our durable state once instead.
+        this.sendState('band_online')
+        this.pushUnsyncedHistory()
+      }
+      this.connect.onclose = () => {
+        const def = this.$app && this.$app.$def
+        if (def) def.closeCount++
+        this.diag('onclose')
+        this.connected = false
+        this.isConnecting = false
+      }
+      this.connect.onmessage = (data) => {
+        try {
+          const raw = data.data
+          this.diag('recv ' + (raw ? raw.length : 0) + 'B')
+          const msg = JSON.parse(raw)
+          this.diag('recv action=' + msg.action)
+
+          // Handle media list sync (music only for now, hype postponed)
+          if (msg.action === 'media_list') {
+            this.$app.$def.musicList = msg.music || []
+            console.info('⌚ [Index] Music list updated globally: ' + (msg.music || []).length + ' tracks')
+            return
+          }
+
+          // Explicit phone commands. They contain no score snapshot: Band
+          // applies and persists them, then publishes the resulting state.
+          // Phone commands skip the tap cooldown — that guard is for a finger
+          // bouncing on the band, not for a different device. A command the
+          // Band refuses still answers with its state, so the phone's
+          // optimistic value snaps back instead of drifting.
+          if (msg.action === 'point_A' || msg.action === 'point_B') {
+            const team = msg.action === 'point_A' ? 'A' : 'B'
+            if (!this.applyPoint(team, null, true)) this.sendState('state_reply')
+            return
+          }
+          if (msg.action === 'minus_A' || msg.action === 'minus_B') {
+            // -1 is only honoured when it is an undo of that team's last rally.
+            const team = msg.action === 'minus_A' ? 'A' : 'B'
+            if (this.rallies.charAt(this.rallies.length - 1) !== team || !this.doUndo()) {
+              this.sendState('state_reply')
+            }
+            return
+          }
+          if (msg.action === 'undo') {
+            if (!this.doUndo()) this.sendState('state_reply')
+            return
+          }
+          if (msg.action === 'players') { this.storePlayers(msg); return }
+          if (msg.action === 'match_ack') { this.onMatchAck(msg.matchId, msg.revision); return }
+          if (msg.action === 'new_match' || msg.action === 'reset') { this.resetGame(); return }
+          if (msg.action === 'request_current_state') { this.sendState('state_reply'); return }
+          if (msg.action === 'set_score_seed') {
+            this.applySeed(parseInt(msg.scoreA, 10) || 0, parseInt(msg.scoreB, 10) || 0,
+              msg.servingTeam === 'B' ? 'B' : 'A')
+            return
+          }
+
+          // Protocol v2 deliberately ignores a phone `sync` snapshot. Old
+          // versions used it to replace the Band score after every reconnect.
+          if (msg.action === 'sync' || msg.action === 'manual_sync') {
+            this.diag('ignored legacy phone sync')
+            this.sendState('state_reply')
+            return
+          }
+
+          // No ordinary inbound message is allowed to replace an active Band
+          // match. `acceptedBandState` is reserved for a future explicit,
+          // user-confirmed restore flow.
+          if (msg.acceptedBandState === true && msg.scoreA !== undefined && msg.scoreB !== undefined) {
+            // Mirror phone-originated state changes into local history so undo stays aligned
+            if (msg.action === 'score_A' || msg.action === 'score_B' || msg.action === 'reset') {
+              this.pushHistory()
+            } else if (msg.action === 'undo') {
+              // Restore the streak that belonged to the state we're rewinding to.
+              const prev = this.history.length > 0 ? this.history.pop() : null
+              if (prev) {
+                this.streakTeam = prev.st
+                this.streakCount = prev.sc
+              }
+            }
+            this.scoreA = msg.scoreA
+            this.scoreB = msg.scoreB
+
+            if (msg.action === 'score_A') {
+              this.bumpStreak('A')
+            } else if (msg.action === 'score_B') {
+              this.bumpStreak('B')
+            } else if (msg.action === 'reset') {
+              this.clearStreak()
+            } else if (this.scoreA === 0 && this.scoreB === 0) {
+              // A plain sync landing on 0-0 means the phone started a new match.
+              // For any other sync we can't tell who scored, so leave the streak
+              // alone rather than inventing one.
+              this.clearStreak()
+            }
+
+            this.checkWinner()
+            if (msg.action === 'sync' || msg.action === 'manual_sync') {
+                this.status('Synced')
+            }
+          }
+        } catch (e) {
+          this.diag('recv PARSE ERROR: ' + e.message)
+        }
+      }
+
+      this.connect.getReadyState({
+        success: (data) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.lastReadyStatus = data.status
+          // Logged as the raw number: everything that is not 1 currently
+          // collapses to "red", which hides why it is not ready.
+          this.diag('getReadyState status=' + data.status)
+          this.connected = (data.status === 1)
+          if (this.connected) {
+            this.sendState('band_ready')
+            this.pushUnsyncedHistory()
+          }
+        },
+        fail: (data, code) => {
+          this.diag('getReadyState FAIL code=' + code)
+        }
+      })
+    },
+
+    /**
+     * The channel opens on its own once the phone app has registered, but only
+     * if the watch happens to be looking at the right moment. That is the whole
+     * reason the ritual has an order to it: open the band app first, then the
+     * phone app, and the dot goes green immediately; do it the other way and it
+     * never does, because readyState was sampled exactly once at onShow and
+     * onopen had already come and gone.
+     *
+     * Polling removes the ordering requirement — whenever the phone shows up,
+     * the watch notices within a few seconds.
+     *
+     * (conn.connect() is not usable for this: it exists only on the prototype
+     * with no JS wrapper, and calling it throws "miwear object expected".
+     * pages/diag still probes for the right shape.)
+     */
+    /**
+     * Adaptive, to keep this off the battery.
+     *
+     * Fast (3s) only while the link is down — that is the only time we are
+     * waiting for a transition nobody will tell us about. Once it is up,
+     * onclose reports a clean drop, so polling drops to 20s and exists purely
+     * as a backstop for a silent death. In a normal match the link comes up
+     * once and this ticks three times a minute.
+     *
+     * It also only runs while the page is visible: onHide stops it, so a
+     * screen-off or a switch to another app costs nothing at all.
+     */
+    startLinkPoll() {
+      this.stopLinkPoll()
+      this.linkFast = !this.connected
+      this.linkTimer = setInterval(() => {
+        this.checkLink()
+      }, this.linkFast ? 3000 : 20000)
+    },
+
+    stopLinkPoll() {
+      if (this.linkTimer) {
+        clearInterval(this.linkTimer)
+        this.linkTimer = null
+      }
+    },
+
+    checkLink() {
+      if (!this.connect) return
+      this.connect.getReadyState({
+        success: (data) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.lastReadyStatus = data.status
+          const ready = (data.status === 1)
+          if (ready !== this.connected) {
+            this.diag('link ' + (ready ? 'UP' : 'DOWN') + ' status=' + data.status)
+            this.connected = ready
+            if (ready) {
+              this.sendState('band_reconnected')
+              this.flushQueue()
+              this.pushUnsyncedHistory()
+            }
+            // Swap cadence to match the new state.
+            if (this.linkFast === ready) this.startLinkPoll()
+          }
+        }
+      })
+    },
+
+    // A point tapped while the channel is down used to vanish without trace.
+    // Hold it and replay once the link comes up.
+    queueSend(payload) {
+      const def = this.$app && this.$app.$def
+      if (!def) return
+      if (!def.pendingSends) def.pendingSends = []
+      def.pendingSends.push(payload)
+      while (def.pendingSends.length > 20) def.pendingSends.shift()
+      this.diag('queued ' + payload.action + ' (' + def.pendingSends.length + ')')
+    },
+
+    flushQueue() {
+      const def = this.$app && this.$app.$def
+      if (!def || !def.pendingSends || def.pendingSends.length === 0) return
+      const items = def.pendingSends
+      def.pendingSends = []
+      this.diag('flushing ' + items.length + ' queued')
+      // Spaced out: the phone applies these in order and a burst risks being
+      // dropped by the transport.
+      const sendNext = (i) => {
+        if (i >= items.length) return
+        this.sendRaw(items[i], null, true)
+        setTimeout(() => { sendNext(i + 1) }, 300)
+      }
+      sendNext(0)
+    },
+
+    onHide() {
+      this.diag('onHide: clearing handlers')
+      // Clear listeners to avoid memory leaks or conflicting messages
+      if (this.connect) {
+        this.connect.onmessage = null
+        this.connect.onopen = null
+        this.connect.onclose = null
+      }
+      this.stopClock()
+      this.stopLinkPoll()
+      // Another page or app: let the screen time out there.
+      if (this.keepOnApplied) {
+        this.keepOnApplied = false
+        try { brightness.setKeepScreenOn({ keepScreenOn: false }) } catch (e) {}
+      }
+    },
+
+    // ── Clock ────────────────────────────────────────────────────────────
+    // 30s tick: the minute shown can lag by up to 30s, which is fine here and
+    // costs far less battery than a 1s timer. Only runs while the page is up.
+    startClock() {
+      this.updateClock()
+      if (this.clockTimer) clearInterval(this.clockTimer)
+      this.clockTimer = setInterval(() => {
+        this.updateClock()
+      }, 30000)
+    },
+
+    stopClock() {
+      if (this.clockTimer) {
+        clearInterval(this.clockTimer)
+        this.clockTimer = null
+      }
+    },
+
+    updateClock() {
+      const d = new Date()
+      const h = d.getHours()
+      const m = d.getMinutes()
+      this.clockText = (h < 10 ? '0' + h : '' + h) + ':' + (m < 10 ? '0' + m : '' + m)
+      this.checkAlarm(h * 60 + m)
+      this.checkIdle()
+    },
+
+    /**
+     * The band has no alarm service — @system.alarm resolves to null — but it
+     * does have a vibrator, and a buzz on the wrist beats a noise from a phone
+     * in a bag across the court.
+     *
+     * Rides the clock's 30s tick rather than adding a timer of its own, so it
+     * costs nothing extra. The catch, stated plainly: this only fires while
+     * this page is up, because onHide stops the tick. The phone reminder set
+     * alongside it is the backstop.
+     *
+     * The ten-minute window stops a reminder from firing again the next day,
+     * and covers the case where the page was hidden right as it came due.
+     */
+    checkAlarm(nowMin) {
+      if (!this.alarmAt || this.alarmFired) return
+      const parts = this.alarmAt.split(':')
+      if (parts.length !== 2) return
+      const target = parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10)
+      const late = nowMin - target
+      if (late < 0 || late > 10) return
+
+      this.alarmFired = true
+      // Persisted, so leaving and reopening the app inside the window does not
+      // set it off a second time.
+      const def = this.$app && this.$app.$def
+      if (def) def.alarmFiredFor = this.alarmAt
+      try {
+        storage.set({ key: 'alarmFiredFor', value: this.alarmAt })
+      } catch (e) {}
+
+      this.status('TIME UP - take your stuff')
+      this.diag('reminder fired at ' + this.clockText)
+      this.buzz(0, 6)
+    },
+
+    // Bursts a second apart: one buzz is easy to miss mid-rally.
+    buzz(n, total) {
+      if (n >= total) return
+      try {
+        if (vibrator && typeof vibrator.vibrate === 'function') {
+          vibrator.vibrate({ mode: 'long' })
+        }
+      } catch (e) {
+        this.diag('vibrate threw: ' + e.message)
+        return
+      }
+      setTimeout(() => { this.buzz(n + 1, total) }, 1000)
+    },
+
+    // ── History & streak ─────────────────────────────────────────────────
+    // Every state mutation snapshots the streak alongside the scores, so undo
+    // rewinds "x3" back to "x2" instead of leaving it stuck.
+    pushHistory() {
+      this.history.push({
+        a: this.scoreA,
+        b: this.scoreB,
+        st: this.streakTeam,
+        sc: this.streakCount,
+        rallies: this.rallies,
+        ralT: this.ralT,
+        startedAt: this.startedAt,
+        endedAt: this.endedAt,
+        status: this.matchStatus
+      })
+      if (this.history.length > 20) this.history.shift()
+    },
+
+    bumpStreak(team) {
+      if (this.streakTeam === team) {
+        this.streakCount++
+      } else {
+        this.streakTeam = team
+        this.streakCount = 1
+      }
+    },
+
+    clearStreak() {
+      this.streakTeam = ''
+      this.streakCount = 0
+    },
+
+    sendState(action, manualHype) {
+      if (!this.stateLoaded) return
+      this.sendRaw({
+        action: action || 'band_state',
+        scoreA: this.scoreA,
+        scoreB: this.scoreB,
+        matchId: this.matchId,
+        revision: this.matchRevision,
+        startedAt: this.startedAt,
+        endedAt: this.endedAt,
+        status: this.matchStatus,
+        seededScoreA: this.seededScoreA,
+        seededScoreB: this.seededScoreB,
+        seedServingTeam: this.seedServingTeam,
+        rallies: this.rallies,
+        streakTeam: this.streakTeam,
+        streakCount: this.streakCount,
+        manualHype: manualHype || null,
+        pv: this.playersVersion(),
+        lu: this.lineup,
+        srv: this.serveTeam ? this.computeServe(this.lineup, this.rallies).srv : '',
+        srvC: this.serveCourt,
+        source: 'band',
+        silent: true,
+        timestamp: Date.now()
+      })
+    },
+
+    // Single place where anything leaves this page, so every send gets its
+    // callbacks. Without the fail callback there is no way to tell "the watch
+    // failed to send" apart from "the phone failed to receive".
+    sendRaw(payload, toast, isReplay) {
+      if (!this.connect) {
+        this.diag('send SKIPPED (no instance): ' + payload.action)
+        return
+      }
+      this.connect.send({
+        data: payload,
+        success: () => {
+          this.diag('send ok: ' + payload.action)
+        },
+        fail: (data, code) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.sendFailCount++
+          this.diag('send FAIL: ' + payload.action + ' code=' + code +
+            ' d=' + JSON.stringify(data))
+          // Not while replaying, or a still-down link would refill the queue.
+          // Band state is never queued either: replaying ten stale states
+          // would make the phone announce ten old points. The latest state
+          // goes out on its own when the link comes back.
+          if (!isReplay && payload.source !== 'band') this.queueSend(payload)
+          if (payload.action === 'match_record') {
+            const def = this.$app && this.$app.$def
+            if (def) def.historyInFlight = 0
+          }
+        }
+      })
+    },
+
+    resetGame() {
+      // A non-empty unfinished set is closed as `stopped` and archived; the
+      // phone learns about it through the history push, not a second live
+      // message sent back-to-back with `new_match` (that one tended to drop).
+      this.closeUnfinished()
+      this.startFreshMatch()
+      this.setScreen('home')
+      this.sendState('new_match')
+      this.status('Set ended')
+    },
+
+    openSettings() {
+      router.push({
+        uri: 'pages/settings',
+        params: {
+          connected: this.connected,
+          scoreA: this.scoreA,
+          scoreB: this.scoreB
+        }
+      })
+    },
+
+    openMediaList() {
+      router.push({
+        uri: 'pages/media_list',
+        params: {
+          connected: this.connected
+        }
+      })
+    },
+
+    checkWinner() {
+      this.isWinnerA = false
+      this.isWinnerB = false
+      if ((this.scoreA >= 21 && (this.scoreA - this.scoreB) >= 2) || this.scoreA === 30) {
+        this.isWinnerA = true
+      } else if ((this.scoreB >= 21 && (this.scoreB - this.scoreA) >= 2) || this.scoreB === 30) {
+        this.isWinnerB = true
+      }
+    },
+
+    startCooldown() {
+      if (this.cooldownTimer) clearInterval(this.cooldownTimer)
+      this.isLocked = true
+      this.cooldownProgress = 100
+      // 250ms lockout (5 ticks of 50ms): short enough for quick rallies,
+      // long enough to swallow a finger bounce.
+      this.cooldownTimer = setInterval(() => {
+        if (this.cooldownProgress > 0) this.cooldownProgress -= 20
+        else this.stopCooldown()
+      }, 50)
+    },
+
+    stopCooldown() {
+      if (this.cooldownTimer) { clearInterval(this.cooldownTimer); this.cooldownTimer = null }
+      this.isLocked = false
+      this.cooldownProgress = 0
+    },
+
+    onScoreA() {
+      // If a long press was just handled, ignore the click (release)
+      if (Date.now() - this.lastLongPressTime < 500) return
+      
+      if (this.isLocked || this.isWinnerA || this.isWinnerB) return
+      this.applyPoint('A')
+    },
+
+    onScoreB() {
+      if (Date.now() - this.lastLongPressTime < 500) return
+
+      if (this.isLocked || this.isWinnerA || this.isWinnerB) return
+      this.applyPoint('B')
+    },
+
+    onQuickHypeA() {
+      if (this.isLocked || this.isWinnerA || this.isWinnerB) return
+      this.lastLongPressTime = Date.now()
+      this.applyPoint('A', 'manual_trigger')
+      this.status('Point + hype')
+    },
+
+    onQuickHypeB() {
+      if (this.isLocked || this.isWinnerA || this.isWinnerB) return
+      this.lastLongPressTime = Date.now()
+      this.applyPoint('B', 'manual_trigger')
+      this.status('Point + hype')
+    },
+
+    onUndo() {
+      if (this.isLocked) return
+      this.doUndo()
+    },
+
+    // Shared by the band button and phone commands. Returns false when there
+    // is nothing to undo.
+    doUndo() {
+      if (this.history.length === 0) {
+        // Started by mistake, no point yet: back to the start screen.
+        if (this.screen === 'game' && this.scoreA === 0 && this.scoreB === 0 && this.startedAt) {
+          this.startedAt = 0
+          this.lineup = null
+          this.persistMatch()
+          this.setScreen('home')
+          this.sendState('state_reply')
+          return true
+        }
+        return false
+      }
+      const lastState = this.history.pop()
+      this.scoreA = lastState.a
+      this.scoreB = lastState.b
+      this.streakTeam = lastState.st
+      this.streakCount = lastState.sc
+      this.rallies = lastState.rallies || ''
+      this.ralT = lastState.ralT || ''
+      this.startedAt = lastState.startedAt || 0
+      this.endedAt = 0
+      // Undoing a winning point reopens the same matchId; winning again
+      // updates that record instead of creating a second one.
+      this.matchStatus = 'active'
+      this.checkWinner()
+      this.removeArchivedCurrent()
+      this.matchRevision++
+      this.persistMatch()
+      this.markActivity()
+      this.startCooldown()
+      this.sendState('undo')
+      return true
+    },
+
+    // Returns false when the point is refused (cooldown, or set already won).
+    applyPoint(team, manualHype, fromPhone) {
+      if (this.isWinnerA || this.isWinnerB) return false
+      if (this.isLocked && !fromPhone) return false
+      // The phone wakes itself on a new point; keep the Settings label true.
+      const def = this.$app && this.$app.$def
+      if (def) def.phoneBlank = false
+      this.pushHistory()
+      if (!this.startedAt) this.startedAt = Date.now()
+      if (team === 'A') this.scoreA++
+      else this.scoreB++
+      this.rallies += team
+      const sec = Math.round((Date.now() - this.startedAt) / 1000)
+      this.ralT = this.ralT ? this.ralT + ',' + sec : '' + sec
+      this.bumpStreak(team)
+      this.checkWinner()
+      this.matchStatus = (this.isWinnerA || this.isWinnerB) ? 'completed' : 'active'
+      this.endedAt = this.matchStatus === 'completed' ? Date.now() : 0
+      this.matchRevision++
+      this.persistMatch()
+      if (this.matchStatus === 'completed') this.archiveCurrent('completed')
+      // A point from the phone while the band shows home still counts.
+      this.setScreen('game')
+      this.markActivity()
+      this.startCooldown()
+      this.sendState(team === 'A' ? 'score_A' : 'score_B', manualHype)
+      return true
+    }
+  }
+</script>
+
+<style>
+  .root-stack {
+    width: 100%;
+    height: 100%;
+    background-color: #0F172A;
+  }
+
+  .container {
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ZONE 1: SETTINGS Area (20%) */
+  /* padding-top clears the bezel curve; the extra height is the clock and
+     status lines added below the progress bar. */
+  .settings-area {
+    width: 100%;
+    height: 138px;
+    padding-top: 14px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    margin-bottom: 6px;
+  }
+
+  .online { background-color: #448AFF; }
+  .offline { background-color: #FF5252; }
+
+  .settings-label {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: bold;
+  }
+
+  .progress-bar {
+    width: 100px;
+    height: 2px;
+    background-color: rgba(255, 255, 255, 0.1);
+    margin-top: 8px;
+  }
+
+  .progress-inner {
+    height: 100%;
+    background-color: #448AFF;
+  }
+
+  /* Status log: green, quiet, and always occupying its line so the layout
+     does not jump when a message appears. */
+  .log-text {
+    height: 16px;
+    font-size: 13px;
+    color: #4ADE80;
+    margin-top: 2px;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+
+  .clock-text {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+    margin-top: 6px;
+  }
+
+  /* ZONE 2 & 3: SCORES Area (60%) */
+  .score-area {
+    flex: 1;
+    width: 100%;
+    flex-direction: row;
+    padding: 8px;
+  }
+
+  .score-btn {
+    flex: 1;
+    height: 100%;
+    margin: 4px;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .card-a { background-color: #FF5252; }
+  .card-b { background-color: #448AFF; }
+
+  .score-watermark {
+    width: 80%;
+    height: 80%;
+    object-fit: contain;
+    opacity: 0.25;
+    position: absolute;
+    bottom: -15px;
+    align-self: center;
+  }
+
+  .score-content {
+    width: 100%;
+    height: 100%;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .score-text {
+    font-size: 65px;
+    font-weight: bold;
+    color: #FFFFFF;
+    text-shadow: 0px 4px 10px rgba(0,0,0,0.3);
+  }
+
+  /* STREAK BADGE
+     136px square rotated 45deg = a diamond with a 96px half-diagonal. Only the
+     part below the card top edge survives .score-btn overflow:hidden, leaving a
+     wedge pointing down.
+
+     Centre sits 40px above the card, so the wedge is 56px deep — twice what it
+     was. Width always works out to twice the depth, which is wider than the
+     Box kept at 90px, the card's own width, with the lift tuned instead: the
+     wedge comes out 56px deep, twice the original, and wider than the card so
+     its top corners clip against the edges. Sizing the box past the card was
+     never necessary for that, and the depth is what reads at a glance. */
+  .streak-tri {
+    position: absolute;
+    top: -53px;
+    align-self: center;
+    width: 90px;
+    height: 90px;
+    background-color: #FBBF24;
+    transform: rotate(45deg);
+  }
+
+  /* Sits across the wide part of the wedge; the descender ends up over the card
+     itself, which is why it is white rather than dark. Fixed width + centre
+     alignment so x1 and x12 stay put instead of drifting with the digit count. */
+
+
+  .streak-text {
+    position: absolute;
+    top: 6px;
+    align-self: center;
+    width: 70px;
+    text-align: center;
+    font-size: 30px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  /* ZONE 4: UNDO Area (20%) */
+  .undo-area {
+    width: 100%;
+    height: 100px;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .undo-text {
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 32px;
+    font-weight: bold;
+  }
+
+  /* HOME: one column of full-width buttons where the cards and undo bar
+     are on the board. Height budget (520 - 138 top): four 78px buttons. */
+  .home-area {
+    flex: 1;
+    width: 100%;
+    flex-direction: column;
+    justify-content: center;
+    padding: 8px 12px 16px 12px;
+  }
+
+  .home-btn {
+    width: 100%;
+    height: 78px;
+    margin-top: 8px;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    border-radius: 20px;
+  }
+
+  .resume { background-color: #334155; height: 86px; }
+  .same { background-color: #334155; height: 96px; }
+  .pick { background-color: rgba(255, 255, 255, 0.08); }
+  .new { background-color: #16A34A; }
+
+  .home-title {
+    height: 30px;
+    font-size: 22px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .home-row { flex-direction: row; align-items: center; height: 40px; }
+  .home-score { font-size: 34px; font-weight: bold; }
+  .home-dash { font-size: 28px; color: rgba(255, 255, 255, 0.5); margin: 0 10px; }
+  .home-red { height: 26px; color: #FF7A7A; font-size: 18px; font-weight: bold; }
+  .home-blue { height: 26px; color: #7AAEFF; font-size: 18px; font-weight: bold; }
+
+  /* WIN: one rounded card where the two score cards are; the undo bar
+     below is the board's own. */
+  .mid-area {
+    flex: 1;
+    width: 100%;
+    padding: 8px;
+  }
+
+  .big-card {
+    flex: 1;
+    height: 100%;
+    margin: 4px;
+    border-radius: 20px;
+    overflow: hidden;
+  }
+
+  .win-col {
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .win-top {
+    flex: 1;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .card-title {
+    font-size: 28px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .card-score {
+    font-size: 44px;
+    font-weight: bold;
+    color: #FFFFFF;
+    margin-top: 4px;
+  }
+
+  /* Lower half of the card, full width: easy to hit on the way out. */
+  .done-btn {
+    width: 100%;
+    height: 120px;
+    border-radius: 16px;
+    justify-content: center;
+    align-items: center;
+    background-color: rgba(15, 23, 42, 0.35);
+  }
+
+  .done-text {
+    color: #FFFFFF;
+    font-size: 30px;
+    font-weight: bold;
+  }
+
+  .color-a { color: #FF7A7A; }
+  .color-b { color: #7AAEFF; }
+</style>

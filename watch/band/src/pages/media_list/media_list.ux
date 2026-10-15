@@ -1,0 +1,377 @@
+<template>
+  <div class="container">
+    <div class="header">
+      <text class="title">Music</text>
+      <div class="sync-btn" onclick="requestMediaList">
+        <text class="sync-text">Sync</text>
+      </div>
+    </div>
+
+    <!-- Mode is the first thing on the page because it changes what every
+         other control below means. -->
+    <div class="mode-row">
+      <div class="mode-btn {{ mode === 'commentary' ? 'mode-on' : '' }}" onclick="setMode('commentary')">
+        <text class="mode-text">Talk</text>
+      </div>
+      <div class="mode-btn {{ mode === 'music' ? 'mode-on' : '' }}" onclick="setMode('music')">
+        <text class="mode-text">Music</text>
+      </div>
+    </div>
+
+    <!-- Doubles as the track count when nothing is playing, which saves a
+         whole line on a screen this short. -->
+    <div class="now-row">
+      <text class="now-name">{{ nowPlaying || (musicList.length + ' tracks') }}</text>
+    </div>
+
+    <!-- Two rows of two rather than four across. Four buttons on a 212px
+         screen leaves each about 43px wide, which is where the mis-taps were
+         coming from; this way each is roughly twice that. -->
+    <div class="t-row">
+      <div class="t-btn" onclick="playPause">
+        <text class="t-text">{{ isPlaying ? '❚❚' : '▶' }}</text>
+      </div>
+      <div class="t-btn" onclick="next">
+        <text class="t-text">▶▶</text>
+      </div>
+    </div>
+
+    <div class="t-row">
+      <div class="t-btn {{ playMode === 'random' ? 't-on' : '' }}" onclick="togglePlayMode">
+        <text class="t-text-sm">{{ playMode === 'random' ? 'Random' : 'In order' }}</text>
+      </div>
+      <div class="t-btn t-stop" onclick="stopAll">
+        <text class="t-text">■</text>
+      </div>
+    </div>
+
+    <list class="media-list">
+      <list-item type="music" for="{{ musicList }}" class="media-item" onclick="playMusic($item.id)">
+        <text class="item-name">{{ $item.name }}</text>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+
+  export default {
+    private: {
+      connect: null,
+      connected: false,
+      musicList: [],
+      // Mirrors of phone state. Never authoritative — every one of these is
+      // overwritten by the next settings_state / player_state echo.
+      mode: 'commentary',
+      playMode: 'random',
+      isPlaying: false,
+      nowPlaying: ''
+    },
+
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('media', msg)
+    },
+
+    onInit() {
+      this.diag('onInit')
+      this.connect = interconnect.instance()
+      this.diag('instance=' + (this.connect ? 'ok' : 'NULL'))
+    },
+
+    onReady() { this.diag('onReady') },
+    onDestroy() { this.diag('onDestroy') },
+
+    onShow() {
+      this.diag('onShow')
+      this.setupConnect()
+      this.syncFromGlobal()
+    },
+
+    onHide() {
+      this.diag('onHide: clearing handlers')
+      if (this.connect) {
+        this.connect.onmessage = null
+        this.connect.onopen = null
+        this.connect.onclose = null
+      }
+    },
+
+    syncFromGlobal() {
+      const def = this.$app && this.$app.$def
+      if (!def) return
+      if (def.musicList && def.musicList.length > 0) {
+        this.musicList = def.musicList
+      }
+      if (def.settings) this.applySettings(def.settings)
+      if (def.player) this.applyPlayer(def.player)
+    },
+
+    applySettings(s) {
+      if (!s) return
+      if (s.mode) this.mode = s.mode
+      if (s.playMode) this.playMode = s.playMode
+    },
+
+    applyPlayer(p) {
+      if (!p) return
+      this.isPlaying = p.playing === true
+      this.nowPlaying = p.track || ''
+    },
+
+    setupConnect() {
+      if (!this.connect) return
+      this.diag('setupConnect: attaching handlers')
+
+      this.connect.onopen = () => {
+        const def = this.$app && this.$app.$def
+        if (def) def.openCount++
+        this.diag('onopen')
+        this.connected = true
+        this.requestMediaList()
+      }
+
+      this.connect.onclose = () => {
+        const def = this.$app && this.$app.$def
+        if (def) def.closeCount++
+        this.diag('onclose')
+        this.connected = false
+      }
+
+      this.connect.onmessage = (data) => {
+        try {
+          const raw = data.data
+          this.diag('recv ' + (raw ? raw.length : 0) + 'B')
+          const msg = JSON.parse(raw)
+          this.diag('recv action=' + msg.action)
+          const def = this.$app && this.$app.$def
+
+          if (msg.action === 'media_list') {
+            const newList = msg.music || []
+            this.diag('media_list: ' + newList.length + ' tracks')
+            this.musicList = newList
+            if (def) def.musicList = newList
+            prompt.showToast({ message: 'Loaded ' + newList.length + ' tracks' })
+          } else if (msg.action === 'settings_state') {
+            if (def) def.settings = msg.s
+            this.applySettings(msg.s)
+          } else if (msg.action === 'player_state') {
+            if (def) def.player = msg.p
+            this.applyPlayer(msg.p)
+          }
+        } catch (e) {
+          this.diag('recv PARSE ERROR: ' + e.message)
+        }
+      }
+
+      this.connect.getReadyState({
+        success: (data) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.lastReadyStatus = data.status
+          this.diag('getReadyState status=' + data.status)
+          this.connected = (data.status === 1)
+          if (this.connected) {
+            this.requestMediaList()
+            this.sendRaw({ action: 'request_settings' })
+          }
+        },
+        fail: (data, code) => {
+          this.diag('getReadyState FAIL code=' + code)
+        }
+      })
+    },
+
+    sendRaw(payload, toast) {
+      if (!this.connect) {
+        this.diag('send SKIPPED (no instance): ' + payload.action)
+        return
+      }
+      this.connect.send({
+        data: payload,
+        success: () => { this.diag('send ok: ' + payload.action) },
+        fail: (data, code) => {
+          const def = this.$app && this.$app.$def
+          if (def) def.sendFailCount++
+          this.diag('send FAIL: ' + payload.action + ' code=' + code)
+          prompt.showToast({ message: 'Phone not connected' })
+        }
+      })
+      if (toast) prompt.showToast({ message: toast })
+    },
+
+    requestMediaList() {
+      this.sendRaw({ action: 'request_media_list' })
+      this.sendRaw({ action: 'request_player' })
+    },
+
+    // Optimistic locally, corrected by the echo — same rule as pages/sound.
+    setMode(m) {
+      if (this.mode === m) return
+      this.mode = m
+      this.sendRaw({ action: 'set_setting', key: 'mode', value: m },
+        m === 'music' ? 'Music mode' : 'Talk mode')
+    },
+
+    togglePlayMode() {
+      const next = this.playMode === 'random' ? 'sequential' : 'random'
+      this.playMode = next
+      this.sendRaw({ action: 'set_setting', key: 'playMode', value: next })
+    },
+
+    playPause() {
+      this.isPlaying = !this.isPlaying
+      this.sendRaw({ action: this.isPlaying ? 'music_resume' : 'music_pause' })
+    },
+
+    next() {
+      this.sendRaw({ action: 'music_next' }, 'Next')
+    },
+
+    playMusic(path) {
+      // Optimistic, like the other controls: the phone's player_state lands a
+      // moment later and replaces this with the truth.
+      this.isPlaying = true
+      this.sendRaw({ action: 'play_music', id: path }, 'Playing')
+    },
+
+    stopAll() {
+      this.isPlaying = false
+      this.sendRaw({ action: 'stop_all_media' }, 'Stopped')
+    }
+  }
+</script>
+
+<style>
+  /* No height on the page root, explicit heights on the list and its items —
+     see docs/watch-ui-gotchas.md. */
+  .container {
+    flex-direction: column;
+    width: 100%;
+    background-color: #0F172A;
+  }
+
+  .header {
+    width: 100%;
+    height: 68px;
+    padding: 18px 14px 0 14px;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .sync-btn {
+    width: 76px;
+    height: 40px;
+    background-color: #8B5CF6;
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .sync-text {
+    font-size: 15px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .mode-row {
+    width: 100%;
+    height: 62px;
+    padding: 5px 8px;
+  }
+
+  .mode-btn {
+    flex: 1;
+    height: 52px;
+    margin: 0 4px;
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .mode-on { background-color: #22C55E; }
+
+  .mode-text {
+    font-size: 18px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .now-row {
+    width: 100%;
+    height: 28px;
+    padding: 0 12px;
+    align-items: center;
+  }
+
+  .now-name {
+    font-size: 14px;
+    color: #FBBF24;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+
+  .t-row {
+    width: 100%;
+    height: 60px;
+    padding: 3px 8px;
+    align-items: center;
+  }
+
+  .t-btn {
+    flex: 1;
+    height: 54px;
+    margin: 0 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .t-on { background-color: #8B5CF6; }
+  .t-stop { background-color: rgba(255, 82, 82, 0.35); }
+
+  .t-text {
+    font-size: 22px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .t-text-sm {
+    font-size: 16px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  /* 520 tall, less header 68, mode 62, now 28 and two 60px button rows. */
+  .media-list {
+    width: 100%;
+    height: 240px;
+  }
+
+  .media-item {
+    width: 100%;
+    height: 58px;
+    padding: 0 16px;
+    margin-top: 5px;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 10px;
+  }
+
+  .item-name {
+    font-size: 18px;
+    color: #E2E8F0;
+    lines: 1;
+    text-overflow: ellipsis;
+  }
+</style>

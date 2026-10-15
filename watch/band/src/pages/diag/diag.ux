@@ -1,0 +1,420 @@
+<template>
+  <div class="container">
+    <div class="header">
+      <!-- Bumped on every build that changes this page, so a flash that did
+           not take is obvious at a glance instead of costing a debug round. -->
+      <text class="title">DIAG b19</text>
+      <div class="clear-btn" onclick="clearLog">
+        <text class="clear-text">CLR</text>
+      </div>
+    </div>
+
+    <div class="summary">
+      <text class="summary-line">ready={{ readyStatus }} open={{ openCount }} close={{ closeCount }}</text>
+      <text class="summary-line {{ sendFailCount > 0 ? 'bad' : '' }}">sendFail={{ sendFailCount }} q={{ queued }} lines={{ lines.length }}</text>
+    </div>
+
+    <!-- Fixed, outside the list: as list items these scrolled away with the
+         log and were simply never seen. -->
+    <div class="actions">
+      <div class="api-btn" onclick="probeApi">
+        <text class="probe-text">1 · LIST API</text>
+      </div>
+      <div class="connect-btn" onclick="doConnect">
+        <text class="probe-text">2 · CONNECT TRY</text>
+      </div>
+      <div class="probe-btn" onclick="probe">
+        <text class="probe-text">3 · TEST SEND</text>
+      </div>
+    </div>
+
+    <!-- One list-item type, fixed height, nothing conditional: the closest
+         thing to Xiaomi's own <list> sample and to pages/settings, the only
+         list in this app that has ever rendered. -->
+    <list class="log-list">
+      <list-item type="line" for="{{ lines }}" class="row">
+        <text class="line-text">{{ $item }}</text>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+  import alarmMod from '@system.alarm'
+  import storageMod from '@system.storage'
+  import vibratorMod from '@system.vibrator'
+  import notificationMod from '@system.notification'
+
+  export default {
+    private: {
+      lines: [],
+      readyStatus: -1,
+      openCount: 0,
+      closeCount: 0,
+      sendFailCount: 0,
+      queued: 0
+    },
+
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('diag', msg)
+    },
+
+    onInit() { this.diag('onInit') },
+    onReady() { this.diag('onReady') },
+
+    onShow() {
+      this.diag('onShow')
+      this.refresh()
+    },
+
+    onHide() { this.diag('onHide') },
+    onDestroy() { this.diag('onDestroy') },
+
+    refresh() {
+      const def = this.$app && this.$app.$def
+      if (!def) return
+      // Newest entry first — the interesting event is always the last one.
+      // Long entries (the API dump) are wrapped here rather than ellipsised:
+      // there is no way to get this text off the watch except by reading it.
+      // Entries go newest-first but the chunks within one entry stay in order.
+      const src = def.diagLog || []
+      // 12px text across ~192px of usable width is about 30 characters, and a
+      // row is one line tall, so chunk to what actually fits.
+      const CHUNK = 30
+      const out = []
+      for (let i = src.length - 1; i >= 0; i--) {
+        const line = src[i]
+        if (line.length <= CHUNK) {
+          out.push(line)
+        } else {
+          for (let j = 0; j < line.length; j += CHUNK) {
+            out.push((j === 0 ? '' : '  ') + line.substr(j, CHUNK))
+          }
+        }
+      }
+      this.lines = out
+      this.readyStatus = def.lastReadyStatus
+      this.openCount = def.openCount
+      this.closeCount = def.closeCount
+      this.sendFailCount = def.sendFailCount
+      this.queued = (def.pendingSends || []).length
+    },
+
+    // Fires a round trip on demand so the link can be tested without having
+    // to score a point: readyState is sampled, then a request_sync goes out
+    // with both callbacks wired, then the reply (if any) shows up in the log.
+    probe() {
+      const conn = interconnect.instance()
+      if (!conn) {
+        this.diag('probe: no instance')
+        this.refresh()
+        return
+      }
+      const self = this
+      const def = this.$app && this.$app.$def
+      conn.getReadyState({
+        success: function (data) {
+          if (def) def.lastReadyStatus = data.status
+          self.diag('probe readyState=' + data.status)
+          self.refresh()
+        },
+        fail: function (data, code) {
+          self.diag('probe readyState FAIL code=' + code)
+          self.refresh()
+        }
+      })
+      conn.send({
+        data: { action: 'request_sync' },
+        success: function () {
+          self.diag('probe send ok')
+          self.refresh()
+        },
+        fail: function (data, code) {
+          if (def) def.sendFailCount++
+          self.diag('probe send FAIL code=' + code + ' d=' + JSON.stringify(data))
+          self.refresh()
+        }
+      })
+      prompt.showToast({ message: 'Probing...' })
+    },
+
+    // The run on 2026-08-23 showed getReadyState=2 with onopen never firing and
+    // send() failing locally — i.e. the watch's outbound channel never opens.
+    // Nothing in our code ever asks it to. Before guessing, list what the
+    // module and the instance actually expose: if there is a connect()/open()
+    // we have never called, this is where it shows up.
+    probeApi() {
+      const names = [
+        'instance', 'connect', 'open', 'close', 'send', 'getReadyState',
+        'subscribe', 'unsubscribe', 'onopen', 'onclose', 'onmessage', 'onerror',
+        'readyState', 'status'
+      ]
+      const conn = interconnect.instance()
+
+      const describe = (obj, label) => {
+        if (!obj) {
+          this.diag(label + ': null')
+          return
+        }
+        const found = []
+        for (let i = 0; i < names.length; i++) {
+          const t = typeof obj[names[i]]
+          if (t !== 'undefined') found.push(names[i] + ':' + t)
+        }
+        this.diag(label + ' has ' + (found.length ? found.join(' ') : '(none)'))
+        try {
+          const own = Object.getOwnPropertyNames(obj)
+          this.diag(label + ' own=' + own.join(','))
+        } catch (e) {
+          this.diag(label + ' own=<err ' + e.message + '>')
+        }
+        try {
+          const proto = Object.getPrototypeOf(obj)
+          if (proto) {
+            this.diag(label + ' proto=' + Object.getOwnPropertyNames(proto).join(','))
+          }
+        } catch (e) {
+          this.diag(label + ' proto=<err ' + e.message + '>')
+        }
+      }
+
+      describe(interconnect, 'module')
+      describe(conn, 'instance')
+
+      // Which system modules this platform actually provides. Declaring a
+      // feature in the manifest is a request, not a guarantee — @system.alarm
+      // is declared and still resolves to null on this band, which cost a
+      // debug round to discover at runtime.
+      const mods = [
+        ['alarm', alarmMod],
+        ['storage', storageMod],
+        ['vibrator', vibratorMod],
+        ['notification', notificationMod]
+      ]
+      for (let i = 0; i < mods.length; i++) {
+        const m = mods[i][1]
+        this.diag('mod ' + mods[i][0] + '=' + (m ? 'ok' : 'NULL'))
+      }
+
+      this.refresh()
+      prompt.showToast({ message: 'API probed' })
+    },
+
+    // The probe found connect/close/init/uninit/listen/getApkStatus on the
+    // instance. We had only ever used send/getReadyState, on a channel nobody
+    // had connected — hence {"data":"not connected","code":1006}. This opens
+    // it by hand so the effect can be seen in isolation.
+    doConnect() {
+      const conn = interconnect.instance()
+      const self = this
+      const def = this.$app && this.$app.$def
+
+      if (conn && typeof conn.getApkStatus === 'function') {
+        try {
+          conn.getApkStatus({
+            success: function (data) {
+              self.diag('getApkStatus=' + JSON.stringify(data))
+              self.refresh()
+            },
+            fail: function (data, code) {
+              self.diag('getApkStatus FAIL code=' + code)
+              self.refresh()
+            }
+          })
+        } catch (e) {
+          this.diag('getApkStatus threw: ' + e.message)
+        }
+      }
+
+      // conn.connect({...}) throws "miwear object expected": connect sits only
+      // on the prototype with no JS wrapper, unlike send/getApkStatus which
+      // appear in both own and proto. So the receiver or the argument is not
+      // what it wants. Each flash costs a full reinstall, so try the plausible
+      // shapes in one pass and log what each one says.
+      const variants = [
+        ['connect()', function () { return conn.connect() }],
+        ['connect(pkg)', function () { return conn.connect(conn.package) }],
+        ['connect(true)', function () { return conn.connect(true) }],
+        ['init()', function () { return conn.init() }],
+        ['create()', function () { return conn.create() }],
+        ['listen()', function () { return conn.listen() }],
+        ['module.connect()', function () { return interconnect.connect() }],
+        ['module.instance(pkg)', function () { return interconnect.instance(conn.package) }]
+      ]
+      for (let i = 0; i < variants.length; i++) {
+        try {
+          const r = variants[i][1]()
+          this.diag(variants[i][0] + ' -> ' + (typeof r) + ' ' + JSON.stringify(r))
+        } catch (e) {
+          this.diag(variants[i][0] + ' threw: ' + e.message)
+        }
+      }
+      this.diag('package=' + JSON.stringify(conn.package))
+
+      if (!conn || typeof conn.connect !== 'function') {
+        this.diag('connect() unavailable')
+        this.refresh()
+        return
+      }
+      this.diag('connect(cb) ...')
+      try {
+        conn.connect({
+          success: function () {
+            self.diag('connect() ok')
+            conn.getReadyState({
+              success: function (d) {
+                if (def) def.lastReadyStatus = d.status
+                self.diag('after connect readyState=' + d.status)
+                self.refresh()
+              }
+            })
+          },
+          fail: function (data, code) {
+            self.diag('connect() FAIL code=' + code + ' d=' + JSON.stringify(data))
+            self.refresh()
+          }
+        })
+      } catch (e) {
+        this.diag('connect() threw: ' + e.message)
+      }
+      this.refresh()
+      prompt.showToast({ message: 'Connecting...' })
+    },
+
+    clearLog() {
+      const def = this.$app && this.$app.$def
+      if (def) {
+        def.diagLog = []
+        def.openCount = 0
+        def.closeCount = 0
+        def.sendFailCount = 0
+      }
+      this.refresh()
+    }
+  }
+</script>
+
+<style>
+  /* No height: 100% here. On a page root it does not resolve, which leaves
+     any flex: 1 child computing to zero height — that is why the log list
+     rendered nothing at all. pages/settings, the one list that always worked,
+     likewise has no height on its root. */
+  .container {
+    flex-direction: column;
+    width: 100%;
+    background-color: #0F172A;
+  }
+
+  /* The screen is a rounded rectangle: the top ~30px is inside the curve and
+     gets clipped by the bezel. Everything on this page starts below that. */
+  .header {
+    width: 100%;
+    height: 84px;
+    padding: 30px 14px 0 14px;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .clear-btn {
+    padding: 5px 12px;
+    background-color: #FF5252;
+    border-radius: 10px;
+  }
+
+  .clear-text {
+    font-size: 14px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .summary {
+    flex-direction: column;
+    width: 100%;
+    padding: 6px 14px;
+    background-color: rgba(255, 255, 255, 0.03);
+  }
+
+  .summary-line {
+    font-size: 13px;
+    color: #4ADE80;
+  }
+
+  .bad {
+    color: #FF5252;
+  }
+
+  /* Explicit height, the way Xiaomi's own <list> sample does it, rather than
+     flex: 1. Screen is 212x520 and design px map 1:1, so this is what is left
+     under the header (84), the summary (~46) and the action row (~108). */
+  .log-list {
+    width: 100%;
+    height: 280px;
+  }
+
+  /* Explicit height is what makes a list-item show up at all. pages/settings
+     has height: 100px here and renders; the two lists that set no height on
+     their items rendered nothing whatsoever. One entry is one 20px row, and
+     refresh() chunks text so that it always fits on a single line. */
+  .row {
+    width: 100%;
+    height: 20px;
+    padding: 0 10px;
+  }
+
+  .actions {
+    flex-direction: column;
+    width: 100%;
+    padding: 8px 12px;
+  }
+
+  .connect-btn {
+    width: 100%;
+    height: 42px;
+    margin-top: 8px;
+    background-color: #22C55E;
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .probe-btn {
+    width: 100%;
+    height: 42px;
+    margin-top: 8px;
+    background-color: #8B5CF6;
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .api-btn {
+    width: 100%;
+    height: 42px;
+    background-color: #0EA5E9;
+    border-radius: 12px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .probe-text {
+    font-size: 15px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .line-text {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.75);
+    lines: 1;
+  }
+</style>

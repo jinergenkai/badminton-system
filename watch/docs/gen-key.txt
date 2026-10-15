@@ -1,0 +1,25 @@
+keytool -genkey -v `
+  -keystore bandcounter.jks `
+  -alias bandcounter `
+  -keyalg RSA `
+  -keysize 2048 `
+  -validity 10000 `
+  -dname "CN=BandCounter, O=Hung, C=VN" `
+  -storepass yourpassword `
+  -keypass yourpassword
+
+keytool -importkeystore `
+  -srckeystore bandcounter.jks `
+  -destkeystore bandcounter.p12 `
+  -srcstoretype jks `
+  -deststoretype pkcs12 `
+  -srcstorepass yourpassword `
+  -deststorepass yourpassword
+
+openssl pkcs12 -nodes `
+  -in bandcounter.p12 `
+  -out bandcounter.pem `
+  -passin pass:yourpassword
+
+gitbash
+openssl pkcs12 -nodes   -in bandcounter.p12   -out bandcounter.pem   -passin pass:yourpassword

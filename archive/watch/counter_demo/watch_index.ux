@@ -1,0 +1,225 @@
+<template>
+  <div class="container">
+    <text class="title">Score Counter</text>
+
+    <div class="score-row">
+      <text class="score-label">A</text>
+      <text class="score-value">{{ scoreA }}</text>
+      <text class="score-label">B</text>
+      <text class="score-value">{{ scoreB }}</text>
+    </div>
+
+    <div class="status-row">
+      <text class="status {{ connected ? 'connected' : 'disconnected' }}">
+        {{ connected ? '● Connected' : '○ No phone' }}
+      </text>
+    </div>
+
+    <div class="btn-row">
+      <input type="button" class="btn btn-a" value="+A" onclick="onScoreA" />
+      <input type="button" class="btn btn-b" value="+B" onclick="onScoreB" />
+    </div>
+
+    <div class="btn-row">
+      <input type="button" class="btn btn-undo" value="↩ Undo" onclick="onUndo" />
+    </div>
+
+    <text class="last-event">{{ lastEvent }}</text>
+  </div>
+</template>
+
+<script>
+  import interconnect from '@system.interconnect'
+
+  export default {
+    data() {
+      return {
+        scoreA: 0,
+        scoreB: 0,
+        connected: false,
+        lastEvent: 'Ready',
+        connect: null,
+      }
+    },
+
+    onInit() {
+      this.connect = interconnect.instance()
+
+      // Lắng nghe trạng thái kết nối
+      this.connect.onopen = (data) => {
+        this.connected = true
+        this.lastEvent = data.isReconnected ? 'Reconnected' : 'Connected'
+      }
+
+      this.connect.onclose = () => {
+        this.connected = false
+        this.lastEvent = 'Phone disconnected'
+      }
+
+      this.connect.onerror = (data) => {
+        this.lastEvent = 'Error: ' + data.data
+      }
+
+      // Nhận data từ phone (nếu cần confirm)
+      this.connect.onmessage = (data) => {
+        // Phone có thể gửi lại score hiện tại để sync
+        try {
+          const msg = JSON.parse(data.data)
+          if (msg.scoreA !== undefined) this.scoreA = msg.scoreA
+          if (msg.scoreB !== undefined) this.scoreB = msg.scoreB
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      // Kiểm tra trạng thái ban đầu
+      this.connect.getReadyState({
+        success: (data) => {
+          this.connected = (data.status === 1)
+        }
+      })
+    },
+
+    // Gửi event về phone, cập nhật score local ngay lập tức
+    sendEvent(action) {
+      // Optimistic update: cập nhật UI trước
+      if (action === 'score_A') {
+        this.scoreA++
+        this.lastEvent = '+A sent'
+      } else if (action === 'score_B') {
+        this.scoreB++
+        this.lastEvent = '+B sent'
+      } else if (action === 'undo') {
+        this.lastEvent = 'Undo sent'
+      }
+
+      // Gửi qua interconnect → BLE → Android app
+      this.connect.send({
+        data: {
+          action: action,
+          scoreA: this.scoreA,
+          scoreB: this.scoreB,
+          timestamp: Date.now(),
+        },
+        success: () => {
+          // Phone đã nhận
+        },
+        fail: (data, code) => {
+          // Revert nếu gửi thất bại
+          if (action === 'score_A') this.scoreA--
+          else if (action === 'score_B') this.scoreB--
+          this.lastEvent = 'Send failed: ' + code
+        }
+      })
+    },
+
+    onScoreA() {
+      this.sendEvent('score_A')
+    },
+
+    onScoreB() {
+      this.sendEvent('score_B')
+    },
+
+    onUndo() {
+      // Undo local score (trước khi phone confirm)
+      // Logic đơn giản: phone là source of truth, watch chỉ trigger
+      this.sendEvent('undo')
+      this.lastEvent = 'Undo sent'
+    },
+  }
+</script>
+
+<style>
+  .container {
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    background-color: #0d0d0d;
+    padding: 12px;
+  }
+
+  .title {
+    font-size: 18px;
+    color: #ffffff;
+    font-weight: bold;
+    margin-bottom: 10px;
+  }
+
+  .score-row {
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 16px;
+  }
+
+  .score-label {
+    font-size: 14px;
+    color: #888888;
+    margin-right: 4px;
+  }
+
+  .score-value {
+    font-size: 32px;
+    color: #ffffff;
+    font-weight: bold;
+    width: 48px;
+    text-align: center;
+  }
+
+  .status-row {
+    margin-bottom: 12px;
+  }
+
+  .status {
+    font-size: 12px;
+  }
+
+  .connected {
+    color: #4caf50;
+  }
+
+  .disconnected {
+    color: #666666;
+  }
+
+  .btn-row {
+    flex-direction: row;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 8px;
+  }
+
+  .btn {
+    height: 44px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 0 20px;
+  }
+
+  .btn-a {
+    background-color: #1565c0;
+    color: #ffffff;
+  }
+
+  .btn-b {
+    background-color: #b71c1c;
+    color: #ffffff;
+  }
+
+  .btn-undo {
+    background-color: #333333;
+    color: #aaaaaa;
+    width: 140px;
+  }
+
+  .last-event {
+    font-size: 11px;
+    color: #555555;
+    margin-top: 8px;
+  }
+</style>

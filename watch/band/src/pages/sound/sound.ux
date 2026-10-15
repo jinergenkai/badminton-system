@@ -1,0 +1,247 @@
+<template>
+  <!-- One screen, no list: a big master control on top, four on/off toggles
+       below. Per-source volumes live on the phone only. -->
+  <div class="container">
+    <div class="header">
+      <text class="title">Sound</text>
+      <text class="conn {{ synced ? 'ok' : 'no' }}">{{ synced ? '●' : '○' }}</text>
+    </div>
+
+    <div class="master">
+      <text class="master-num">{{ master }}%</text>
+      <!-- Drag to set. No slider has been used on this band before: if it
+           does not render, the two big buttons below still do the job. -->
+      <slider class="master-slider" min="0" max="100" step="5" value="{{ master }}"
+              onchange="onSlide"></slider>
+      <div class="steps">
+        <div class="step" onclick="bump(-10)"><text class="step-text">–</text></div>
+        <div class="step" onclick="bump(10)"><text class="step-text">+</text></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="tog {{ announceOn ? 'on' : 'off' }}" onclick="toggle('announceOn')">
+        <text class="tog-text">Score</text>
+      </div>
+      <div class="tog {{ hypeOn ? 'on' : 'off' }}" onclick="toggle('hypeOn')">
+        <text class="tog-text">Hype</text>
+      </div>
+    </div>
+    <div class="grid">
+      <div class="tog {{ tensionOn ? 'on' : 'off' }}" onclick="toggle('tensionOn')">
+        <text class="tog-text">Tension</text>
+      </div>
+      <div class="tog {{ winOn ? 'on' : 'off' }}" onclick="toggle('winOn')">
+        <text class="tog-text">Win</text>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+  import interconnect from '@system.interconnect'
+  import prompt from '@system.prompt'
+
+  export default {
+    private: {
+      connect: null,
+      synced: false,
+      // Rendered from every settings_state. The phone owns the values; the
+      // band only shows them and sends changes.
+      master: 0,
+      announceOn: true,
+      hypeOn: true,
+      tensionOn: true,
+      winOn: true,
+      // Slider drags fire many changes: only the last one is sent.
+      slideTimer: null
+    },
+
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('sound', msg)
+    },
+
+    onInit() {
+      this.connect = interconnect.instance()
+      this.render(this.cached())
+    },
+
+    onShow() {
+      this.diag('onShow')
+      this.setupConnect()
+      this.render(this.cached())
+      this.send({ action: 'request_settings' })
+    },
+
+    onHide() {
+      if (this.connect) this.connect.onmessage = null
+      if (this.slideTimer) { clearTimeout(this.slideTimer); this.slideTimer = null }
+    },
+
+    cached() {
+      const def = this.$app && this.$app.$def
+      return (def && def.settings) || null
+    },
+
+    setupConnect() {
+      if (!this.connect) return
+      this.connect.onmessage = (data) => {
+        try {
+          const msg = JSON.parse(data.data)
+          if (msg.action !== 'settings_state') return
+          this.diag('settings_state received')
+          const def = this.$app && this.$app.$def
+          if (def) def.settings = msg.s
+          this.synced = true
+          // Don't yank the value from under a finger that is still dragging.
+          if (!this.slideTimer) this.render(msg.s)
+        } catch (e) {
+          this.diag('parse error: ' + e.message)
+        }
+      }
+    },
+
+    send(payload) {
+      if (!this.connect) return
+      this.connect.send({
+        data: payload,
+        success: () => { this.diag('send ok: ' + payload.action) },
+        fail: (d, code) => {
+          this.synced = false
+          this.diag('send FAIL ' + payload.action + ' code=' + code)
+          prompt.showToast({ message: 'Phone not connected' })
+        }
+      })
+    },
+
+    render(s) {
+      if (!s) return
+      this.master = typeof s.master === 'number' ? s.master : 0
+      this.announceOn = s.announceOn === true
+      this.hypeOn = s.hypeOn === true
+      this.tensionOn = s.tensionOn === true
+      this.winOn = s.winOn === true
+    },
+
+    setMaster(v) {
+      let n = Math.round(v / 5) * 5
+      if (n < 0) n = 0
+      if (n > 100) n = 100
+      this.master = n
+      return n
+    },
+
+    bump(delta) {
+      const n = this.setMaster(this.master + delta)
+      this.send({ action: 'set_setting', key: 'master', value: n })
+    },
+
+    onSlide(e) {
+      const v = e && (e.progress !== undefined ? e.progress : e.value)
+      if (typeof v !== 'number') return
+      this.setMaster(v)
+      if (this.slideTimer) clearTimeout(this.slideTimer)
+      this.slideTimer = setTimeout(() => {
+        this.slideTimer = null
+        this.send({ action: 'set_setting', key: 'master', value: this.master })
+      }, 300)
+    },
+
+    toggle(key) {
+      const next = !this[key]
+      // Optimistic: the phone's echo corrects it if it disagrees.
+      this[key] = next
+      this.send({ action: 'set_setting', key: key, value: next })
+    }
+  }
+</script>
+
+<style>
+  .container {
+    flex-direction: column;
+    width: 100%;
+    background-color: #0F172A;
+  }
+
+  .header {
+    width: 100%;
+    height: 72px;
+    padding: 30px 16px 0 16px;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .title { font-size: 20px; font-weight: bold; color: #FFFFFF; }
+  .conn { font-size: 18px; }
+  .ok { color: #4ADE80; }
+  .no { color: #FF5252; }
+
+  /* Height budget: header 72 + master 236 + two toggle rows 2 x 84 = 476. */
+  .master {
+    width: 100%;
+    height: 228px;
+    margin-top: 8px;
+    padding: 10px 10px;
+    flex-direction: column;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 18px;
+  }
+
+  .master-num {
+    width: 100%;
+    height: 64px;
+    text-align: center;
+    font-size: 52px;
+    font-weight: bold;
+    color: #FBBF24;
+  }
+
+  .master-slider {
+    width: 100%;
+    height: 56px;
+    color: rgba(255, 255, 255, 0.18);
+    selected-color: #FBBF24;
+    block-color: #FFFFFF;
+  }
+
+  .steps {
+    width: 100%;
+    height: 78px;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .step {
+    width: 48%;
+    height: 78px;
+    background-color: rgba(255, 255, 255, 0.16);
+    border-radius: 16px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .step-text { font-size: 40px; font-weight: bold; color: #FFFFFF; }
+
+  .grid {
+    width: 100%;
+    height: 76px;
+    margin-top: 8px;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .tog {
+    width: 48%;
+    height: 76px;
+    border-radius: 16px;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .on { background-color: #16A34A; }
+  .off { background-color: rgba(255, 255, 255, 0.10); }
+
+  .tog-text { font-size: 18px; font-weight: bold; color: #FFFFFF; }
+</style>

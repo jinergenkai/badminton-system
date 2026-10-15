@@ -1,0 +1,267 @@
+<template>
+  <div class="container">
+    <div class="header">
+      <text class="title">Remind</text>
+      <text class="now-text">{{ nowText }}</text>
+    </div>
+
+    <div class="note">
+      <text class="note-text">{{ hasAlarm ? "Rings on the band" : "Band vibrates + phone reminds" }}</text>
+    </div>
+
+    <list class="opt-list">
+      <list-item type="opt" for="{{ options }}" class="opt" onclick="pick($idx)">
+        <text class="opt-time">{{ $item.at }}</text>
+        <text class="opt-label">{{ $item.away }}</text>
+      </list-item>
+    </list>
+  </div>
+</template>
+
+<script>
+  import alarm from '@system.alarm'
+  import storage from '@system.storage'
+  import router from '@system.router'
+  import prompt from '@system.prompt'
+  import interconnect from '@system.interconnect'
+
+  export default {
+    private: {
+      nowText: '--:--',
+      // Built in onShow so the times are never stale.
+      options: [],
+      // Mi Band 10 resolves @system.alarm to null even with system.alarm
+      // declared in the manifest — the platform simply has no alarm service.
+      // Declared features are a request, not a guarantee, so every system
+      // module has to be treated as possibly absent.
+      hasAlarm: false
+    },
+
+    diag(msg) {
+      const def = this.$app && this.$app.$def
+      if (def && def.logDiag) def.logDiag('alarm', msg)
+    },
+
+    onInit() { this.diag('onInit') },
+
+    onShow() {
+      this.diag('onShow')
+      this.build()
+      this.hasAlarm = !!(alarm && typeof alarm.setAlarm === 'function')
+      this.diag('alarm module=' + (this.hasAlarm ? 'present' : 'NULL'))
+      if (this.hasAlarm) {
+        try {
+          this.diag('alarm provider=' + alarm.getProvider())
+        } catch (e) {
+          this.diag('getProvider threw: ' + e.message)
+        }
+      }
+    },
+
+    pad(n) {
+      return n < 10 ? '0' + n : '' + n
+    },
+
+    /**
+     * First :00 or :30 strictly after `d`.
+     *
+     * Always advances, never returns `d` itself: at 03:30:40 the boundary has
+     * already passed, and returning 03:30 would offer a reminder in the past.
+     */
+    nextHalfHour(d) {
+      const r = new Date(d.getTime())
+      r.setSeconds(0, 0)
+      if (r.getMinutes() < 30) {
+        r.setMinutes(30)
+      } else {
+        r.setMinutes(0)
+        r.setHours(r.getHours() + 1) // rolls the day over on its own
+      }
+      return r
+    },
+
+    // "in 29m" / "in 1h" / "in 2h30"
+    humanize(mins) {
+      if (mins < 60) return 'in ' + mins + 'm'
+      const h = Math.floor(mins / 60)
+      const m = mins % 60
+      if (m === 0) return 'in ' + h + 'h'
+      return 'in ' + h + 'h' + (m < 10 ? '0' + m : m)
+    },
+
+    /**
+     * Anchored on the clock, not on the current time.
+     *
+     * The first option is the next :00 or :30, and the rest step 30 minutes
+     * from there — so at 03:01 the list opens at 03:30, not 04:00. Adding an
+     * interval to "now" and rounding that afterwards was what pushed the first
+     * option a whole half hour away.
+     *
+     * Sessions are booked on the clock, so the times are the primary label and
+     * the distance is the hint, computed exactly rather than assumed from the
+     * step: the first row can be anywhere from 1 to 30 minutes out.
+     */
+    build() {
+      const now = new Date()
+      this.nowText = this.pad(now.getHours()) + ':' + this.pad(now.getMinutes())
+
+      const base = this.nextHalfHour(now)
+      const out = []
+      for (let i = 0; i < 6; i++) {
+        const t = new Date(base.getTime() + i * 30 * 60000)
+        const away = Math.round((t.getTime() - now.getTime()) / 60000)
+        out.push({
+          at: this.pad(t.getHours()) + ':' + this.pad(t.getMinutes()),
+          away: this.humanize(away),
+          hour: t.getHours(),
+          minute: t.getMinutes()
+        })
+      }
+      this.options = out
+    },
+
+    pick(idx) {
+      const o = this.options[idx]
+      if (!o) return
+      this.diag('reminder set for ' + o.at + ' (' + o.away + ')')
+
+      const self = this
+
+      // Saved first, always, before anything that can fail. The band vibrates
+      // off this value on its own; the phone is a bonus, not a prerequisite.
+      // Previously this only got stored inside the phone-send success
+      // callback, so with no phone in range nothing was remembered and no
+      // reminder ever fired — which made a watch-only feature need a phone.
+      this.remember(o.at)
+      prompt.showToast({ message: 'Remind at ' + o.at })
+
+      if (!this.hasAlarm) {
+        this.tellPhone(o.at)
+        router.back()
+        return
+      }
+
+      try {
+        alarm.setAlarm({
+          hour: o.hour,
+          minute: o.minute,
+          message: 'Lay do - het gio danh',
+          success: function () {
+            self.diag('setAlarm ok ' + o.at)
+            self.remember(o.at)
+            prompt.showToast({ message: 'Remind at ' + o.at })
+            router.back()
+          },
+          fail: function (data, code) {
+            self.diag('setAlarm FAIL code=' + code + ' d=' + JSON.stringify(data))
+            self.tellPhone(o.at)
+          }
+        })
+      } catch (e) {
+        this.diag('setAlarm threw: ' + e.message)
+        this.tellPhone(o.at)
+      }
+    },
+
+    // Best effort, and nothing depends on it: a second reminder from the phone
+    // if it happens to be connected and running.
+    tellPhone(at) {
+      const conn = interconnect.instance()
+      if (!conn) return
+      const self = this
+      conn.send({
+        data: { action: 'set_reminder', at: at },
+        success: function () { self.diag('phone reminder also set: ' + at) },
+        fail: function (data, code) { self.diag('phone reminder skipped, code=' + code) }
+      })
+    },
+
+    /// Persisted, so the reminder survives leaving the app: index reads it back
+    /// on show and vibrates off it. Clearing alarmFiredFor re-arms it, since
+    /// this is a new time that has not fired yet.
+    remember(at) {
+      const def = this.$app && this.$app.$def
+      if (def) {
+        def.alarmAt = at
+        def.alarmFiredFor = ''
+      }
+      try {
+        storage.set({ key: 'alarmAt', value: at })
+        storage.set({ key: 'alarmFiredFor', value: '' })
+      } catch (e) {
+        this.diag('storage.set threw: ' + e.message)
+      }
+    }
+  }
+</script>
+
+<style>
+  /* No height: 100% on a page root, and every list-item gets an explicit
+     height — see docs/watch-ui-gotchas.md. */
+  .container {
+    flex-direction: column;
+    width: 100%;
+    background-color: #0F172A;
+  }
+
+  /* 30px of top inset: the screen is a rounded rectangle and anything above
+     this sits inside the bezel curve. */
+  .header {
+    width: 100%;
+    height: 84px;
+    padding: 30px 16px 0 16px;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+
+  .now-text {
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .note {
+    width: 100%;
+    padding: 6px 16px;
+    background-color: rgba(255, 255, 255, 0.03);
+  }
+
+  .note-text {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+    lines: 2;
+  }
+
+  .opt-list {
+    width: 100%;
+    height: 380px;
+  }
+
+  .opt {
+    width: 100%;
+    height: 64px;
+    padding: 0 20px;
+    margin-top: 6px;
+    justify-content: space-between;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 14px;
+  }
+
+  .opt-label {
+    font-size: 15px;
+    color: rgba(255, 255, 255, 0.45);
+  }
+
+  .opt-time {
+    font-size: 26px;
+    font-weight: bold;
+    color: #FBBF24;
+  }
+</style>

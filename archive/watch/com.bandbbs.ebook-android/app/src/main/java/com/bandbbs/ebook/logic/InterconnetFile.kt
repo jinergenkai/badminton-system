@@ -1,0 +1,1086 @@
+package com.bandbbs.ebook.logic
+
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Base64
+import android.util.Log
+import com.bandbbs.ebook.database.BookEntity
+import com.bandbbs.ebook.database.Chapter
+import com.bandbbs.ebook.database.ChapterDao
+import com.bandbbs.ebook.ui.model.Book
+import com.bandbbs.ebook.utils.ChapterContentManager
+import com.bandbbs.ebook.utils.bytesToReadable
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import java.io.ByteArrayOutputStream
+import java.io.File
+
+data class BookStatusResult(val syncedChapters: List<Int>, val hasCover: Boolean)
+
+data class ReadingDataResult(
+    val progress: String? = null,
+    val readingTime: String? = null
+)
+
+data class BandStorageInfoData(
+    val product: String? = null,
+    val totalStorage: Long = 0,
+    val availableStorage: Long = 0,
+    val reservedStorage: Long = 0,
+    val usedStorage: Long = 0,
+    val actualAvailable: Long = 0
+)
+
+class InterconnetFile(private val conn: InterHandshake) {
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+        isLenient = true
+    }
+    private val mutex = Mutex()
+    private var chapterIndices: List<Int> = emptyList()
+    private lateinit var chapterDao: ChapterDao
+    private var bookId: Int = 0
+    private var totalChaptersInBook: Int = 0
+    private var lastChunkTime: Long = 0
+
+    var onError: ((message: String, count: Int) -> Unit)? = null
+    var onSuccess: ((message: String, count: Int) -> Unit)? = null
+    var onProgress: ((progress: Double, chunkPreview: String, status: String) -> Unit)? = null
+    var onCoverProgress: ((current: Int, total: Int) -> Unit)? = null
+    var onStorageInfo: ((BandStorageInfoData) -> Unit)? = null
+
+    var busy = false
+        private set
+
+    private val CHUNK_SIZE = 10 * 1024
+    private val COVER_CHUNK_SIZE = 8 * 1024
+
+    private var currentChapterChunks: List<String> = emptyList()
+    private var currentChunkIndex: Int = 0
+    private var currentChapterForTransfer: Chapter? = null
+    private var currentChapterIndexInBook: Int = 0
+    private var currentChapterIndexInSlicedList: Int = 0
+
+    private var bookStatusCompleter: CompletableDeferred<BookStatusResult>? = null
+    private var readingDataCompleter: CompletableDeferred<FileMessagesFromDevice.ReadingData>? =
+        null
+    private var deleteChaptersCompleter: CompletableDeferred<Boolean>? = null
+    private var deleteChaptersProgressCallback: ((Double, String) -> Unit)? = null
+    private var deleteChaptersSuccessCallback: ((String) -> Unit)? = null
+    private var deleteChaptersErrorCallback: ((String) -> Unit)? = null
+
+    private var transferStartChapterIndex: Int = 0
+    private var settingsCompleter: CompletableDeferred<Map<String, String>>? = null
+    private var settingsUpdateCompleter: CompletableDeferred<Boolean>? = null
+    private var bookmarksCompleter: CompletableDeferred<List<BookmarkData>>? = null
+    private var bookmarksUpdateCompleter: CompletableDeferred<Boolean>? = null
+    private var deleteBookCompleter: CompletableDeferred<Boolean>? = null
+    private var deleteBookSuccessCallback: ((String) -> Unit)? = null
+    private var deleteBookErrorCallback: ((String) -> Unit)? = null
+
+    private var chapterIndexMap: Map<Int, Int> = emptyMap()
+    private var coverImageChunks: List<String> = emptyList()
+    private var currentCoverChunkIndex: Int = 0
+    private var hasPendingCoverTransfer = false
+    private var isCoverOnlyTransfer = false
+
+    private fun resetTransferState() {
+        busy = false
+        chapterIndices = emptyList()
+        totalChaptersInBook = 0
+        lastChunkTime = 0
+        currentChapterChunks = emptyList()
+        currentChunkIndex = 0
+        currentChapterForTransfer = null
+        currentChapterIndexInBook = 0
+        currentChapterIndexInSlicedList = 0
+        transferStartChapterIndex = 0
+        chapterIndexMap = emptyMap()
+        coverImageChunks = emptyList()
+        currentCoverChunkIndex = 0
+        hasPendingCoverTransfer = false
+        isCoverOnlyTransfer = false
+
+        bookStatusCompleter?.cancel()
+        bookStatusCompleter = null
+        readingDataCompleter?.cancel()
+        readingDataCompleter = null
+        settingsCompleter?.cancel()
+        settingsCompleter = null
+        settingsUpdateCompleter?.cancel()
+        settingsUpdateCompleter = null
+        bookmarksCompleter?.cancel()
+        bookmarksCompleter = null
+        bookmarksUpdateCompleter?.cancel()
+        bookmarksUpdateCompleter = null
+        deleteBookCompleter?.cancel()
+        deleteBookCompleter = null
+        deleteBookSuccessCallback = null
+        deleteBookErrorCallback = null
+        deleteChaptersCompleter?.cancel()
+        deleteChaptersCompleter = null
+        deleteChaptersProgressCallback = null
+        deleteChaptersSuccessCallback = null
+        deleteChaptersErrorCallback = null
+    }
+
+    init {
+        conn.addListener("file") listener@{
+            try {
+                val header = json.decodeFromString<FileMessagesFromDevice.Header>(it)
+                when (header.type) {
+                    "ready" -> {
+                        val jsonMessage = json.decodeFromString<FileMessagesFromDevice.Ready>(it)
+                        if (jsonMessage.usage > 25 * 1024 * 1024) {
+                            onError?.invoke("存储空间不足", 0)
+                            resetTransferState()
+                            return@listener
+                        }
+                        if (hasPendingCoverTransfer) {
+                            sendNextCoverChunk()
+                        } else {
+                            conn.scope.launch { sendNextChapter(0) }
+                        }
+                    }
+
+                    "error" -> {
+                        val jsonMessage = json.decodeFromString<FileMessagesFromDevice.Error>(it)
+                        handleErrorResponse(jsonMessage.message, jsonMessage.count)
+                    }
+
+                    "success" -> {
+                        val jsonMessage = json.decodeFromString<FileMessagesFromDevice.Success>(it)
+                        handleSuccessResponse(jsonMessage.message, jsonMessage.count)
+                    }
+
+                    "next" -> {
+                        if (!busy) return@listener
+                        val jsonMessage = json.decodeFromString<FileMessagesFromDevice.Next>(it)
+                        val nextSlicedListIndex = chapterIndexMap[jsonMessage.count]
+                        if (nextSlicedListIndex == null) {
+                            onError?.invoke(
+                                "章节索引映射错误: ${jsonMessage.count}",
+                                jsonMessage.count
+                            )
+                            resetTransferState()
+                            return@listener
+                        }
+                        conn.scope.launch { sendNextChapter(nextSlicedListIndex) }
+                    }
+
+                    "next_chunk" -> {
+                        if (!busy) return@listener
+                        currentChunkIndex++
+                        sendCurrentChunk()
+                    }
+
+                    "chapter_chunk_complete" -> {
+                        if (!busy) return@listener
+                        sendChapterComplete()
+                    }
+
+                    "chapter_saved" -> {
+                        if (!busy) return@listener
+                        val nextSlicedListIndex = currentChapterIndexInSlicedList + 1
+                        if (nextSlicedListIndex >= chapterIndices.size) {
+                            sendTransferComplete()
+                        } else {
+                            conn.scope.launch { sendNextChapter(nextSlicedListIndex) }
+                        }
+                    }
+
+                    "transfer_finished" -> {
+                        if (!busy) return@listener
+                        onProgress?.invoke(1.0, "", " --")
+                        onSuccess?.invoke("传输完成", chapterIndices.size)
+                        busy = false
+                    }
+
+                    "cover_chunk_received", "cover_ready" -> {
+                        if (!busy) return@listener
+                        sendNextCoverChunk()
+                    }
+
+                    "cover_saved" -> {
+                        if (!busy) return@listener
+                        if (isCoverOnlyTransfer) {
+                            onSuccess?.invoke("封面同步完成", 1)
+                            resetTransferState()
+                        }
+                    }
+
+                    "cancel" -> {
+                        onSuccess?.invoke("取消传输", 0)
+                        resetTransferState()
+                    }
+
+                    "book_status" -> {
+                        val jsonMessage =
+                            json.decodeFromString<FileMessagesFromDevice.BookStatus>(it)
+                        bookStatusCompleter?.complete(
+                            BookStatusResult(
+                                jsonMessage.syncedChapters,
+                                jsonMessage.hasCover
+                            )
+                        )
+                        bookStatusCompleter = null
+                    }
+
+                    "reading_data" -> {
+                        val jsonMessage =
+                            json.decodeFromString<FileMessagesFromDevice.ReadingData>(it)
+                        readingDataCompleter?.complete(jsonMessage)
+                        readingDataCompleter = null
+                    }
+
+                    "progress" -> {
+                        val jsonMessage = json.decodeFromString<FileMessagesFromDevice.Progress>(it)
+                        val progressValue = jsonMessage.count / 100.0
+                        onProgress?.invoke(progressValue, jsonMessage.message, "")
+                        deleteChaptersProgressCallback?.invoke(progressValue, jsonMessage.message)
+                    }
+
+                    "storage_info" -> {
+                        val jsonMessage =
+                            json.decodeFromString<FileMessagesFromDevice.StorageInfo>(it)
+                        onStorageInfo?.invoke(
+                            BandStorageInfoData(
+                                product = jsonMessage.product,
+                                totalStorage = jsonMessage.totalStorage,
+                                availableStorage = jsonMessage.availableStorage,
+                                reservedStorage = jsonMessage.reservedStorage,
+                                usedStorage = jsonMessage.usedStorage,
+                                actualAvailable = jsonMessage.actualAvailable
+                            )
+                        )
+                    }
+
+                    "settings_data" -> {
+                        val jsonMessage =
+                            json.decodeFromString<FileMessagesFromDevice.SettingsData>(it)
+                        settingsCompleter?.complete(jsonMessage.settings)
+                        settingsCompleter = null
+                    }
+
+                    "bookmarks_data" -> {
+                        val jsonMessage =
+                            json.decodeFromString<FileMessagesFromDevice.BookmarksData>(it)
+                        bookmarksCompleter?.complete(jsonMessage.bookmarks)
+                        bookmarksCompleter = null
+                    }
+
+                    "bookmarks_saved" -> {
+                        bookmarksUpdateCompleter?.complete(true)
+                        bookmarksUpdateCompleter = null
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("File", "Error parsing JSON message: $it", e)
+            }
+        }
+    }
+
+    private fun handleErrorResponse(message: String, count: Int) {
+        when {
+            deleteChaptersCompleter != null -> {
+                deleteChaptersErrorCallback?.invoke(message)
+                deleteChaptersCompleter?.complete(false)
+                clearDeleteChaptersCallbacks()
+            }
+
+            deleteBookCompleter != null -> {
+                deleteBookErrorCallback?.invoke(message)
+                deleteBookCompleter?.complete(false)
+                clearDeleteBookCallbacks()
+            }
+
+            settingsCompleter != null -> {
+                settingsCompleter?.completeExceptionally(Exception(message))
+                settingsCompleter = null
+            }
+
+            settingsUpdateCompleter != null -> {
+                settingsUpdateCompleter?.complete(false)
+                settingsUpdateCompleter = null
+            }
+
+            else -> {
+                onError?.invoke(message, count)
+                resetTransferState()
+            }
+        }
+    }
+
+    private fun handleSuccessResponse(message: String, count: Int) {
+        when {
+            deleteChaptersCompleter != null -> {
+                deleteChaptersSuccessCallback?.invoke(message)
+                deleteChaptersCompleter?.complete(true)
+                clearDeleteChaptersCallbacks()
+            }
+
+            deleteBookCompleter != null -> {
+                deleteBookSuccessCallback?.invoke(message)
+                deleteBookCompleter?.complete(true)
+                clearDeleteBookCallbacks()
+            }
+
+            settingsUpdateCompleter != null -> {
+                settingsUpdateCompleter?.complete(true)
+                settingsUpdateCompleter = null
+            }
+
+            else -> {
+                onSuccess?.invoke(message, count)
+                resetTransferState()
+            }
+        }
+    }
+
+    private fun clearDeleteChaptersCallbacks() {
+        deleteChaptersCompleter = null
+        deleteChaptersProgressCallback = null
+        deleteChaptersSuccessCallback = null
+        deleteChaptersErrorCallback = null
+    }
+
+    private fun clearDeleteBookCallbacks() {
+        deleteBookCompleter = null
+        deleteBookSuccessCallback = null
+        deleteBookErrorCallback = null
+    }
+
+    suspend fun deleteChapters(
+        bookName: String,
+        chapterIndices: List<Int>,
+        onProgress: ((progress: Double, message: String) -> Unit)? = null,
+        onSuccess: ((message: String) -> Unit)? = null,
+        onError: ((message: String) -> Unit)? = null
+    ): Boolean = mutex.withLock {
+        return try {
+            if (busy) return false
+            deleteChaptersCompleter = CompletableDeferred()
+            this.deleteChaptersProgressCallback = onProgress
+            this.deleteChaptersSuccessCallback = onSuccess
+            this.deleteChaptersErrorCallback = onError
+
+            val message = FileMessagesToSend.DeleteChapters(
+                filename = bookName,
+                chapterIndices = chapterIndices
+            )
+            conn.sendMessage(json.encodeToString(message)).await()
+
+            val result = deleteChaptersCompleter?.await() ?: false
+            clearDeleteChaptersCallbacks()
+            result
+        } catch (e: Exception) {
+            clearDeleteChaptersCallbacks()
+            onError?.invoke("删除失败: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun deleteBook(
+        bookName: String,
+        onSuccess: ((message: String) -> Unit)? = null,
+        onError: ((message: String) -> Unit)? = null
+    ): Boolean = mutex.withLock {
+        return try {
+            if (busy) return false
+            deleteBookCompleter = CompletableDeferred()
+            this.deleteBookSuccessCallback = onSuccess
+            this.deleteBookErrorCallback = onError
+
+            val message = FileMessagesToSend.DeleteBook(filename = bookName)
+            conn.sendMessage(json.encodeToString(message)).await()
+
+            val result = deleteBookCompleter?.await() ?: false
+            clearDeleteBookCallbacks()
+            result
+        } catch (e: Exception) {
+            clearDeleteBookCallbacks()
+            onError?.invoke("删除失败: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun getBookStatus(bookName: String): BookStatusResult = mutex.withLock {
+        bookStatusCompleter = CompletableDeferred()
+        conn.sendMessage(json.encodeToString(FileMessagesToSend.GetBookStatus(filename = bookName)))
+            .await()
+        return bookStatusCompleter!!.await()
+    }
+
+    suspend fun getReadingData(bookName: String): ReadingDataResult = mutex.withLock {
+        readingDataCompleter = CompletableDeferred()
+        conn.sendMessage(json.encodeToString(FileMessagesToSend.GetReadingData(filename = bookName)))
+            .await()
+        return try {
+            val result = readingDataCompleter!!.await()
+            ReadingDataResult(progress = result.progress, readingTime = result.readingTime)
+        } catch (e: Exception) {
+            ReadingDataResult(null, null)
+        }
+    }
+
+    suspend fun getStorageInfo() = mutex.withLock {
+        conn.sendMessage(json.encodeToString(FileMessagesToSend.GetStorageInfo())).await()
+    }
+
+    suspend fun getSettings(keys: List<String>): Map<String, String> = mutex.withLock {
+        settingsCompleter = CompletableDeferred()
+        conn.sendMessage(json.encodeToString(FileMessagesToSend.GetSettings(keys = keys))).await()
+        return try {
+            settingsCompleter!!.await()
+        } catch (e: Exception) {
+            emptyMap()
+        }
+    }
+
+    suspend fun setSettings(settings: Map<String, String>): Boolean = mutex.withLock {
+        settingsUpdateCompleter = CompletableDeferred()
+        conn.sendMessage(json.encodeToString(FileMessagesToSend.SetSettings(settings = settings)))
+            .await()
+        return settingsUpdateCompleter!!.await()
+    }
+
+    suspend fun getBookmarks(bookName: String): List<BookmarkData> = mutex.withLock {
+        bookmarksCompleter = CompletableDeferred()
+        conn.sendMessage(json.encodeToString(FileMessagesToSend.GetBookmarks(filename = bookName)))
+            .await()
+        return try {
+            bookmarksCompleter!!.await()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun setBookmarks(bookName: String, bookmarks: List<BookmarkData>): Boolean =
+        mutex.withLock {
+            bookmarksUpdateCompleter = CompletableDeferred()
+            conn.sendMessage(
+                json.encodeToString(
+                    FileMessagesToSend.SetBookmarks(
+                        filename = bookName,
+                        bookmarks = bookmarks
+                    )
+                )
+            ).await()
+            return bookmarksUpdateCompleter!!.await()
+        }
+
+    suspend fun setReadingData(
+        bookName: String,
+        progress: String? = null,
+        readingTime: String? = null
+    ) = mutex.withLock {
+        conn.sendMessage(
+            json.encodeToString(
+                FileMessagesToSend.SetReadingData(
+                    filename = bookName,
+                    progress = progress,
+                    readingTime = readingTime
+                )
+            )
+        ).await()
+    }
+
+    suspend fun sendCoverOnly(
+        book: Book,
+        coverImagePath: String,
+        onError: (message: String, count: Int) -> Unit,
+        onSuccess: (message: String, count: Int) -> Unit,
+        onCoverProgress: (current: Int, total: Int) -> Unit
+    ) = mutex.withLock {
+        if (busy) return@withLock
+        conn.setOnDisconnected {
+            onError("连接断开", 0)
+            resetTransferState()
+        }
+        this.onError = onError
+        this.onSuccess = onSuccess
+        this.onCoverProgress = onCoverProgress
+        busy = true
+        isCoverOnlyTransfer = true
+
+        conn.sendMessage(json.encodeToString(FileMessagesToSend.StartCoverTransfer(filename = book.name)))
+            .await()
+        hasPendingCoverTransfer = true
+        sendCoverImage(coverImagePath)
+    }
+
+    suspend fun updateBookInfo(
+        bookName: String,
+        author: String?,
+        summary: String?,
+        bookStatus: String?,
+        category: String?,
+        localCategory: String?
+    ) = mutex.withLock {
+        conn.sendMessage(
+            json.encodeToString(
+                FileMessagesToSend.UpdateBookInfo(
+                    filename = bookName,
+                    author = author,
+                    summary = summary,
+                    bookStatus = bookStatus,
+                    category = category,
+                    localCategory = localCategory
+                )
+            )
+        ).await()
+    }
+
+    suspend fun sentChapters(
+        book: Book,
+        bookId: Int,
+        chaptersIndicesToSend: List<Int>,
+        chapterDao: ChapterDao,
+        totalChaptersInBook: Int,
+        startFromIndex: Int,
+        firstChapterName: String,
+        coverImagePath: String?,
+        bookEntity: BookEntity? = null,
+        onError: (message: String, count: Int) -> Unit,
+        onSuccess: (message: String, count: Int) -> Unit,
+        onProgress: (progress: Double, String, status: String) -> Unit,
+        onCoverProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
+    ) = mutex.withLock {
+        if (busy) return@withLock
+        if (bookEntity?.format == "pdf") {
+            onError("PDF 禁止传输到手环", 0)
+            resetTransferState()
+            return@withLock
+        }
+        conn.setOnDisconnected {
+            onError("连接断开", 0)
+            resetTransferState()
+        }
+        this.bookId = bookId
+        this.chapterDao = chapterDao
+        this.chapterIndices = chaptersIndicesToSend
+        this.totalChaptersInBook = totalChaptersInBook
+        this.transferStartChapterIndex = startFromIndex
+        this.onError = onError
+        this.onSuccess = onSuccess
+        this.onProgress = onProgress
+        this.onCoverProgress = onCoverProgress
+        this.chapterIndexMap =
+            chaptersIndicesToSend.mapIndexed { listIndex, index -> index to listIndex }.toMap()
+
+        this.currentChapterChunks = emptyList()
+        this.currentChunkIndex = 0
+        this.currentChapterForTransfer = null
+        this.lastChunkTime = 0L
+
+        busy = true
+        isCoverOnlyTransfer = false
+        onProgress(0.0, firstChapterName, " --")
+        delay(200L)
+
+        val hasCoverImage = coverImagePath?.let { File(it).exists() } ?: false
+
+        conn.sendMessage(
+            json.encodeToString(
+                FileMessagesToSend.StartTransfer(
+                    filename = book.name,
+                    total = totalChaptersInBook,
+                    wordCount = book.wordCount,
+                    startFrom = startFromIndex,
+                    chapterIndices = chaptersIndicesToSend,
+                    hasCover = hasCoverImage,
+                    author = bookEntity?.author,
+                    summary = bookEntity?.summary,
+                    bookStatus = bookEntity?.bookStatus,
+                    category = bookEntity?.category,
+                    localCategory = bookEntity?.localCategory
+                )
+            )
+        ).await()
+
+        if (hasCoverImage && coverImagePath != null) {
+            hasPendingCoverTransfer = true
+            sendCoverImage(coverImagePath)
+        } else {
+            hasPendingCoverTransfer = false
+        }
+    }
+
+    private suspend fun sendNextChapter(chapterIndexInSlicedList: Int) {
+        if (chapterIndexInSlicedList < 0 || chapterIndexInSlicedList >= chapterIndices.size) {
+            if (chapterIndexInSlicedList >= chapterIndices.size) {
+                onProgress?.invoke(1.0, "", " --")
+                onSuccess?.invoke("传输完成", chapterIndices.size)
+            } else {
+                onError?.invoke(
+                    "无效的章节索引: $chapterIndexInSlicedList",
+                    currentChapterIndexInBook
+                )
+            }
+            resetTransferState()
+            return
+        }
+
+        this.currentChapterIndexInSlicedList = chapterIndexInSlicedList
+        val chapterIndex = chapterIndices[chapterIndexInSlicedList]
+
+        val chapterInfo =
+            withContext(Dispatchers.IO) { chapterDao.getChapterInfoByIndex(bookId, chapterIndex) }
+        if (chapterInfo == null) {
+            onError?.invoke("无法加载章节信息: index $chapterIndex", chapterIndex)
+            resetTransferState()
+            return
+        }
+
+        val chapterContent = withContext(Dispatchers.IO) { loadChapterContent(chapterInfo.id) }
+        if (chapterContent == null) {
+            onError?.invoke("无法加载章节内容: index $chapterIndex", chapterIndex)
+            resetTransferState()
+            return
+        }
+
+        currentChapterForTransfer = Chapter(
+            id = chapterInfo.id,
+            bookId = chapterInfo.bookId,
+            index = chapterInfo.index,
+            name = chapterInfo.name,
+            contentFilePath = "",
+            wordCount = chapterInfo.wordCount
+        )
+        currentChapterIndexInBook = chapterInfo.index
+        currentChapterChunks = chapterContent.chunked(CHUNK_SIZE)
+        currentChunkIndex = 0
+        sendCurrentChunk()
+    }
+
+    private suspend fun loadChapterContent(chapterId: Int): String? {
+        return try {
+            val chapter = chapterDao.getChapterById(chapterId) ?: return null
+            ChapterContentManager.readChapterContent(chapter.contentFilePath)
+        } catch (e: Exception) {
+            Log.e("File", "Exception while loading chapter content", e)
+            null
+        }
+    }
+
+    private fun sendCurrentChunk() {
+        conn.scope.launch {
+            val chapter = currentChapterForTransfer ?: return@launch
+            if (currentChunkIndex >= currentChapterChunks.size) return@launch
+
+            val chunkContent = currentChapterChunks[currentChunkIndex]
+            val chapterForTransfer = ChapterForTransfer(
+                index = chapter.index,
+                name = chapter.name,
+                content = chunkContent,
+                wordCount = chapter.wordCount,
+                chunkNum = currentChunkIndex,
+                totalChunks = currentChapterChunks.size
+            )
+
+            val message = FileMessagesToSend.DataChunk(
+                count = currentChapterIndexInBook,
+                data = json.encodeToString(chapterForTransfer)
+            )
+
+            val currentTime = System.currentTimeMillis()
+            try {
+                conn.sendMessage(json.encodeToString(message)).await()
+            } catch (e: Exception) {
+                onError?.invoke("发送失败: ${e.message}", currentChapterIndexInBook)
+                resetTransferState()
+                return@launch
+            }
+
+            val totalChaptersToSend = chapterIndices.size.coerceAtLeast(1)
+            val progress =
+                (currentChapterIndexInSlicedList.toDouble() + (currentChunkIndex + 1.0) / currentChapterChunks.size) / totalChaptersToSend
+
+            if (lastChunkTime != 0L) {
+                val timeTaken = currentTime - lastChunkTime
+                val speed =
+                    if (timeTaken > 0) " ${bytesToReadable(chunkContent.toByteArray().size / (timeTaken / 1000.0))}/s" else " --"
+                onProgress?.invoke(
+                    progress,
+                    "${chapter.name} (${currentChunkIndex + 1}/${currentChapterChunks.size})",
+                    speed
+                )
+            } else {
+                onProgress?.invoke(
+                    progress,
+                    "${chapter.name} (${currentChunkIndex + 1}/${currentChapterChunks.size})",
+                    " --"
+                )
+            }
+            lastChunkTime = currentTime
+        }
+    }
+
+    private fun sendCoverImage(coverImagePath: String) {
+        conn.scope.launch(Dispatchers.IO) {
+            try {
+                val file = File(coverImagePath)
+                if (!file.exists()) return@launch
+
+                val originalBytes = file.readBytes()
+                val compressedBytes = compressCoverImage(originalBytes)
+                val coverBase64 = Base64.encodeToString(compressedBytes, Base64.NO_WRAP)
+
+                coverImageChunks = coverBase64.chunked(COVER_CHUNK_SIZE)
+                currentCoverChunkIndex = 0
+
+                withContext(Dispatchers.Main) {
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    onError?.invoke("封面准备失败: ${e.message}", 0)
+                    resetTransferState()
+                }
+            }
+        }
+    }
+
+    private fun compressCoverImage(imageBytes: ByteArray): ByteArray {
+        return try {
+            val originalBitmap =
+                BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size) ?: return imageBytes
+            val scale = minOf(160f / originalBitmap.width, 213f / originalBitmap.height)
+            val finalWidth =
+                if (scale < 1) (originalBitmap.width * scale).toInt() else originalBitmap.width
+            val finalHeight =
+                if (scale < 1) (originalBitmap.height * scale).toInt() else originalBitmap.height
+
+            val scaledBitmap =
+                Bitmap.createScaledBitmap(originalBitmap, finalWidth, finalHeight, true)
+            val outputStream = ByteArrayOutputStream()
+            var quality = 85
+            scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+
+            while (outputStream.size() > 50 * 1024 && quality > 20) {
+                outputStream.reset()
+                quality -= 10
+                scaledBitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+            }
+
+            val result = outputStream.toByteArray()
+            originalBitmap.recycle()
+            if (scaledBitmap != originalBitmap) scaledBitmap.recycle()
+            result
+        } catch (e: Exception) {
+            imageBytes
+        }
+    }
+
+    private fun sendNextCoverChunk() {
+        conn.scope.launch {
+            if (currentCoverChunkIndex >= coverImageChunks.size) {
+                try {
+                    conn.sendMessage(json.encodeToString(FileMessagesToSend.CoverTransferComplete()))
+                        .await()
+                    coverImageChunks = emptyList()
+                    currentCoverChunkIndex = 0
+                    hasPendingCoverTransfer = false
+                    onCoverProgress?.invoke(0, 0)
+                    if (!isCoverOnlyTransfer) {
+                        sendNextChapter(0)
+                    }
+                } catch (e: Exception) {
+                    onError?.invoke("封面传输完成命令发送失败: ${e.message}", 0)
+                    resetTransferState()
+                }
+                return@launch
+            }
+
+            try {
+                val message = FileMessagesToSend.CoverChunk(
+                    chunkIndex = currentCoverChunkIndex,
+                    totalChunks = coverImageChunks.size,
+                    data = coverImageChunks[currentCoverChunkIndex]
+                )
+                conn.sendMessage(json.encodeToString(message)).await()
+                currentCoverChunkIndex++
+                onCoverProgress?.invoke(currentCoverChunkIndex, coverImageChunks.size)
+            } catch (e: Exception) {
+                onError?.invoke("封面发送失败: ${e.message}", 0)
+                resetTransferState()
+            }
+        }
+    }
+
+    fun cancel() {
+        if (!busy) return
+        conn.scope.launch {
+            try {
+                conn.sendMessage(json.encodeToString(FileMessagesToSend.Cancel())).await()
+            } catch (e: Exception) {
+            }
+        }
+        resetTransferState()
+    }
+
+    private fun sendChapterComplete() {
+        conn.scope.launch {
+            try {
+                val message = FileMessagesToSend.ChapterComplete(count = currentChapterIndexInBook)
+                conn.sendMessage(json.encodeToString(message)).await()
+            } catch (e: Exception) {
+                onError?.invoke("章节完成命令发送失败: ${e.message}", currentChapterIndexInBook)
+                resetTransferState()
+            }
+        }
+    }
+
+    private fun sendTransferComplete() {
+        conn.scope.launch {
+            try {
+                val message = FileMessagesToSend.TransferComplete()
+                conn.sendMessage(json.encodeToString(message)).await()
+            } catch (e: Exception) {
+                onProgress?.invoke(1.0, "", " --")
+                onSuccess?.invoke("传输完成（但未能通知手环）", chapterIndices.size)
+                busy = false
+            }
+        }
+    }
+
+    @Serializable
+    private sealed class FileMessagesFromDevice {
+        @Serializable
+        data class Header(val tag: String = "file", val type: String) : FileMessagesFromDevice()
+
+        @Serializable
+        data class Ready(val type: String = "ready", val usage: Long, val count: Int) :
+            FileMessagesFromDevice()
+
+        @Serializable
+        data class Error(val type: String = "error", val message: String, val count: Int) :
+            FileMessagesFromDevice()
+
+        @Serializable
+        data class Success(val type: String = "success", val message: String, val count: Int) :
+            FileMessagesFromDevice()
+
+        @Serializable
+        data class Next(val type: String = "next", val message: String, val count: Int) :
+            FileMessagesFromDevice()
+
+        @Serializable
+        data class BookStatus(
+            val type: String = "book_status",
+            val syncedChapters: List<Int>,
+            val hasCover: Boolean = false
+        ) : FileMessagesFromDevice()
+
+        @Serializable
+        data class ReadingData(
+            val type: String = "reading_data",
+            val progress: String? = null,
+            val readingTime: String? = null
+        ) : FileMessagesFromDevice()
+
+        @Serializable
+        data class Progress(val type: String = "progress", val message: String, val count: Int) :
+            FileMessagesFromDevice()
+
+        @Serializable
+        data class StorageInfo(
+            val type: String = "storage_info",
+            val product: String? = null,
+            val totalStorage: Long = 0,
+            val availableStorage: Long = 0,
+            val reservedStorage: Long = 0,
+            val usedStorage: Long = 0,
+            val actualAvailable: Long = 0
+        ) : FileMessagesFromDevice()
+
+        @Serializable
+        data class SettingsData(
+            val type: String = "settings_data",
+            val settings: Map<String, String>
+        ) : FileMessagesFromDevice()
+
+        @Serializable
+        data class BookmarksData(
+            val type: String = "bookmarks_data",
+            val bookmarks: List<BookmarkData>
+        ) : FileMessagesFromDevice()
+    }
+
+    @Serializable
+    private sealed class FileMessagesToSend {
+        @Serializable
+        data class StartTransfer(
+            val tag: String = "file",
+            val stat: String = "startTransfer",
+            val filename: String,
+            val total: Int,
+            val wordCount: Long,
+            val startFrom: Int,
+            val chapterIndices: List<Int>,
+            val hasCover: Boolean = false,
+            val author: String? = null,
+            val summary: String? = null,
+            val bookStatus: String? = null,
+            val category: String? = null,
+            val localCategory: String? = null
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class CoverChunk(
+            val tag: String = "file",
+            val stat: String = "cover_chunk",
+            val chunkIndex: Int,
+            val totalChunks: Int,
+            val data: String
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class DataChunk(
+            val tag: String = "file",
+            val stat: String = "d",
+            val count: Int,
+            val data: String
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class Cancel(val tag: String = "file", val stat: String = "cancel") :
+            FileMessagesToSend()
+
+        @Serializable
+        data class GetBookStatus(
+            val tag: String = "file",
+            val stat: String = "get_book_status",
+            val filename: String
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class StartCoverTransfer(
+            val tag: String = "file",
+            val stat: String = "start_cover_transfer",
+            val filename: String
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class CoverTransferComplete(
+            val tag: String = "file",
+            val stat: String = "cover_transfer_complete"
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class ChapterComplete(
+            val tag: String = "file",
+            val stat: String = "chapter_complete",
+            val count: Int
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class TransferComplete(
+            val tag: String = "file",
+            val stat: String = "transfer_complete"
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class UpdateBookInfo(
+            val tag: String = "file",
+            val stat: String = "update_book_info",
+            val filename: String,
+            val author: String? = null,
+            val summary: String? = null,
+            val bookStatus: String? = null,
+            val category: String? = null,
+            val localCategory: String? = null
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class GetReadingData(
+            val tag: String = "file",
+            val stat: String = "get_reading_data",
+            val filename: String
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class SetReadingData(
+            val tag: String = "file",
+            val stat: String = "set_reading_data",
+            val filename: String,
+            val progress: String? = null,
+            val readingTime: String? = null
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class DeleteChapters(
+            val tag: String = "file",
+            val stat: String = "delete_chapters",
+            val filename: String,
+            val chapterIndices: List<Int>
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class GetStorageInfo(val tag: String = "file", val stat: String = "get_storage_info") :
+            FileMessagesToSend()
+
+        @Serializable
+        data class GetSettings(
+            val tag: String = "file",
+            val stat: String = "get_settings",
+            val keys: List<String>
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class SetSettings(
+            val tag: String = "file",
+            val stat: String = "set_settings",
+            val settings: Map<String, String>
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class GetBookmarks(
+            val tag: String = "file",
+            val stat: String = "get_bookmarks",
+            val filename: String
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class SetBookmarks(
+            val tag: String = "file",
+            val stat: String = "set_bookmarks",
+            val filename: String,
+            val bookmarks: List<BookmarkData>
+        ) : FileMessagesToSend()
+
+        @Serializable
+        data class DeleteBook(
+            val tag: String = "file",
+            val stat: String = "delete_book",
+            val filename: String
+        ) : FileMessagesToSend()
+    }
+}
+
+@Serializable
+data class BookmarkData(
+    val name: String,
+    val chapterIndex: Int,
+    val chapterName: String,
+    val offsetInChapter: Int = 0,
+    val scrollOffset: Int = 0,
+    val time: Long = 0
+)
+
+@Serializable
+private data class ChapterForTransfer(
+    val index: Int,
+    val name: String,
+    val content: String,
+    val wordCount: Int,
+    val chunkNum: Int = 0,
+    val totalChunks: Int = 1
+)
