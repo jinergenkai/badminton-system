@@ -1,0 +1,558 @@
+{
+  "_doc": "Every hype sound and which trigger pools it is in. A sound plays, in order: an MP3 dropped on the phone (<files>/sounds/<id>.mp3), the bundled assets/audio/hype/<id>.mp3, else its text via cached TTS. When a trigger fires is code (HypeVoiceController._triggerMatches); what it plays is here. Changes made on the phone are merged back with tools/pull_sound_library.py.",
+  "sounds": [
+    {
+      "id": "ap_dao_1",
+      "display": "ÁP ĐẢO",
+      "text": "Áp đảo!"
+    },
+    {
+      "id": "badminton_slayer_1",
+      "display": "BADMINTON\nSLAYER",
+      "text": "Badminton slayer!",
+      "glow": "fire"
+    },
+    {
+      "id": "cham_dut",
+      "display": "CHẤM DỨT",
+      "text": "Chấm dứt!"
+    },
+    {
+      "id": "comeback_king_1",
+      "display": "COMEBACK\nKING",
+      "text": "Comeback king!",
+      "glow": "legendary"
+    },
+    {
+      "id": "cu_danh_dep",
+      "display": "CÚ ĐÁNH ĐẸP",
+      "text": "Cú đánh đẹp!"
+    },
+    {
+      "id": "did_you_see_that_1",
+      "display": "DID YOU\nSEE THAT?",
+      "text": "Did you see that?",
+      "glow": "fire"
+    },
+    {
+      "id": "double_kill_1",
+      "display": "DOUBLE KILL",
+      "text": "Double kill!"
+    },
+    {
+      "id": "double_shot_1",
+      "display": "DOUBLE SHOT",
+      "text": "Double shot!"
+    },
+    {
+      "id": "female_pack/ai_can_noi_f",
+      "display": "AI CẢN NỔI",
+      "text": "Ai cản nổi!"
+    },
+    {
+      "id": "female_pack/an_sung_troi_ban_f",
+      "display": "ĂN SÚNG\nTRỜI BAN",
+      "text": "Ăn súng trời ban!"
+    },
+    {
+      "id": "female_pack/can_loi_can_y_f",
+      "display": "CẢN LỜI\nCẢN Ý",
+      "text": "Cản lời cản ý!"
+    },
+    {
+      "id": "female_pack/cao_thu_cao_thu_f",
+      "display": "CAO THỦ\nCAO THỦ",
+      "text": "Cao thủ cao thủ!"
+    },
+    {
+      "id": "female_pack/cham_dut_f",
+      "display": "CHẤM DỨT",
+      "text": "Chấm dứt!"
+    },
+    {
+      "id": "female_pack/chan_buoc_di_dau_khong_quay_lai",
+      "display": "CHÂN BƯỚC\nKHÔNG QUAY LẠI",
+      "text": "Chân bước không quay lại!"
+    },
+    {
+      "id": "female_pack/chay_the_nho_f",
+      "display": "CHẠY THẾ NHỚ",
+      "text": "Chạy thế nhớ!"
+    },
+    {
+      "id": "female_pack/co_may_ghi_diem_f",
+      "display": "CỖ MÁY\nGHI ĐIỂM",
+      "text": "Cỗ máy ghi điểm!"
+    },
+    {
+      "id": "female_pack/con_mua_ban_thang_f",
+      "display": "CƠN MƯA\nBÀN THẮNG",
+      "text": "Cơn mưa bàn thắng!"
+    },
+    {
+      "id": "female_pack/cu_danh_dep_f",
+      "display": "CÚ ĐÁNH ĐẸP",
+      "text": "Cú đánh đẹp!"
+    },
+    {
+      "id": "female_pack/cu_danh_sam_set_f",
+      "display": "CÚ ĐÁNH\nSẤM SÉT",
+      "text": "Cú đánh sấm sét!"
+    },
+    {
+      "id": "female_pack/cu_dap_ca_map_f",
+      "display": "CÚ ĐẬP\nCÁ MẬP",
+      "text": "Cú đập cá mập!"
+    },
+    {
+      "id": "female_pack/cu_nay_khet_f",
+      "display": "CÚ NÀY KHÉT",
+      "text": "Cú này khét!"
+    },
+    {
+      "id": "female_pack/de_bep_f",
+      "display": "DẸP BẸP",
+      "text": "Dẹp bẹp!"
+    },
+    {
+      "id": "female_pack/dep_nhu_mo_f",
+      "display": "ĐẸP NHƯ MƠ",
+      "text": "Đẹp như mơ!"
+    },
+    {
+      "id": "female_pack/dinh_cao_phong_do_f",
+      "display": "ĐỈNH CAO\nPHONG ĐỘ",
+      "text": "Đỉnh cao phong độ!"
+    },
+    {
+      "id": "female_pack/dinh_cua_chop_f",
+      "display": "ĐỈNH CỦA CHÓP",
+      "text": "Đỉnh của chóp!"
+    },
+    {
+      "id": "female_pack/dinh_noc_kich_tran_f",
+      "display": "ĐỈNH NÓC\nKÍCH TRẦN",
+      "text": "Đỉnh nóc kích trần!"
+    },
+    {
+      "id": "female_pack/dinh_the_nho_f",
+      "display": "ĐỈNH THẾ NHỜ",
+      "text": "Đỉnh thế nhờ!"
+    },
+    {
+      "id": "female_pack/duong_cau_lam_tho_f",
+      "display": "ĐƯỜNG CẦU\nLÀM THƠ",
+      "text": "Đường cầu làm thơ!"
+    },
+    {
+      "id": "female_pack/khet_let_f",
+      "display": "KHÉT LẸT",
+      "text": "Khét lẹt!"
+    },
+    {
+      "id": "female_pack/khoi_can_ban_cao_nhan_an_the_f",
+      "display": "CAO NHÂN\nẨN THẾ",
+      "text": "Cao nhân ẩn thế!"
+    },
+    {
+      "id": "female_pack/khong_ngung_bo_cuoc_f",
+      "display": "KHÔNG NGỪNG\nBỎ CUỘC",
+      "text": "Không ngừng bỏ cuộc!"
+    },
+    {
+      "id": "female_pack/khong_the_tin_duoc_f",
+      "display": "KHÔNG THỂ\nTIN ĐƯỢC",
+      "text": "Không thể tin được!"
+    },
+    {
+      "id": "female_pack/lat_keo_f",
+      "display": "LẬT KÈO",
+      "text": "Lật kèo!"
+    },
+    {
+      "id": "female_pack/man_nhan_f",
+      "display": "MÃN NHÃN",
+      "text": "Mãn nhãn!"
+    },
+    {
+      "id": "female_pack/manh_ho_vo_moi_f",
+      "display": "MÃNH HỔ\nVÔ MỒI",
+      "text": "Mãnh hổ vô mồi!"
+    },
+    {
+      "id": "female_pack/manh_ho_xuat_son_f",
+      "display": "MÃNH HỔ\nXUẤT SƠN",
+      "text": "Mãnh hổ xuất sơn!"
+    },
+    {
+      "id": "female_pack/mot_phat_chet_tuoi_f",
+      "display": "MỘT PHÁT\nCHẾT TƯƠI",
+      "text": "Một phát chết tươi!"
+    },
+    {
+      "id": "female_pack/mua_rao_giua_ha_f",
+      "display": "MƯA RÀO\nGIỮA HẠ",
+      "text": "Mưa rào giữa hạ!"
+    },
+    {
+      "id": "female_pack/nhu_dieu_dut_day_f",
+      "display": "NHƯ DIỀU\nĐỨT DÂY",
+      "text": "Như diều đứt dây!"
+    },
+    {
+      "id": "female_pack/nhu_tron_khong_nguoi_f",
+      "display": "NHƯ TRỐNG\nKHÔNG NGƯỜI",
+      "text": "Như trống không người!"
+    },
+    {
+      "id": "female_pack/phong_do_dinh_cao_f",
+      "display": "PHONG ĐỘ\nĐỈNH CAO",
+      "text": "Phong độ đỉnh cao!"
+    },
+    {
+      "id": "female_pack/qua_tang_mien_phi_f",
+      "display": "QUÀ TẶNG\nMIỄN PHÍ",
+      "text": "Quà tặng miễn phí!"
+    },
+    {
+      "id": "female_pack/quay_xe_cuc_gat_f",
+      "display": "QUAY XE\nCỰC GẮT",
+      "text": "Quay xe cực gắt!"
+    },
+    {
+      "id": "female_pack/sam_set_giua_troi_quang_f",
+      "display": "SẤM SÉT\nGIỮA TRỜI QUANG",
+      "text": "Sấm sét giữa trời quang!"
+    },
+    {
+      "id": "female_pack/sao_bang_xe_troi_f",
+      "display": "SAO BĂNG\nXẸT TRỜI",
+      "text": "Sao băng xẹt trời!"
+    },
+    {
+      "id": "female_pack/sao_ma_hay_vay_troi_f",
+      "display": "SAO MÀ HAY\nVẬY TRỜI",
+      "text": "Sao mà hay vậy trời!"
+    },
+    {
+      "id": "female_pack/thuc_tinh_he_thong_f",
+      "display": "THỨC TỈNH\nHỆ THỐNG",
+      "text": "Thức tỉnh hệ thống!"
+    },
+    {
+      "id": "female_pack/toi_cong_chuyen_f",
+      "display": "TÔI CÔNG\nCHUYÊN",
+      "text": "Tôi công chuyên!"
+    },
+    {
+      "id": "female_pack/tro_lai_tu_dong_tro_tan_f",
+      "display": "TRỞ LẠI TỪ\nĐỐNG TRO TÀN",
+      "text": "Trở lại từ đống tro tàn!"
+    },
+    {
+      "id": "female_pack/vo_dich_thien_ha_f",
+      "display": "VÔ ĐỊCH\nTHIÊN HẠ",
+      "text": "Vô địch thiên hạ!"
+    },
+    {
+      "id": "female_pack/xinh_trai_co_gi_sai_f",
+      "display": "XINH TRAI\nCÓ GÌ SAI",
+      "text": "Xinh trai có gì sai!"
+    },
+    {
+      "id": "female_pack/xuat_quy_nhap_than_f",
+      "display": "XUẤT QUỶ\nNHẬP THẦN",
+      "text": "Xuất quỷ nhập thần!"
+    },
+    {
+      "id": "game_on_1",
+      "display": "GAME ON",
+      "text": "Game on!"
+    },
+    {
+      "id": "game_on_2",
+      "display": "GAME ON",
+      "text": "Game on!"
+    },
+    {
+      "id": "godlike_1",
+      "display": "GODLIKE",
+      "text": "Godlike!",
+      "glow": "legendary"
+    },
+    {
+      "id": "here_we_go_1",
+      "display": "HERE WE GO",
+      "text": "Here we go!"
+    },
+    {
+      "id": "khong_the_can",
+      "display": "KHÔNG THỂ\nCẢN",
+      "text": "Không thể cản!"
+    },
+    {
+      "id": "legendary_1",
+      "display": "LEGENDARY",
+      "text": "Legendary!",
+      "glow": "legendary"
+    },
+    {
+      "id": "legendary_2",
+      "display": "LEGENDARY",
+      "text": "Legendary!",
+      "glow": "legendary"
+    },
+    {
+      "id": "lets_dance_1",
+      "display": "LET'S DANCE",
+      "text": "Let's dance!"
+    },
+    {
+      "id": "mom_are_you_watching_1",
+      "display": "MOM, ARE YOU\nWATCHING?",
+      "text": "Mom, are you watching?",
+      "glow": "legendary"
+    },
+    {
+      "id": "penta_shot_1",
+      "display": "PENTA SHOT",
+      "text": "Penta shot!",
+      "glow": "fire"
+    },
+    {
+      "id": "quadra_shot_1",
+      "display": "QUADRA SHOT",
+      "text": "Quadra shot!"
+    },
+    {
+      "id": "rampage_1",
+      "display": "RAMPAGE",
+      "text": "Rampage!",
+      "glow": "fire"
+    },
+    {
+      "id": "shutdown_1",
+      "display": "SHUTDOWN!",
+      "text": "Shutdown!",
+      "glow": "danger"
+    },
+    {
+      "id": "shutdown_3",
+      "display": "SHUTDOWN!",
+      "text": "Shutdown!",
+      "glow": "danger"
+    },
+    {
+      "id": "shutdown_4",
+      "display": "SHUTDOWN!",
+      "text": "Shutdown!",
+      "glow": "danger"
+    },
+    {
+      "id": "sieu_pham",
+      "display": "SIÊU PHẨM",
+      "text": "Siêu phẩm!"
+    },
+    {
+      "id": "the_chosen_one_1",
+      "display": "THE CHOSEN ONE",
+      "text": "The chosen one!",
+      "glow": "legendary"
+    },
+    {
+      "id": "triple_kill_1",
+      "display": "TRIPLE KILL",
+      "text": "Triple kill!"
+    },
+    {
+      "id": "triple_shot_1",
+      "display": "TRIPLE SHOT",
+      "text": "Triple shot!"
+    },
+    {
+      "id": "unbelievable_1",
+      "display": "UNBELIEVABLE",
+      "text": "Unbelievable!",
+      "glow": "legendary"
+    },
+    {
+      "id": "unbelievable_2",
+      "display": "UNBELIEVABLE",
+      "text": "Unbelievable!",
+      "glow": "legendary"
+    },
+    {
+      "id": "unstoppable_1",
+      "display": "UNSTOPPABLE",
+      "text": "Unstoppable!",
+      "glow": "fire"
+    },
+    {
+      "id": "unstoppable_2",
+      "display": "UNSTOPPABLE",
+      "text": "Unstoppable!",
+      "glow": "fire"
+    }
+  ],
+  "triggers": [
+    {
+      "id": "manual_trigger",
+      "priority": 1000,
+      "pool": [
+        "cu_danh_dep",
+        "did_you_see_that_1"
+      ]
+    },
+    {
+      "id": "match_end",
+      "priority": 95,
+      "pool": [
+        "female_pack/chan_buoc_di_dau_khong_quay_lai",
+        "female_pack/vo_dich_thien_ha_f"
+      ]
+    },
+    {
+      "id": "crucial_moment",
+      "priority": 80,
+      "pool": [
+        "unbelievable_1",
+        "unbelievable_2",
+        "did_you_see_that_1",
+        "female_pack/phong_do_dinh_cao_f",
+        "female_pack/dinh_cao_phong_do_f",
+        "female_pack/dinh_cua_chop_f",
+        "female_pack/sam_set_giua_troi_quang_f"
+      ]
+    },
+    {
+      "id": "shutdown",
+      "priority": 70,
+      "pool": [
+        "shutdown_1",
+        "shutdown_3",
+        "shutdown_4",
+        "cham_dut",
+        "female_pack/de_bep_f",
+        "female_pack/can_loi_can_y_f",
+        "female_pack/cham_dut_f",
+        "female_pack/khong_ngung_bo_cuoc_f"
+      ]
+    },
+    {
+      "id": "comeback",
+      "priority": 60,
+      "pool": [
+        "comeback_king_1",
+        "unbelievable_1",
+        "unbelievable_2",
+        "mom_are_you_watching_1",
+        "female_pack/tro_lai_tu_dong_tro_tan_f",
+        "female_pack/quay_xe_cuc_gat_f",
+        "female_pack/lat_keo_f"
+      ]
+    },
+    {
+      "id": "streak_high",
+      "priority": 50,
+      "pool": [
+        "rampage_1",
+        "unstoppable_1",
+        "unstoppable_2",
+        "badminton_slayer_1",
+        "khong_the_can",
+        "ap_dao_1",
+        "did_you_see_that_1",
+        "female_pack/dinh_noc_kich_tran_f",
+        "female_pack/ai_can_noi_f",
+        "female_pack/nhu_tron_khong_nguoi_f",
+        "female_pack/manh_ho_xuat_son_f",
+        "female_pack/xuat_quy_nhap_than_f",
+        "female_pack/co_may_ghi_diem_f",
+        "female_pack/khong_the_tin_duoc_f",
+        "female_pack/thuc_tinh_he_thong_f"
+      ]
+    },
+    {
+      "id": "streak_4",
+      "priority": 50,
+      "pool": [
+        "quadra_shot_1"
+      ]
+    },
+    {
+      "id": "streak_5_plus",
+      "priority": 50,
+      "pool": [
+        "penta_shot_1",
+        "godlike_1",
+        "legendary_1",
+        "legendary_2",
+        "the_chosen_one_1",
+        "mom_are_you_watching_1",
+        "female_pack/cao_thu_cao_thu_f",
+        "female_pack/manh_ho_vo_moi_f",
+        "female_pack/khoi_can_ban_cao_nhan_an_the_f"
+      ]
+    },
+    {
+      "id": "streak_low",
+      "priority": 50,
+      "pool": [
+        "sieu_pham",
+        "cu_danh_dep",
+        "female_pack/cu_danh_dep_f",
+        "female_pack/cu_nay_khet_f",
+        "female_pack/khet_let_f",
+        "female_pack/mot_phat_chet_tuoi_f",
+        "female_pack/cu_dap_ca_map_f",
+        "female_pack/mua_rao_giua_ha_f",
+        "female_pack/sao_bang_xe_troi_f",
+        "female_pack/dinh_the_nho_f"
+      ]
+    },
+    {
+      "id": "streak_2",
+      "priority": 50,
+      "pool": [
+        "double_kill_1",
+        "double_shot_1",
+        "female_pack/cu_danh_sam_set_f"
+      ]
+    },
+    {
+      "id": "streak_3",
+      "priority": 50,
+      "pool": [
+        "triple_kill_1",
+        "triple_shot_1"
+      ]
+    },
+    {
+      "id": "random_meme",
+      "priority": 50,
+      "pool": [
+        "female_pack/chay_the_nho_f",
+        "female_pack/xinh_trai_co_gi_sai_f",
+        "female_pack/qua_tang_mien_phi_f",
+        "female_pack/an_sung_troi_ban_f",
+        "female_pack/toi_cong_chuyen_f",
+        "female_pack/nhu_dieu_dut_day_f",
+        "female_pack/duong_cau_lam_tho_f",
+        "female_pack/con_mua_ban_thang_f",
+        "female_pack/man_nhan_f",
+        "female_pack/dep_nhu_mo_f",
+        "female_pack/sao_ma_hay_vay_troi_f"
+      ]
+    },
+    {
+      "id": "first_point_of_match",
+      "priority": 0,
+      "pool": [
+        "game_on_1",
+        "game_on_2",
+        "lets_dance_1",
+        "here_we_go_1"
+      ]
+    }
+  ]
+}

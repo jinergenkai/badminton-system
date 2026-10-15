@@ -1,0 +1,242 @@
+import 'package:flutter_tts/flutter_tts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'audio_settings.dart';
+import 'package:get/get.dart';
+
+class TtsService extends GetxService {
+  final FlutterTts _flutterTts = FlutterTts();
+  bool _isInitialized = false;
+  final RxString _currentLanguage = 'vi-VN'.obs;
+  final RxBool isSpeaking = false.obs;
+  final RxDouble volume = 1.0.obs;
+
+  // Callback when speech finishes
+  Function? onSpeechCompleted;
+
+  Future<void> initialize() async {
+    try {
+      print('🔊 [TTS] Initializing Text-to-Speech...');
+
+      // Setup handlers
+      _flutterTts.setStartHandler(() {
+        isSpeaking.value = true;
+      });
+
+      _flutterTts.setCompletionHandler(() {
+        print('🔊 [TTS] Speech completed');
+        isSpeaking.value = false;
+        if (onSpeechCompleted != null) {
+          onSpeechCompleted!();
+        }
+      });
+
+      _flutterTts.setErrorHandler((msg) {
+        isSpeaking.value = false;
+      });
+
+      _flutterTts.setCancelHandler(() {
+        isSpeaking.value = false;
+      });
+      final prefs = await SharedPreferences.getInstance();
+      _currentLanguage.value = prefs.getString('tts_language') ?? 'vi-VN';
+      // Clamped: a level above 100% may be saved from a build that allowed it.
+      volume.value = (prefs.getDouble('tts_volume') ?? 1.0).clamp(0.0, 1.0);
+
+      // Cấu hình TTS
+      await _flutterTts.setLanguage(_currentLanguage.value);
+      await _flutterTts.setSpeechRate(0.6); // Chậm để nghe rõ
+      await _flutterTts.setVolume(_scaled(volume.value));
+      await _flutterTts.setPitch(1.0);
+      AudioSettings.maybe?.masterVolume
+          .listen((_) => _flutterTts.setVolume(_scaled(volume.value)));
+
+      _isInitialized = true;
+      print('🔊 [TTS] ✅ Ready! Language: ${_currentLanguage.value}');
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error initializing: $e');
+    }
+  }
+
+  double _scaled(double v) {
+    final m = AudioSettings.maybe;
+    return m == null ? v : m.scale(v);
+  }
+
+  Future<void> saveVolumePreference() async {
+    await _flutterTts.setVolume(_scaled(volume.value));
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('tts_volume', volume.value);
+  }
+
+  Future<void> setLanguage(String languageCode) async {
+    try {
+      _currentLanguage.value = languageCode;
+      await _flutterTts.setLanguage(languageCode);
+
+      // Save preference
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('tts_language', languageCode);
+
+      print('🔊 [TTS] Language changed to: $languageCode');
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error setting language: $e');
+    }
+  }
+
+  String get currentLanguage => _currentLanguage.value;
+  RxString get currentLanguageRx => _currentLanguage;
+
+  Future<void> announceScore(
+    int teamAScore,
+    int teamBScore,
+    String scoringTeam,
+  ) async {
+    if (!_isInitialized) {
+      await initialize();
+    }
+
+    try {
+      String announcement;
+      int say(int n) => AudioSettings.spokenScore(n, _currentLanguage.value);
+      if (teamAScore == teamBScore) {
+        announcement = _currentLanguage.value.startsWith('vi')
+            ? "${say(teamAScore)} đều"
+            : "$teamAScore all";
+      } else {
+        // Scoring team reads first (badminton rule: server announces first)
+        final first = say(scoringTeam == 'A' ? teamAScore : teamBScore);
+        final second = say(scoringTeam == 'A' ? teamBScore : teamAScore);
+        announcement = "$first, $second";
+      }
+
+      print('🔊 [TTS] 📢 Announcing: "$announcement"');
+
+      await _flutterTts.speak(announcement);
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error speaking: $e');
+    }
+  }
+
+  Future<void> announceWinner(
+    String winnerName,
+    int teamAScore,
+    int teamBScore,
+  ) async {
+    if (!_isInitialized) return;
+
+    try {
+      String announcement;
+      if (_currentLanguage.value.startsWith('vi')) {
+        // For Vietnamese, we still use the "thắng" pattern
+        announcement = "$winnerName thắng $teamAScore $teamBScore";
+      } else {
+        announcement = "$winnerName wins $teamAScore $teamBScore";
+      }
+
+      print('🔊 [TTS] 🏆 Announcing: "$announcement"');
+      await _flutterTts.speak(announcement);
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error: $e');
+    }
+  }
+
+  Future<void> announceNewBattle() async {
+    if (!_isInitialized) await initialize();
+
+    try {
+      String announcement;
+      if (_currentLanguage.value.startsWith('vi')) {
+        announcement = 'Trận mới bắt đầu!';
+      } else {
+        announcement = "New battle begins!";
+      }
+
+      print('🔊 [TTS] 🆕 Announcing: "$announcement"');
+      await _flutterTts.speak(announcement);
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error: $e');
+    }
+  }
+
+  Future<void> announceUndo(
+      int teamAScore, int teamBScore, String undoneTeam) async {
+    if (!_isInitialized) await initialize();
+
+    try {
+      String announcement;
+      final String scoreText;
+      if (teamAScore == teamBScore) {
+        scoreText = _currentLanguage.value.startsWith('vi')
+            ? "$teamAScore đều"
+            : "$teamAScore all";
+      } else {
+        // After undo, the team that LOST the point no longer serves.
+        // The other team now serves → reads first.
+        final serverIsA = undoneTeam == 'B';
+        final first = serverIsA ? teamAScore : teamBScore;
+        final second = serverIsA ? teamBScore : teamAScore;
+        scoreText = "$first $second";
+      }
+      announcement = _currentLanguage.value.startsWith('vi')
+          ? "Hoàn tác, $scoreText"
+          : "Undo, $scoreText";
+
+      print('🔊 [TTS] ↩️ Announcing: "$announcement"');
+      await _flutterTts.speak(announcement);
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error speaking: $e');
+    }
+  }
+
+  /// Render [text] to a WAV file at [path] (for VoiceClipService). Waits for
+  /// the engine to finish; its completion is a separate "synth" event, so the
+  /// speech-completed hype chain is not triggered.
+  Future<bool> synthesizeTo(String text, String path) async {
+    if (!_isInitialized) await initialize();
+    try {
+      await _flutterTts.awaitSynthCompletion(true);
+      final r = await _flutterTts
+          .synthesizeToFile(text, path, true)
+          .timeout(const Duration(seconds: 10));
+      return r == 1;
+    } catch (e) {
+      print('🔊 [TTS] synthesize failed: $e');
+      return false;
+    }
+  }
+
+  /// Speak any text
+  Future<void> speak(String text) async {
+    if (!_isInitialized) await initialize();
+
+    try {
+      await _flutterTts.speak(text);
+    } catch (e) {
+      print('🔊 [TTS] ❌ Error speaking: $e');
+    }
+  }
+
+  Future<void> testSpeech() async {
+    if (!_isInitialized) await initialize();
+
+    if (_currentLanguage.value.startsWith('vi')) {
+      await _flutterTts.speak("Xin chào");
+    } else if (_currentLanguage.value.startsWith('zh')) {
+      await _flutterTts.speak("你好");
+    } else if (_currentLanguage.value.startsWith('ja')) {
+      await _flutterTts.speak("こんにちは");
+    } else if (_currentLanguage.value.startsWith('ko')) {
+      await _flutterTts.speak("안녕하세요");
+    } else {
+      await _flutterTts.speak("Hello");
+    }
+  }
+
+  Future<void> stop() async {
+    await _flutterTts.stop();
+  }
+
+  void dispose() {
+    _flutterTts.stop();
+  }
+}

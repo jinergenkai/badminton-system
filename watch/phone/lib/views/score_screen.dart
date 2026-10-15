@@ -1,0 +1,598 @@
+import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:voice_counter/services/music_service.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import '../controllers/score_controller.dart';
+import '../features/hype_voice/services/hype_voice_controller.dart';
+import '../widgets/team_card.dart';
+import '../widgets/kill_overlay.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'history_screen.dart';
+import 'settings_screen.dart';
+import 'players_screen.dart';
+import 'sound_library_screen.dart';
+import '../services/phone_controls_service.dart';
+import 'utility_screen.dart';
+import '../features/camera/camera_link_service.dart';
+import '../features/camera/board_recorder.dart';
+
+class ScoreScreen extends StatefulWidget {
+  const ScoreScreen({super.key});
+
+  @override
+  State<ScoreScreen> createState() => _ScoreScreenState();
+}
+
+class _ScoreScreenState extends State<ScoreScreen> {
+  late final ScoreController controller;
+
+  @override
+  void initState() {
+    super.initState();
+    WakelockPlus.enable();
+    controller = Get.put(ScoreController());
+  }
+
+  @override
+  void dispose() {
+    WakelockPlus.disable();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          // MAIN APP UI
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF0F172A), Color(0xFF1E1B4B), Color(0xFF312E81)],
+              ),
+            ),
+            child: SafeArea(
+              child: Column(
+                children: [
+                  _buildModernTopBar(context, controller),
+
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: Obx(() {
+                        final state = controller.gameStateObservable.value;
+                        // Each team keeps its own colour, score and watch
+                        // button; swapping only reverses the order they are
+                        // laid out in, so the board matches the court.
+                        final swapped = controller.sidesSwapped.value;
+                        final cardA = Expanded(
+                          flex: 10,
+                          child: TeamCard(
+                            teamId: 'A',
+                            teamName: controller.labelFor('A') ?? state.teamAName,
+                            score: state.teamAScore,
+                            primaryColor: Colors.redAccent,
+                            accentColor: Colors.orangeAccent,
+                            onIncrement: controller.incrementTeamA,
+                            onDecrement: controller.decrementTeamA,
+                            isActive: state.isGameActive,
+                            mascotAsset: 'assets/image/dog_smash.png',
+                            isLeftPanel: !swapped,
+                          ),
+                        );
+                        final cardB = Expanded(
+                          flex: 10,
+                          child: TeamCard(
+                            teamId: 'B',
+                            teamName: controller.labelFor('B') ?? state.teamBName,
+                            score: state.teamBScore,
+                            primaryColor: Colors.blueAccent,
+                            accentColor: Colors.cyanAccent,
+                            onIncrement: controller.incrementTeamB,
+                            onDecrement: controller.decrementTeamB,
+                            isActive: state.isGameActive,
+                            mascotAsset: 'assets/image/cat_dropshot.png',
+                            isLeftPanel: swapped,
+                          ),
+                        );
+                        return LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isPortrait = constraints.maxWidth < constraints.maxHeight;
+                            return Flex(
+                              direction: isPortrait ? Axis.vertical : Axis.horizontal,
+                              children: [
+                                swapped ? cardB : cardA,
+                                const SizedBox(width: 4, height: 4),
+                                swapped ? cardA : cardB,
+                              ],
+                            );
+                          },
+                        );
+                      }),
+                    ),
+                  ),
+
+                  _buildBottomControls(controller),
+                ],
+              ),
+            ),
+          ),
+
+          // EPIC WIN OVERLAY
+          Obx(() {
+            if (controller.isGameEnded.value) {
+              return _buildEpicWinOverlay(controller);
+            }
+            return const SizedBox.shrink();
+          }),
+
+          // KILL / HYPE OVERLAY (full screen, above everything)
+          Obx(() {
+            final hype = Get.find<HypeVoiceController>();
+            final event = hype.displayEvent.value;
+            if (event == null) return const SizedBox.shrink();
+            final mascot = event.team == 'A'
+                ? 'assets/image/dog_smash.png'
+                : 'assets/image/cat_dropshot.png';
+            return KillOverlay(key: ValueKey(event.voiceId), event: event, mascotAsset: mascot);
+          }),
+
+          // BLANK (from the band). Topmost, opaque, swallows every tap so the
+          // board cannot be scored while the user is away. Long-press is the
+          // escape hatch if the band is out of reach.
+          Obx(() {
+            if (!controller.phoneBlank.value) return const SizedBox.shrink();
+            return Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onLongPress: () => controller.setPhoneBlank(false),
+                child: const ColoredBox(color: Colors.black),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEpicWinOverlay(ScoreController controller) {
+    final winner = controller.gameState.winner;
+    final winnerName = controller.winnerDisplay();
+    final isTeamA = winner == 'A';
+    final winColor = isTeamA ? Colors.redAccent : Colors.blueAccent;
+    final mascot = isTeamA ? 'assets/image/dog_smash.png' : 'assets/image/cat_dropshot.png';
+    final delay = controller.autoResetDelay.value;
+
+    return GestureDetector(
+      onTap: controller.resetGame,
+      child: Container(
+        color: Colors.black.withOpacity(0.92),
+        width: double.infinity,
+        height: double.infinity,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Mascot large celebratory image
+            Image.asset(mascot, width: 160, height: 160, fit: BoxFit.contain)
+                .animate()
+                .scale(duration: 600.ms, curve: Curves.elasticOut)
+                .then()
+                .shake(duration: 400.ms, hz: 4),
+            const SizedBox(height: 16),
+            Text(
+              'WINNER',
+              style: TextStyle(
+                  color: Colors.white70,
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 8),
+            ).animate().fadeIn(delay: 300.ms),
+            const SizedBox(height: 8),
+            Text(
+              winnerName.toUpperCase(),
+              style: TextStyle(
+                color: winColor,
+                fontSize: 60,
+                fontWeight: FontWeight.w900,
+                shadows: [Shadow(color: winColor, blurRadius: 40)],
+              ),
+              textAlign: TextAlign.center,
+            ).animate().scale(
+                delay: 500.ms, duration: 400.ms, curve: Curves.easeOutBack),
+            const SizedBox(height: 40),
+
+            const SizedBox(height: 24),
+
+            Text(
+              'Tap anywhere or wait ${delay}s to reset',
+              style: const TextStyle(
+                  color: Colors.white24,
+                  fontSize: 14,
+                  fontStyle: FontStyle.italic),
+            ).animate().fadeIn(delay: 1000.ms),
+          ],
+        ),
+      ),
+    ).animate().fadeIn(duration: 400.ms);
+  }
+
+  Widget _buildModernTopBar(BuildContext context, ScoreController controller) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Obx(() {
+            final isConnected = controller.isWatchConnected.value;
+            return GestureDetector(
+              onTap: () => _showWatchSettings(context, controller),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 300),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isConnected ? Colors.blueAccent : Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: isConnected ? [BoxShadow(color: Colors.blueAccent.withOpacity(0.4), blurRadius: 10)] : null,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(isConnected ? Icons.watch : Icons.watch_off, size: 20, color: isConnected ? Colors.white : Colors.white24),
+                    const SizedBox(width: 10),
+                    Text(
+                      isConnected ? 'MI BAND 10 ONLINE' : 'BAND DISCONNECTED',
+                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 0.5),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          // Scrolls sideways when the screen is too narrow for every
+          // button (a phone held upright): the last ones stay reachable.
+          const SizedBox(width: 12),
+          Flexible(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              reverse: true,
+              child: Row(
+            children: [
+              // Phone volume and screen brightness, always shown: green = at
+              // max, orange = not. Volume: tap for max (the band's Master is
+              // the knob to turn down). Brightness: tap toggles max.
+              if (PhoneControlsService.maybe != null) ...[
+                Obx(() {
+                  final c = PhoneControlsService.maybe!;
+                  final ok = c.volumeAtMax;
+                  return _buildStatusChip(
+                    icon: ok ? Icons.volume_up : Icons.volume_down,
+                    label: c.volMax.value == 0 ? '?' : '${c.vol.value}/${c.volMax.value}',
+                    ok: ok,
+                    onTap: c.setVolumeMax,
+                  );
+                }),
+                const SizedBox(width: 8),
+                Obx(() {
+                  final c = PhoneControlsService.maybe!;
+                  final on = c.brightMax.value;
+                  return _buildStatusChip(
+                    icon: on ? Icons.brightness_high : Icons.brightness_medium,
+                    label: on ? 'MAX' : 'AUTO',
+                    ok: on,
+                    onTap: c.toggleBrightness,
+                  );
+                }),
+                const SizedBox(width: 12),
+              ],
+              // Cameras: shown once one is in play (the corner phone linked, or
+              // this device recording); REC when any of them records.
+              Obx(() {
+                final l = CameraLinkService.maybe;
+                final own = BoardRecorder.maybe;
+                final linked = l?.connected.value ?? false;
+                final ownOn = own?.on.value ?? false;
+                if (!linked && !ownOn) return const SizedBox.shrink();
+                own?.rig?.recording.value;
+                final rec = (l?.recording ?? false) || (own?.recording ?? false);
+                return Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: _buildStatusChip(
+                    icon: rec ? Icons.fiber_manual_record : Icons.videocam_outlined,
+                    label: rec ? 'REC' : 'CAM',
+                    ok: rec,
+                    onTap: () => Get.to(() => const UtilityScreen()),
+                  ),
+                );
+              }),
+              _buildTopIconButton(icon: Icons.groups, onPressed: () => Get.to(() => const PlayersScreen())),
+              const SizedBox(width: 12),
+              _buildTopIconButton(icon: Icons.library_music, onPressed: () => Get.to(() => const SoundLibraryScreen())),
+              const SizedBox(width: 12),
+              _buildTopIconButton(icon: Icons.history, onPressed: () => Get.to(() => const HistoryScreen())),
+              const SizedBox(width: 12),
+              _buildTopIconButton(icon: Icons.apps, onPressed: () => Get.to(() => const UtilityScreen())),
+              const SizedBox(width: 12),
+              _buildTopIconButton(icon: Icons.settings, onPressed: () => Get.to(() => const SettingsScreen())),
+            ],
+          ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatusChip(
+      {required IconData icon, required String label, required bool ok, required VoidCallback onTap}) {
+    final color = ok ? Colors.greenAccent : Colors.orangeAccent;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(ok ? 0.06 : 0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withOpacity(ok ? 0.4 : 1)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 4),
+            Text(label, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTopIconButton({required IconData icon, required VoidCallback onPressed}) {
+    return InkWell(
+      onTap: onPressed,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+        child: Icon(icon, color: Colors.white70, size: 24),
+      ),
+    );
+  }
+
+  Widget _buildBottomControls(ScoreController controller) {
+    final MusicService musicService = Get.find<MusicService>();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.5),
+        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              // Music Controls Area
+              Expanded(
+                child: Obx(() {
+                  final isPlaying = musicService.isPlaying.value;
+                  final trackName = musicService.currentTrackName.value;
+                  final isNonStop = musicService.isNonStop.value;
+                  final playMode = musicService.playMode.value;
+
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white10),
+                    ),
+                    child: Row(
+                      children: [
+                        // Play/Pause
+                        _buildMusicAction(
+                          icon: isPlaying ? Icons.pause : Icons.play_arrow,
+                          onTap: () => isPlaying ? musicService.pause() : musicService.resume(),
+                          color: isPlaying ? Colors.greenAccent : Colors.white70,
+                        ),
+                        
+                        const SizedBox(width: 8),
+
+                        // Track Info
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                trackName.isEmpty ? 'MUSIC STANDBY' : trackName.toUpperCase(),
+                                style: TextStyle(
+                                  color: trackName.isEmpty ? Colors.white24 : Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => musicService.toggleNonStop(),
+                                    child: Text(
+                                      isNonStop ? 'NON-STOP ON' : 'SINGLE PLAY',
+                                      style: TextStyle(
+                                        color: isNonStop ? Colors.orangeAccent : Colors.white24,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  GestureDetector(
+                                    onTap: () {
+                                      musicService.playMode.value = (playMode == 'random' ? 'sequential' : 'random');
+                                      musicService.savePreferences();
+                                    },
+                                    child: Text(
+                                      playMode.toUpperCase(),
+                                      style: const TextStyle(
+                                        color: Colors.blueAccent,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+
+                        // Next Track
+                        _buildMusicAction(
+                          icon: Icons.skip_next,
+                          onTap: () => musicService.next(),
+                          color: Colors.white70,
+                          isSmall: true,
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              ),
+
+              const SizedBox(width: 16),
+
+              // Action Buttons
+              _buildCircleAction(icon: Icons.undo, color: Colors.orangeAccent, onTap: () => controller.undo(), isEnabled: true),
+              const SizedBox(width: 12),
+              _buildCircleAction(icon: Icons.refresh, color: Colors.redAccent, onTap: () => _confirmReset(controller), isEnabled: true),
+            ],
+          ),
+          
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMusicAction({required IconData icon, required VoidCallback onTap, required Color color, bool isSmall = false}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: EdgeInsets.all(isSmall ? 6 : 10),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: color, size: isSmall ? 18 : 22),
+      ),
+    );
+  }
+
+
+  Widget _buildCircleAction({required IconData icon, required Color color, required VoidCallback onTap, required bool isEnabled}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(30),
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          shape: BoxShape.circle,
+          border: Border.all(color: color.withOpacity(0.3)),
+        ),
+        child: Icon(icon, color: color, size: 26),
+      ),
+    );
+  }
+
+  void _showWatchSettings(BuildContext context, ScoreController controller) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(28),
+        decoration: const BoxDecoration(color: Color(0xFF1E1B4B), borderRadius: BorderRadius.vertical(top: Radius.circular(40))),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 32),
+            const Text('Watch Connectivity', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 20),
+            // Step-0 diagnostics. The handshake has to be readable on the
+            // court, where there is no adb.
+            Obx(() {
+              final oneWay = controller.watchService.sendPathUp.value &&
+                  !controller.watchService.listenerRegistered.value;
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.35),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: oneWay ? Colors.orangeAccent : Colors.white12,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (oneWay)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          'ONE-WAY: watch → phone is DOWN',
+                          style: TextStyle(
+                              color: Colors.orangeAccent,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    Text(
+                      controller.watchService.diagnostics.value,
+                      style: const TextStyle(
+                          color: Colors.white70, fontSize: 11, height: 1.5),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+            _settingsListTile(icon: Icons.bluetooth_searching, title: 'Reconnect Watch', color: Colors.blueAccent, onTap: () { Navigator.pop(context); controller.watchService.initialize(force: true); }),
+            const SizedBox(height: 16),
+            _settingsListTile(icon: Icons.rocket_launch, title: 'Launch App on Watch', color: Colors.purpleAccent, onTap: () { Navigator.pop(context); controller.watchService.launchWearApp(); }),
+            const SizedBox(height: 16),
+            _settingsListTile(icon: Icons.sync, title: 'Refresh From Band', color: Colors.greenAccent, onTap: () { Navigator.pop(context); controller.watchService.sendScoreCommand('request_current_state'); }),
+            const SizedBox(height: 24),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _settingsListTile({required IconData icon, required String title, required Color color, required VoidCallback onTap}) {
+    return ListTile(
+      onTap: onTap,
+      leading: Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(14)), child: Icon(icon, color: color)),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      tileColor: Colors.white.withOpacity(0.04),
+    );
+  }
+
+  void _confirmReset(ScoreController controller) {
+    Get.dialog(AlertDialog(
+      backgroundColor: const Color(0xFF1E1B4B),
+      title: const Text('Reset Match?', style: TextStyle(color: Colors.white)),
+      actions: [
+        TextButton(onPressed: () => Get.back(), child: const Text('CANCEL')),
+        ElevatedButton(style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent), onPressed: () { controller.resetGame(); Get.back(); }, child: const Text('RESET')),
+      ],
+    ));
+  }
+}

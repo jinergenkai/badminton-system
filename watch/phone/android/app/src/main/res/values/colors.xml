@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Icon disc: the app's amber accent -->
+    <color name="ic_launcher_background">#FFC107</color>
+    <!-- Splash and window behind Flutter: the app's background (Ui.bg) -->
+    <color name="splash_background">#0F172A</color>
+</resources>

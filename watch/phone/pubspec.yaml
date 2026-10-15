@@ -1,0 +1,61 @@
+name: voice_counter
+description: "A new Flutter project."
+publish_to: "none"
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.8.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  get: ^4.6.6
+  flutter_animate: ^4.5.0
+  flutter_tts: ^4.2.3
+  shared_preferences: ^2.5.3
+
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+
+  uuid: ^4.5.1
+
+  # Audio Playback for Hype Feature
+  audioplayers: ^6.1.0
+  path_provider: ^2.1.4
+  crypto: ^3.0.3
+
+  # Keep screen on while scoring
+  wakelock_plus: ^1.2.10
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  fake_async: ^1.3.1
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.8
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/audio/hype/
+    - assets/audio/hype/female_pack/
+    - assets/audio/music/
+    - assets/audio/score/vi/
+    - assets/audio/score/en/
+    - assets/config/sound_library.json
+    - assets/image/
+
+  # Bundled, not fetched: google_fonts downloaded these on first use, and a
+  # court tablet without internet fell back to a plain font for the score.
+  fonts:
+    - family: Orbitron
+      fonts:
+        - asset: assets/fonts/Orbitron-Variable.ttf
+    - family: Poppins
+      fonts:
+        - asset: assets/fonts/Poppins-Regular.ttf
+        - asset: assets/fonts/Poppins-Medium.ttf
+          weight: 500
