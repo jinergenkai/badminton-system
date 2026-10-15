@@ -4,7 +4,8 @@
       "Bash(/d/lib/flutter/bin/dart analyze *)",
       "Bash(awk '{print $5, $9}')",
       "Bash(adb devices *)",
-      "Bash(adb shell *)"
+      "Bash(adb shell *)",
+      "PowerShell(adb shell *)"
     ]
   }
 }
