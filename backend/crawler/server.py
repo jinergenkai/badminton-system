@@ -87,6 +87,9 @@ def load_data(data_dir: str) -> dict:
         name = os.path.basename(path)
         if name.startswith("_") or name.startswith("."):
             continue
+        # trong Docker config.json nằm chung data/ (CONFIG_PATH) — không phải file booking
+        if name == "config.json" or os.path.abspath(path) == os.path.abspath(CONFIG_PATH):
+            continue
         try:
             doc = json.load(open(path, encoding="utf-8"))
         except Exception as e:
@@ -306,7 +309,8 @@ def crawl_coverage(started_ts: float | None = None) -> dict:
                          "have": have, "fresh": fresh, "total": len(days)})
     # lần cào gần nhất = file data mới nhất
     files = glob.glob(os.path.join(HERE, "data", "*.json"))
-    files = [f for f in files if not os.path.basename(f).startswith(("_", "sample_"))]
+    files = [f for f in files if not os.path.basename(f).startswith(("_", "sample_"))
+             and os.path.basename(f) != "config.json"]
     newest = max((os.path.getmtime(f) for f in files), default=0)
     return {"branches": branches, "interval_min": cfg.get("interval_min", 30),
             "days_window": window_size_cfg(cfg), "tracking": started_ts is not None,
