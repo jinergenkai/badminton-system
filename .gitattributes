@@ -1,0 +1,6 @@
+# File chạy/đọc trên Linux (Dokploy) phải là LF — CRLF làm hỏng `\` nối dòng trong Dockerfile/sh.
+Dockerfile      text eol=lf
+.dockerignore   text eol=lf
+*.sh            text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
