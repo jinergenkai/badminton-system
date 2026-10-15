@@ -129,21 +129,13 @@ Cấu hình, **một token dùng chung**:
 | Ở đâu | Biến | Giá trị |
 |---|---|---|
 | Vercel | `CRAWLER_TOKEN` | chuỗi ngẫu nhiên dài |
-| Vercel | `CRAWLER_TRIGGER_URL` | `http://<IP server>:8000/api/crawl/run` (chỉ cần nếu muốn nút Cào ngay) |
-| `backend/crawler/.env` | `PUSH_URL` | `https://<project>.vercel.app/api/courts` |
-| `backend/crawler/.env` | `PUSH_TOKEN` | giống `CRAWLER_TOKEN` |
+| Vercel | `CRAWLER_TRIGGER_URL` | `https://caulongapi.app.huynhhanh.com/api/crawl/run` |
+| Dokploy (crawler) | `PUSH_URL` | `https://<project>.vercel.app/api/courts` |
+| Dokploy (crawler) | `PUSH_TOKEN` | giống `CRAWLER_TOKEN` |
 
-Muốn nút Cào ngay: chạy `python server.py --host 0.0.0.0` và mở cổng 8000. Từ internet chỉ
-gọi được đúng `POST /api/crawl/run`, phải có token, cách nhau tối thiểu 2 phút; đổi danh sách
-sân vẫn chỉ làm được từ máy nhà/LAN/Tailscale.
-
-Cài thành service (tự chạy lại khi crash/khởi động máy) — xem `backend/crawler/deploy/alobo-service.sh help` (sẽ được thay bằng Dokploy — xem `backend/`):
-
-```bash
-./backend/crawler/deploy/alobo-service.sh setup                 # home server, 1 lần, không sudo
-sudo ./backend/crawler/deploy/alobo-service.sh install          # home server, chỉ cào khi bấm trên web
-sudo ./backend/crawler/deploy/alobo-service.sh relay-install <IP WireGuard của home>   # trên Linode
-```
+Crawler chạy trên Dokploy ở home server — cách deploy: [`backend/README.md`](../backend/README.md).
+Từ internet chỉ gọi được đúng `POST /api/crawl/run`, phải có token, cách nhau tối thiểu 2 phút;
+đổi danh sách sân chỉ làm được qua SSH tunnel về home server.
 
 Sửa giao diện heatmap: sửa `backend/crawler/viz/index.html` rồi chạy
 `python backend/crawler/make_courts_page.py` (chạy từ root repo hoặc đâu cũng được) — **đừng sửa tay `courts.html`**.

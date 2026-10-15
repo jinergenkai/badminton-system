@@ -26,7 +26,8 @@ import adapt  # dùng weekday helper + redact qua alobo_codec
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
-CONFIG = os.path.join(HERE, "config.json")
+# CONFIG_PATH: trong Docker trỏ vào volume (data/config.json) để sửa trên UI không mất khi redeploy
+CONFIG = os.environ.get("CONFIG_PATH") or os.path.join(HERE, "config.json")
 
 DEFAULT_CONFIG = {
     "branches": ["sport_bui_thi_xuan_badminton"],

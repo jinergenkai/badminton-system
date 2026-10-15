@@ -158,8 +158,14 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
                     break
         if chrome_path:
             launch_args["executable_path"] = chrome_path
+        # PLAYWRIGHT_WS (vd ws://<container chromium>:3000/) → nối vào Playwright server dùng
+        # chung trên Dokploy thay vì tự mở Chromium. Client phải cùng major.minor với server.
+        ws_endpoint = os.environ.get("PLAYWRIGHT_WS", "").strip()
         try:
-            _BROWSER = _PLAYWRIGHT.chromium.launch(**launch_args)
+            if ws_endpoint:
+                _BROWSER = _PLAYWRIGHT.chromium.connect(ws_endpoint, timeout=30_000)
+            else:
+                _BROWSER = _PLAYWRIGHT.chromium.launch(**launch_args)
             _CONTEXT = _BROWSER.new_context(
                 locale="vi-VN", viewport={"width": 1366, "height": 900}
             )
@@ -176,7 +182,8 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
             _PAGE.on("request", capture_signature)
         except Exception as exc:
             _PAGE = _CONTEXT = _BROWSER = _PLAYWRIGHT = None
-            raise RuntimeError(f"Không thể khởi động Chrome cho ALOBO: {exc}") from exc
+            where = f"Playwright server {ws_endpoint}" if ws_endpoint else "Chrome"
+            raise RuntimeError(f"Không thể khởi động {where} cho ALOBO: {exc}") from exc
 
     def refresh_signature() -> None:
         """Buộc app phát request bootstrap và chờ header ký mới trong RAM."""

@@ -1,0 +1,10 @@
+# Bí mật + dữ liệu KHÔNG được vào image (truyền qua env / volume)
+.env
+envelope.json
+data/
+_*.json
+__pycache__/
+*.pyc
+.venv/
+deploy/
+test*.py

@@ -160,7 +160,7 @@ def load_data(data_dir: str) -> dict:
     return {"branches": out, "count": len(out), "monitored": sorted(monitored)}
 
 
-CONFIG_PATH = os.path.join(HERE, "config.json")
+CONFIG_PATH = os.environ.get("CONFIG_PATH") or os.path.join(HERE, "config.json")   # cùng file với scheduler.CONFIG
 DIRECTORY_PATH = os.path.join(HERE, "branches_directory.json")
 BRANCH_RE = re.compile(r"^[a-z0-9_\-]{2,80}$")
 
