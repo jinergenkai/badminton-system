@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.tmp
+
+# large or personal inputs: videos, photos, model weights (see README for where to get them)
+data/
+models/
+
+# generated per video by the pipeline
+outputs/
+
+# cloned separately (see README)
+third_party/TrackNetV3/
