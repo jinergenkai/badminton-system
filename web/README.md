@@ -23,18 +23,17 @@ dev-server.mjs    server chạy thử ở máy, KHÔNG deploy
 
 **1. Repo**
 
-Trang web nằm ở thư mục `web/` của monorepo `caulong` (repo **private** — Vercel deploy
-repo private miễn phí). Không còn repo riêng `caulong-web`.
+Trang web nằm ở thư mục `web/` của monorepo `badminton-system` (repo public). Không còn repo riêng `caulong-web`.
 
 **2. Nối vào Vercel**
 
-Vào [vercel.com](https://vercel.com) → **Add New → Project** → chọn repo `caulong` →
+Vào [vercel.com](https://vercel.com) → **Add New → Project** → chọn repo `badminton-system` →
 **Root Directory = `web`** → **Deploy**.
 
 Để sửa watch/backend/analysis không làm Vercel build lại: **Settings → Git → Ignored Build Step**
 → chọn *Custom* và dán `git diff --quiet HEAD^ HEAD -- .` (lệnh chạy trong `web/`, trả 0 = bỏ qua).
 
-> Project Vercel cũ đang nối repo `caulong-web`: đổi sang repo `caulong` ở **Settings → Git**
+> Project Vercel cũ đang nối repo `caulong-web`: đổi sang repo `badminton-system` ở **Settings → Git**
 > (Disconnect rồi Connect), đặt Root Directory = `web`. Biến môi trường và kho Blob giữ nguyên.
 
 **3. Tạo kho dữ liệu**

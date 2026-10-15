@@ -20,7 +20,7 @@ Flutter trên Android làm bảng điểm + loa.
 > không đặt nút được, `right:` bị bỏ qua trong `<stack>`, toast hệ thống không
 > đổi được vị trí.
 
-> Từ khi gộp vào monorepo `caulong`, `phone/` **không còn là repo lồng** — commit
+> Từ khi gộp vào monorepo `badminton-system`, `phone/` **không còn là repo lồng** — commit
 > chung một lần với band, web, backend. Lịch sử cũ của `voice_counter` vẫn còn
 > nguyên (`git log -- watch/phone`).
 
