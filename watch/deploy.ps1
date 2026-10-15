@@ -24,7 +24,9 @@ param(
     [switch]$Uncourt
 )
 
-$Rpk = 'bandcounter-watch/dist/com.hung.bandcounter.release.1.0.0.rpk'
+# Paths resolve from this script's folder, so it runs from anywhere (e.g. the monorepo root).
+$Band = Join-Path $PSScriptRoot 'band'
+$Rpk = Join-Path $Band 'dist/com.hung.bandcounter.release.1.0.0.rpk'
 
 # Mi Fitness has shipped under both names; stopping a missing one is harmless.
 # The modded build on the dev phone is com.xiaomi.wearable.
@@ -190,7 +192,7 @@ if ($Push) {
 # is out of the way.
 if ($Dev) {
     Write-Host '== 1/6 Build band app (release) =='
-    Push-Location bandcounter-watch
+    Push-Location $Band
     npm run release
     $ok = $LASTEXITCODE -eq 0
     Pop-Location

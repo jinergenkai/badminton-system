@@ -4,8 +4,14 @@
     {
       "name": "alobo-heatmap",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["alobo_crawler/server.py"],
+      "runtimeArgs": ["backend/crawler/server.py"],
       "autoPort": true
+    },
+    {
+      "name": "web-dev",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["web/dev-server.mjs"],
+      "port": 3210
     }
   ]
 }

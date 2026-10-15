@@ -15,7 +15,7 @@ Every voice set has the same target and profile: a score call, a hype line
 and a TTS line (lib/services/wav_gain.dart, same numbers) are spliced one
 after another, so any difference between them is heard as a jump.
 
-Usage:  python tools/normalize_voice.py            (from bandcounter-flutter/)
+Usage:  python tools/normalize_voice.py            (from watch/phone/)
         python tools/normalize_voice.py --dry-run  (report only)
         python tools/normalize_voice.py --changed  (only new/changed sources)
         python tools/normalize_voice.py --louder 2 (every clip 2 dB louder, kept)

@@ -1,0 +1,6 @@
+# Chung cho cả repo — mỗi thư mục con vẫn có .gitignore riêng.
+.DS_Store
+Thumbs.db
+desktop.ini
+__pycache__/
+*.pyc

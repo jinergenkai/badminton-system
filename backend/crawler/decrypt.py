@@ -38,7 +38,7 @@ def decrypt(envelope: Any) -> Any:
             pass
 
     if not key_text:
-        raise ValueError("Thiếu ALOBO_KEY trong alobo_crawler/.env.")
+        raise ValueError("Thiếu ALOBO_KEY trong backend/crawler/.env.")
 
     key = key_text.encode("utf-8")
     if len(key) not in (16, 24, 32):

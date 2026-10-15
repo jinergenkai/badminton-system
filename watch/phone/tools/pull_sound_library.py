@@ -13,7 +13,7 @@ into the code:
                         assets/audio/hype/ via normalize_voice.py --changed)
   <id>.wav           -> converted to <id>.mp3, likewise
 
-Usage (from bandcounter-flutter/):
+Usage (from watch/phone/):
   python tools/pull_sound_library.py              merge
   python tools/pull_sound_library.py --dry-run    show what would change
   python tools/pull_sound_library.py --clear-device
@@ -41,7 +41,7 @@ def main():
     dry = '--dry-run' in sys.argv
     clear = '--clear-device' in sys.argv
     if not os.path.exists(LIB):
-        sys.exit(f'run from bandcounter-flutter/ ({LIB} not found)')
+        sys.exit(f'run from watch/phone/ ({LIB} not found)')
 
     tmp = tempfile.mkdtemp(prefix='sounds_')
     r = adb('pull', DEVICE_DIR, tmp, check=False)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Sinh ../courts.html (trang công khai trên Vercel) từ viz/index.html.
+"""Sinh web/courts.html (trang công khai trên Vercel) từ viz/index.html.
 
 viz/index.html là NGUỒN DUY NHẤT của giao diện heatmap. Trang công khai chỉ khác:
   - bỏ tab ⟳ Cào dữ liệu và ⚙ Cài đặt sân (người xem không được điều khiển crawler)
@@ -16,7 +16,7 @@ from pathlib import Path
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")   # console Windows không in nổi ✓
 HERE = Path(__file__).resolve().parent
 SRC = HERE / "viz" / "index.html"
-OUT = HERE.parent / "courts.html"
+OUT = HERE.parents[1] / "web" / "courts.html"     # backend/crawler/ → <repo>/web/courts.html
 
 s = SRC.read_text(encoding="utf-8")
 
@@ -127,10 +127,10 @@ rep("  fetch('/api/data').then(r=>r.json()).then(p=>{", "  loadCourts().then(p=>
 if "/api/config" in s.split("function renderSettings")[0]:
     raise SystemExit("[make_courts_page] còn gọi /api/config ngoài phần cài đặt — kiểm tra lại")
 
-NOTE = ("<!-- FILE SINH TỰ ĐỘNG từ alobo_crawler/viz/index.html — đừng sửa tay, "
-        "chạy alobo_crawler/make_courts_page.py -->")
+NOTE = ("<!-- FILE SINH TỰ ĐỘNG từ backend/crawler/viz/index.html — đừng sửa tay, "
+        "chạy backend/crawler/make_courts_page.py -->")
 head, nl, rest = s.partition("\n")          # giữ <!DOCTYPE> ở dòng đầu (tránh quirks mode)
 if not head.lower().startswith("<!doctype"):
     raise SystemExit("[make_courts_page] viz/index.html phải mở đầu bằng <!DOCTYPE html>")
 OUT.write_text(head + nl + NOTE + "\n" + rest, encoding="utf-8")
-print(f"✓ đã sinh {OUT.relative_to(HERE.parent)} ({len(s)//1024}KB)")
+print(f"✓ đã sinh {OUT.relative_to(HERE.parents[1])} ({len(s)//1024}KB)")

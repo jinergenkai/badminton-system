@@ -1,5 +1,3 @@
-alobo_crawler/
-.claude/
 dev-server.mjs
 dev-data.json
 dev-courts.json

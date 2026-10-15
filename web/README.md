@@ -21,25 +21,21 @@ dev-server.mjs    server chạy thử ở máy, KHÔNG deploy
 
 ## Đưa lên mạng (Vercel) — làm một lần
 
-**1. Tạo repo mới trên GitHub**
+**1. Repo**
 
-⚠️ **Đừng dùng repo `jine-ws`.** Repo đó đang chứa `yt-downloader/cookies.txt`, file `.exe`
-và nhạc mp3 — công khai nó là hỏng chuyện. Tạo repo riêng, chỉ chứa thư mục này:
-
-```bash
-cd caulong-web && git init && git add -A && git commit -m "So Cau Long" && git branch -M main
-```
-
-Rồi tạo repo trống trên github.com (private cũng được — Vercel deploy repo private miễn phí) và:
-
-```bash
-git remote add origin https://github.com/<tên-bạn>/<tên-repo>.git && git push -u origin main
-```
+Trang web nằm ở thư mục `web/` của monorepo `caulong` (repo **private** — Vercel deploy
+repo private miễn phí). Không còn repo riêng `caulong-web`.
 
 **2. Nối vào Vercel**
 
-Vào [vercel.com](https://vercel.com) → đăng nhập bằng GitHub → **Add New → Project** →
-chọn repo vừa tạo → **Deploy**. Không cần chỉnh gì, để mặc định.
+Vào [vercel.com](https://vercel.com) → **Add New → Project** → chọn repo `caulong` →
+**Root Directory = `web`** → **Deploy**.
+
+Để sửa watch/backend/analysis không làm Vercel build lại: **Settings → Git → Ignored Build Step**
+→ chọn *Custom* và dán `git diff --quiet HEAD^ HEAD -- .` (lệnh chạy trong `web/`, trả 0 = bỏ qua).
+
+> Project Vercel cũ đang nối repo `caulong-web`: đổi sang repo `caulong` ở **Settings → Git**
+> (Disconnect rồi Connect), đặt Root Directory = `web`. Biến môi trường và kho Blob giữ nguyên.
 
 **3. Tạo kho dữ liệu**
 
@@ -135,23 +131,23 @@ Cấu hình, **một token dùng chung**:
 |---|---|---|
 | Vercel | `CRAWLER_TOKEN` | chuỗi ngẫu nhiên dài |
 | Vercel | `CRAWLER_TRIGGER_URL` | `http://<IP server>:8000/api/crawl/run` (chỉ cần nếu muốn nút Cào ngay) |
-| `alobo_crawler/.env` | `PUSH_URL` | `https://<project>.vercel.app/api/courts` |
-| `alobo_crawler/.env` | `PUSH_TOKEN` | giống `CRAWLER_TOKEN` |
+| `backend/crawler/.env` | `PUSH_URL` | `https://<project>.vercel.app/api/courts` |
+| `backend/crawler/.env` | `PUSH_TOKEN` | giống `CRAWLER_TOKEN` |
 
 Muốn nút Cào ngay: chạy `python server.py --host 0.0.0.0` và mở cổng 8000. Từ internet chỉ
 gọi được đúng `POST /api/crawl/run`, phải có token, cách nhau tối thiểu 2 phút; đổi danh sách
 sân vẫn chỉ làm được từ máy nhà/LAN/Tailscale.
 
-Cài thành service (tự chạy lại khi crash/khởi động máy) — xem `alobo_crawler/deploy/alobo-service.sh help`:
+Cài thành service (tự chạy lại khi crash/khởi động máy) — xem `backend/crawler/deploy/alobo-service.sh help` (sẽ được thay bằng Dokploy — xem `backend/`):
 
 ```bash
-./alobo_crawler/deploy/alobo-service.sh setup                 # home server, 1 lần, không sudo
-sudo ./alobo_crawler/deploy/alobo-service.sh install          # home server, chỉ cào khi bấm trên web
-sudo ./alobo_crawler/deploy/alobo-service.sh relay-install <IP WireGuard của home>   # trên Linode
+./backend/crawler/deploy/alobo-service.sh setup                 # home server, 1 lần, không sudo
+sudo ./backend/crawler/deploy/alobo-service.sh install          # home server, chỉ cào khi bấm trên web
+sudo ./backend/crawler/deploy/alobo-service.sh relay-install <IP WireGuard của home>   # trên Linode
 ```
 
-Sửa giao diện heatmap: sửa `alobo_crawler/viz/index.html` rồi chạy
-`python alobo_crawler/make_courts_page.py` — **đừng sửa tay `courts.html`**.
+Sửa giao diện heatmap: sửa `backend/crawler/viz/index.html` rồi chạy
+`python backend/crawler/make_courts_page.py` (chạy từ root repo hoặc đâu cũng được) — **đừng sửa tay `courts.html`**.
 
 
 ```bash

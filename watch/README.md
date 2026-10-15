@@ -9,12 +9,10 @@ Flutter trên Android làm bảng điểm + loa.
 
 | Thư mục | Vai trò |
 |---|---|
-| `bandcounter-watch/` | **Source of truth.** QuickApp `.ux` chạy trên band. Build bằng `aiot-toolkit`. |
-| `bandcounter-flutter/` | **Source of truth.** App phone (GetX). Native bridge ở `android/app/src/main/kotlin/com/hung/bandcounter/MainActivity.kt`. |
-| `bandcounter-android/` | Đồ cũ — bản Kotlin/Compose thuần trước khi chuyển sang Flutter. Chỉ để tham khảo. |
-| `com.bandbbs.ebook/`, `com.bandbbs.ebook-android/` | Repo mẫu của người khác, dùng để học cơ chế interconnect. |
-| `counter_demo/`, `interconnect_dev_test_demo/` | Demo tối giản hồi đầu. |
+| `band/` | **Source of truth.** QuickApp `.ux` chạy trên band. Build bằng `aiot-toolkit`. (trước là `bandcounter-watch/`) |
+| `phone/` | **Source of truth.** App phone (GetX). Native bridge ở `android/app/src/main/kotlin/com/hung/bandcounter/MainActivity.kt`. (trước là repo riêng `bandcounter-flutter` / `voice_counter`) |
 | `docs/` | Ghi chú research cũ + code Kotlin cũ dán vào file `.md`. |
+| `../archive/watch/` | Đồ tham khảo để hiểu cách custom band, **không build**: `bandcounter-android/` (bản Kotlin/Compose cũ trước Flutter), `com.bandbbs.ebook*/` (repo mẫu của người khác, học cơ chế interconnect), `counter_demo/`, `interconnect_dev_test_demo/` (demo tối giản hồi đầu). |
 
 > 📌 **[docs/watch-ui-gotchas.md](docs/watch-ui-gotchas.md) — đọc trước khi làm UI
 > cho band.** Những bẫy đã tốn hàng giờ debug: `<list-item>` không có `height`
@@ -22,9 +20,9 @@ Flutter trên Android làm bảng điểm + loa.
 > không đặt nút được, `right:` bị bỏ qua trong `<stack>`, toast hệ thống không
 > đổi được vị trí.
 
-> `bandcounter-flutter/` có `.git` riêng bên trong → nó là repo lồng. Đừng
-> `git add` nó vào repo cha, sẽ tạo gitlink rỗng chứ không commit code. Commit
-> riêng trong thư mục đó.
+> Từ khi gộp vào monorepo `caulong`, `phone/` **không còn là repo lồng** — commit
+> chung một lần với band, web, backend. Lịch sử cũ của `voice_counter` vẫn còn
+> nguyên (`git log -- watch/phone`).
 
 ---
 
@@ -50,10 +48,10 @@ chính là đường truyền — xem phần 5.
 
 Watch app và Android app **phải cùng package name và cùng chữ ký**:
 
-- package QuickApp (`bandcounter-watch/src/manifest.json` → `package`)
+- package QuickApp (`band/src/manifest.json` → `package`)
   == `applicationId` của Android (`android/app/build.gradle.kts`)
   == `com.hung.bandcounter`
-- RPK ký bằng cặp `.pem` trong `bandcounter-watch/sign/{debug,release}/`
+- RPK ký bằng cặp `.pem` trong `band/sign/{debug,release}/`
 - APK ký bằng `bandcounter.jks`
 - Cặp `.pem` phải được **trích ra từ chính `bandcounter.jks`** (quy trình ở
   `docs/gen-key.txt` và `docs/SETUP_GUIDE.md`)
@@ -69,7 +67,7 @@ Watch app và Android app **phải cùng package name và cùng chữ ký**:
 Kiểm tra lại khi nghi ngờ:
 
 ```bash
-openssl x509 -in bandcounter-watch/sign/release/certificate.pem -noout -fingerprint -sha256
+openssl x509 -in band/sign/release/certificate.pem -noout -fingerprint -sha256
 ```
 
 ```bash
@@ -93,7 +91,7 @@ mặc định. Đường dẫn keystore lấy từ `android/gradle.properties` �
 ## 4. Build
 
 ```bash
-cd bandcounter-watch && npm run release
+cd band && npm run release
 ```
 
 Sinh ra `dist/com.hung.bandcounter.release.1.0.0.rpk`. Lưu ý `npm run build` chỉ
@@ -101,7 +99,7 @@ ra bản `.debug.` — mà `deploy.ps1` thì push file `.release.`, nên build x
 `npm run build` rồi chạy `deploy.ps1` sẽ đẩy nhầm file cũ.
 
 ```bash
-cd bandcounter-flutter && flutter run --release
+cd phone && flutter run --release
 ```
 
 ### Quy trình dev: đưa bản build mới lên band
@@ -143,7 +141,7 @@ Các lệnh lẻ khác của `deploy.ps1`:
 
 ### Âm thanh: Sound Library
 
-Mọi câu hype nằm trong **một** file: `bandcounter-flutter/assets/config/sound_library.json`
+Mọi câu hype nằm trong **một** file: `phone/assets/config/sound_library.json`
 (câu nói, chữ hiện trên màn, màu, nằm trong trigger nào). *Khi nào* một trigger
 bắn là code (`HypeVoiceController._triggerMatches`); *phát câu gì* là dữ liệu.
 
@@ -161,7 +159,7 @@ cùng thư mục `sounds/`, không cần build lại app.
 Muốn chỉnh sửa trên phone thành mặc định trong code:
 
 ```bash
-cd bandcounter-flutter && python tools/pull_sound_library.py --dry-run
+cd phone && python tools/pull_sound_library.py --dry-run
 ```
 
 Bỏ `--dry-run` để ghi thật. MP3 kéo về nằm ở `audio_src/hype/`. Lần build Android
