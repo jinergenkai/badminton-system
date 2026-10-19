@@ -4,3 +4,7 @@ Thumbs.db
 desktop.ini
 __pycache__/
 *.pyc
+
+# Keys sinh để deploy — không bao giờ commit
+.env.deploy
+backend/.env.deploy
