@@ -37,7 +37,7 @@ export default function App() {
         <Toolbar sx={{ gap: 1.25, minHeight: { xs: 60, sm: 68 } }}>
           <Logo sx={{ width: 34, height: 34 }} />
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-            <Typography sx={{ fontFamily: theme.typography.fontSecondaryFamily, fontWeight: 800, fontSize: 21, lineHeight: 1, color: "primary.darker", letterSpacing: "-0.01em" }}>
+            <Typography noWrap sx={{ fontFamily: theme.typography.fontSecondaryFamily, fontWeight: 800, fontSize: 21, lineHeight: 1, color: "primary.darker", letterSpacing: "-0.01em" }}>
               Sổ Cầu Lông
             </Typography>
             {isMobile && <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>{cur.label}</Typography>}
