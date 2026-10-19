@@ -51,7 +51,7 @@ class _SyncScreenState extends State<SyncScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
         children: [
           const UiSection('Backend'),
-          _field(_base, 'Địa chỉ backend', 'https://caulong-api.app.huynhhanh.com'),
+          _field(_base, 'Địa chỉ backend', 'https://caulongdata.app.huynhhanh.com'),
           const SizedBox(height: 12),
           _field(_token, 'API_TOKEN', 'dán token từ .env.deploy', obscure: true),
           const SizedBox(height: 20),

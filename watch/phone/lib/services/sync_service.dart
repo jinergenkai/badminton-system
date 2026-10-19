@@ -24,9 +24,12 @@ class SyncService extends GetxService {
 
   static SyncService get to => Get.find<SyncService>();
 
+  static const _defaultBase = 'https://caulongdata.app.huynhhanh.com';
+
   Future<SyncService> init() async {
     final prefs = await SharedPreferences.getInstance();
-    baseUrl.value = prefs.getString(_kBase) ?? '';
+    final saved = prefs.getString(_kBase);
+    baseUrl.value = (saved == null || saved.isEmpty) ? _defaultBase : saved;
     token.value = prefs.getString(_kToken) ?? '';
     return this;
   }
