@@ -153,3 +153,40 @@ export function hue(s) {
 }
 export const payRef = (m) =>
   ("CAULONG " + norm(m.name).replace(/[^a-z0-9]+/g, " ").trim().toUpperCase()).slice(0, 40);
+
+// Liệt kê đúng những chỗ hai bản khác nhau (hộp conflict). Port từ sổ cũ, trả text thuần.
+export function diffSummary(mine, theirs) {
+  const out = [];
+  const nm = (d, mid) => { const m = (d.members || []).find((x) => x.id === mid); return m ? m.name : "(ai đó)"; };
+  const map = (d) => new Map((d.sessions || []).map((s) => [s.id, s]));
+  const A = map(mine), B = map(theirs);
+  A.forEach((s, k) => { if (!B.has(k)) out.push(`Buổi ${s.date || "?"}: chỉ có ở máy này`); });
+  B.forEach((s, k) => { if (!A.has(k)) out.push(`Buổi ${s.date || "?"}: chỉ có trên web`); });
+  A.forEach((a, k) => {
+    const b = B.get(k); if (!b) return;
+    const d = a.date || "?";
+    if (a.court !== b.court || a.shuttles !== b.shuttles || a.price !== b.price || a.date !== b.date)
+      out.push(`Buổi ${d}: tiền hoặc ngày khác nhau`);
+    if ((a.parts || []).length !== (b.parts || []).length)
+      out.push(`Buổi ${d}: số người khác (${a.parts.length} ở máy này / ${b.parts.length} trên web)`);
+    Object.keys(a.paid || {}).forEach((mid) => { if (!(b.paid || {})[mid])
+      out.push(`Buổi ${d} · ${nm(mine, mid)}: máy này ghi đã trả, web chưa`); });
+    Object.keys(b.paid || {}).forEach((mid) => { if (!(a.paid || {})[mid])
+      out.push(`Buổi ${d} · ${nm(theirs, mid)}: web ghi đã trả, máy này chưa`); });
+    if ((a.photo || "") !== (b.photo || "")) out.push(`Buổi ${d}: ảnh buổi chơi khác nhau`);
+  });
+  const mA = new Map((mine.members || []).map((m) => [m.id, m]));
+  const mB = new Map((theirs.members || []).map((m) => [m.id, m]));
+  mA.forEach((m, k) => { if (!mB.has(k)) out.push(`Người ${m.name}: chỉ có ở máy này`); });
+  mB.forEach((m, k) => { if (!mA.has(k)) out.push(`Người ${m.name}: chỉ có trên web`); });
+  mA.forEach((m, k) => { const o = mB.get(k); if (!o) return;
+    if (m.name !== o.name) out.push(`Tên khác: "${m.name}" ở máy này / "${o.name}" trên web`);
+    if ((m.av || "") !== (o.av || "")) out.push(`Ảnh đại diện của ${m.name} khác nhau`); });
+  if ((mine.note || "") !== (theirs.note || "")) out.push("Thông tin ngân hàng khác nhau");
+  if ((mine.qr || "") !== (theirs.qr || "")) out.push("Mã QR khác nhau");
+  return out;
+}
+
+export const picName = (book, t) => !t ? "" : (t.k === "m"
+  ? (memById(book, t.id)?.name || "")
+  : ("buổi " + (book.sessions.find((x) => x.id === t.id)?.date || "?")));
