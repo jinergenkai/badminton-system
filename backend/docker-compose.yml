@@ -47,6 +47,11 @@ services:
       # Đẩy mirror danh bạ lên Blob để web/Flutter đọc luôn-online.
       ROSTER_PUSH_URL: ${ROSTER_PUSH_URL:-}
       ROSTER_PUSH_TOKEN: ${ROSTER_PUSH_TOKEN:-}
+      # Cổng Sân trống: proxy sang service crawler (cùng network). Token để kích cào,
+      # ADMIN_PASS (= mật khẩu sổ) để gate đổi cấu hình / kích cào từ web.
+      CRAWLER_URL: ${CRAWLER_URL:-http://crawler:8000}
+      CRAWLER_TOKEN: ${CRAWLER_TOKEN:-}
+      ADMIN_PASS: ${ADMIN_PASS:-}
     volumes:
       - api-data:/app/data              # badminton.db, giữ qua redeploy
     expose:
