@@ -7,8 +7,10 @@ import {
   ToggleButton, ToggleButtonGroup, Switch, FormControlLabel, Chip, Tooltip,
   CircularProgress, Alert, useMediaQuery,
 } from "@mui/material";
+import { Button, Collapse, Snackbar } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
 import { api } from "../lib/api.js";
+import { useAuth } from "../lib/auth.jsx";
 import WidgetSummary from "../components/WidgetSummary.jsx";
 import { Iconify } from "../components/iconify/index.jsx";
 import { Label } from "../components/label/index.jsx";
@@ -78,6 +80,7 @@ export default function Courts() {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
   const ST = useStatusStyles();
+  const auth = useAuth();
   const [data, setData] = useState(null);
   const [err, setErr] = useState("");
   const [updatedAt, setUpdatedAt] = useState(null);
@@ -90,12 +93,12 @@ export default function Courts() {
   const [date, setDate] = useState(null);
   const [finder, setFinder] = useState(pref.current.finder || { days: [0, 1, 2, 3, 4], start: "18:00", end: "20:00" });
 
-  useEffect(() => {
-    api.getCourts().then((j) => {
-      setUpdatedAt(j.updatedAt || null);
-      setData(expandCourts(j.data || { branches: [], monitored: [] }));
-    }).catch((e) => setErr(e.message || String(e)));
-  }, []);
+  const reload = () => api.getCourts().then((j) => {
+    setUpdatedAt(j.updatedAt || null);
+    setData(expandCourts(j.data || { branches: [], monitored: [] }));
+    return j.updatedAt || null;
+  });
+  useEffect(() => { reload().catch((e) => setErr(e.message || String(e))); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const branches = useMemo(() => {
     if (!data) return [];
@@ -153,6 +156,7 @@ export default function Courts() {
 
   return (
     <Stack spacing={2.5} sx={{ mt: 1 }}>
+      {auth.isAdmin && <CrawlPanel pass={auth.passRef} stamp={stamp} reload={reload} />}
       {/* KPIs */}
       <Box sx={{ display: "grid", gap: { xs: 1.5, sm: 2.5 }, gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" } }}>
         <WidgetSummary color="success" icon="solar:calendar-search-bold-duotone" title="Ô trống (T2–T6)" total={free} caption={`khung ${range.start}–${range.end} · ${total} ô`} />
@@ -382,5 +386,47 @@ function Finder({ branches, finder, setFinder, timeOpts, onOpen }) {
         })}
       </Box>
     </Box>
+  );
+}
+
+// Bảng quản trị: cào lại dữ liệu sân (gửi lệnh qua Vercel → server cào).
+function CrawlPanel({ pass, stamp, reload }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [toast, setToast] = useState("");
+  const run = async () => {
+    setBusy(true); setMsg("Đang gửi lệnh cào…");
+    try {
+      const before = await reload().catch(() => null);
+      await api.triggerCrawl(pass.current);
+      setMsg("Server đang cào… trang tự cập nhật khi xong (vài phút).");
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 20000));
+        const now = await reload().catch(() => null);
+        if (now && now !== before) { setMsg(""); setToast("Đã cào xong — dữ liệu mới."); break; }
+      }
+    } catch (e) {
+      setMsg(""); setToast("Lỗi cào: " + (e.message || e));
+    } finally { setBusy(false); }
+  };
+  return (
+    <Card sx={{ p: 2 }}>
+      <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+        <Box sx={{ width: 40, height: 40, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: (t) => alpha(t.palette.primary.main, 0.1), color: "primary.main", flexShrink: 0 }}>
+          <Iconify icon="solar:refresh-circle-bold-duotone" width={24} />
+        </Box>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography variant="subtitle1" sx={{ lineHeight: 1.2 }}>Cào dữ liệu sân</Typography>
+          <Typography variant="caption" color="text.secondary">Lần cào gần nhất: {stamp}</Typography>
+        </Box>
+        <Button variant="contained" disabled={busy} onClick={run}
+          startIcon={<Iconify icon="solar:refresh-bold" width={18} />}>{busy ? "Đang cào…" : "Cào lại ngay"}</Button>
+      </Stack>
+      <Collapse in={!!msg}><Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>{msg}</Typography></Collapse>
+      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
+        Danh sách sân theo dõi &amp; số ngày cào được cấu hình trên máy cào (config.json của crawler).
+      </Typography>
+      <Snackbar open={!!toast} autoHideDuration={3500} onClose={() => setToast("")} message={toast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
+    </Card>
   );
 }
