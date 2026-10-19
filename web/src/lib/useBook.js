@@ -1,10 +1,11 @@
 // Store sổ tiền cho React — port logic §2 của sổ cũ: đọc/ghi /api/data, lưu gộp,
 // chống đè theo rev (409 -> conflict), cache localStorage, nhật ký, hàng đợi lưu.
+// Quyền admin lấy từ AuthProvider dùng chung (mật khẩu chung cả app).
 import { useCallback, useEffect, useRef, useState } from "react";
 import { migrate, EMPTY_BOOK, LOG_MAX } from "./model.js";
+import { useAuth } from "./auth.jsx";
 
 const CACHE_KEY = "bmw_book_cache";
-const PASS_KEY = "bmw_book_pass";
 const SAVE_DELAY = 1200, RETRY_DELAY = 4000, MAX_RETRY = 3;
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
@@ -21,19 +22,19 @@ async function apiGet() {
 }
 
 export function useBook() {
+  const auth = useAuth();
   const [book, setBook] = useState(null);
   const [rev, setRev] = useState(0);
   const [updatedAt, setUpdatedAt] = useState(null);
   const [online, setOnline] = useState(true);
   const [loadErr, setLoadErr] = useState("");
-  const [pass, setPass] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
   const [save, setSave] = useState({ dirty: false, saving: false, err: "", savedAt: null, retries: 0 });
   const [conflict, setConflict] = useState(null); // {rev,updatedAt,data}
 
   // refs cho giá trị thay đổi nhanh, tránh stale closure trong push()
-  const ref = useRef({ book: null, rev: 0, pass: "", localSeq: 0, saving: false, dirty: false, timer: null });
-  const sync = () => { ref.current.book = book; ref.current.rev = rev; ref.current.pass = pass; };
+  const ref = useRef({ book: null, rev: 0, localSeq: 0, saving: false, dirty: false, timer: null });
+  const pass = auth.pass;
+  const isAdmin = auth.isAdmin;
 
   const writeCache = useCallback((b, r, u, dirty) => {
     try { localStorage.setItem(CACHE_KEY, JSON.stringify({ rev: r, updatedAt: u, data: b, dirty })); } catch { /* */ }
@@ -41,7 +42,8 @@ export function useBook() {
 
   const push = useCallback(async function push(forceRev) {
     const c = ref.current;
-    if (!c.pass || c.saving) return;
+    const pw = auth.passRef.current;
+    if (!pw || c.saving) return;
     clearTimeout(c.timer);
     c.saving = true;
     setSave((s) => ({ ...s, saving: true, err: "" }));
@@ -50,7 +52,7 @@ export function useBook() {
     try {
       const r = await fetch("/api/data", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pass: c.pass, rev: forceRev === undefined ? c.rev : forceRev, data: c.book }),
+        body: JSON.stringify({ pass: pw, rev: forceRev === undefined ? c.rev : forceRev, data: c.book }),
       });
       const j = await r.json().catch(() => ({}));
       if (r.status === 409) conflictData = j.server || null;
@@ -74,7 +76,7 @@ export function useBook() {
       return;
     }
     if (c.dirty) { clearTimeout(c.timer); c.timer = setTimeout(() => push(), 200); }
-  }, [writeCache]);
+  }, [writeCache, auth.passRef]);
 
   const schedulePush = useCallback((ms) => {
     const c = ref.current; clearTimeout(c.timer); c.timer = setTimeout(() => push(), ms ?? SAVE_DELAY);
@@ -106,10 +108,8 @@ export function useBook() {
   useEffect(() => {
     let unsaved = false;
     const c = readCache();
-    if (c) { try { const b = migrate(c.data); setBook(b); setRev(c.rev || 0); setUpdatedAt(c.updatedAt || null); unsaved = !!c.dirty; } catch { /* */ } }
-    let savedPass = "";
-    try { savedPass = localStorage.getItem(PASS_KEY) || ""; } catch { /* */ }
-    if (savedPass) { setPass(savedPass); setIsAdmin(true); ref.current.pass = savedPass; }
+    if (c) { try { const b = migrate(c.data); setBook(b); setRev(c.rev || 0); setUpdatedAt(c.updatedAt || null); ref.current.book = b; ref.current.rev = c.rev || 0; unsaved = !!c.dirty; } catch { /* */ } }
+    const savedPass = auth.passRef.current;
     (async () => {
       try {
         const j = await apiGet();
@@ -128,20 +128,16 @@ export function useBook() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => { sync(); });
+  // giữ ref.current.book/rev đồng bộ với state hiện tại
+  useEffect(() => { ref.current.book = book; ref.current.rev = rev; });
 
+  // Đăng nhập: xác thực qua auth rồi lấy bản mới nhất trước khi sửa.
   const login = useCallback(async (pw) => {
-    const r = await fetch("/api/data", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pass: pw, check: 1 }) });
-    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || "Sai mật khẩu."); }
-    setPass(pw); setIsAdmin(true); ref.current.pass = pw;
-    try { localStorage.setItem(PASS_KEY, pw); } catch { /* */ }
+    await auth.login(pw);
     try { const j = await apiGet(); const b = migrate(j.data); setBook(b); setRev(j.rev || 0); setUpdatedAt(j.updatedAt || null); ref.current.book = b; ref.current.rev = j.rev || 0; } catch { /* */ }
-  }, []);
+  }, [auth]);
 
-  const logout = useCallback(() => {
-    setIsAdmin(false); setPass(""); ref.current.pass = "";
-    try { localStorage.removeItem(PASS_KEY); } catch { /* */ }
-  }, []);
+  const logout = useCallback(() => { auth.logout(); }, [auth]);
 
   const resolveConflict = useCallback((take) => {
     const srv = conflict; setConflict(null);

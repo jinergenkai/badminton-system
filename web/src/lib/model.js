@@ -122,6 +122,7 @@ export const sCollected = (s) => s.parts.reduce((a, p) => a + (isPaid(s, p.mid) 
 export const sSettled = (s) => s.parts.length > 0 && sUnpaid(s).length === 0;
 
 export const memById = (book, mid) => book.members.find((m) => m.id === mid);
+export const sessionById = (book, sid) => book.sessions.find((s) => s.id === sid);
 export const memberSessions = (book, mid) => book.sessions.filter((s) => s.parts.some((p) => p.mid === mid));
 export const memberDueSessions = (book, mid) => memberSessions(book, mid).filter((s) => !isPaid(s, mid));
 export const memberDue = (book, mid) => memberDueSessions(book, mid).reduce((a, s) => a + shareIn(s, mid), 0);

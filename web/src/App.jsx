@@ -7,6 +7,7 @@ import { useTheme, alpha } from "@mui/material/styles";
 
 import { Logo } from "./components/logo/index.jsx";
 import { Iconify } from "./components/iconify/index.jsx";
+import AdminButton from "./components/AdminButton.jsx";
 import BillBook from "./pages/BillBook.jsx";
 import Courts from "./pages/Courts.jsx";
 import Ranking from "./pages/Ranking.jsx";
@@ -48,6 +49,7 @@ export default function App() {
               {TABS.map((t, i) => <Tab key={i} label={t.label} icon={<Iconify icon={t.icon} width={22} />} iconPosition="start" />)}
             </Tabs>
           )}
+          <AdminButton compact={isMobile} />
         </Toolbar>
       </AppBar>
 
