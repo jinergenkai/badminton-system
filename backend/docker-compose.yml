@@ -15,13 +15,14 @@ services:
       # Playwright server dùng chung (container chromium trong dokploy-network)
       PLAYWRIGHT_WS: ${PLAYWRIGHT_WS:-ws://jinerproject-chromium-bzuzgh-chromium-1:3000/}
       ALOBO_KEY: ${ALOBO_KEY:?đặt ALOBO_KEY trong Environment của Dokploy}
+      PROD_KEY: ${PROD_KEY:-}
       PUSH_URL: ${PUSH_URL:-}
       PUSH_TOKEN: ${PUSH_TOKEN:-}
       TRIGGER_TOKEN: ${TRIGGER_TOKEN:-}
     volumes:
-      - crawler-data:/app/data          # dữ liệu cào + config.json + log, giữ qua redeploy
+      - crawler-data:/app/data # dữ liệu cào + config.json + log, giữ qua redeploy
     expose:
-      - "8000"                          # Traefik (domain) vào cổng này qua dokploy-network
+      - "8000" # Traefik (domain) vào cổng này qua dokploy-network
     ports:
       # Cổng quản trị cho máy nhà: http://10.8.0.4:8001 qua WireGuard (đổi danh sách sân,
       # cào không cần token). Ai khác tới được cổng này (LAN, …) mà không nằm trong
@@ -53,11 +54,11 @@ services:
       CRAWLER_TOKEN: ${CRAWLER_TOKEN:-}
       ADMIN_PASS: ${ADMIN_PASS:-}
     volumes:
-      - api-data:/app/data              # badminton.db, giữ qua redeploy
+      - api-data:/app/data # badminton.db, giữ qua redeploy
     expose:
       - "8000"
     ports:
-      - "8002:8000"                     # quản trị qua WireGuard: http://10.8.0.4:8002
+      - "8002:8000" # quản trị qua WireGuard: http://10.8.0.4:8002
     networks:
       - dokploy-network
 
