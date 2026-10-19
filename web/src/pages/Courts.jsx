@@ -157,6 +157,7 @@ export default function Courts() {
   return (
     <Stack spacing={2.5} sx={{ mt: 1 }}>
       {auth.isAdmin && <CrawlPanel pass={auth.passRef} stamp={stamp} reload={reload} />}
+      {auth.isAdmin && <CourtsSettings pass={auth.passRef} />}
       {/* KPIs */}
       <Box sx={{ display: "grid", gap: { xs: 1.5, sm: 2.5 }, gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" } }}>
         <WidgetSummary color="success" icon="solar:calendar-search-bold-duotone" title="Ô trống (T2–T6)" total={free} caption={`khung ${range.start}–${range.end} · ${total} ô`} />
@@ -427,6 +428,63 @@ function CrawlPanel({ pass, stamp, reload }) {
         Danh sách sân theo dõi &amp; số ngày cào được cấu hình trên máy cào (config.json của crawler).
       </Typography>
       <Snackbar open={!!toast} autoHideDuration={3500} onClose={() => setToast("")} message={toast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
+    </Card>
+  );
+}
+
+// Cấu hình sân cho admin: số ngày cào + chọn sân theo dõi (ghi vào config.json của crawler).
+function CourtsSettings({ pass }) {
+  const [open, setOpen] = useState(false);
+  const [dir, setDir] = useState(null);
+  const [days, setDays] = useState(21);
+  const [sel, setSel] = useState(() => new Set());
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!open || dir) return;
+    Promise.all([api.getCourtsDirectory().catch(() => null), api.getCourtsConfig().catch(() => null)])
+      .then(([d, c]) => {
+        if (d) { setDir(d); setSel(new Set((d.branches || []).filter((b) => b.monitored).map((b) => b.id))); }
+        if (c) setDays(c.days_window || c.days_ahead || 21);
+        if (!d) setMsg("Không đọc được danh bạ sân (backend/crawler chưa sẵn sàng).");
+      });
+  }, [open, dir]);
+  const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const save = async () => {
+    setBusy(true); setMsg("Đang lưu…");
+    try { const r = await api.saveCourtsConfig(pass.current, [...sel], Math.max(1, Math.min(60, +days || 21))); setMsg(`✓ Đã lưu ${(r.branches || []).length} sân · ${r.days_window} ngày.`); }
+    catch (e) { setMsg("Lỗi: " + (e.message || e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Card sx={{ p: 2 }}>
+      <Stack direction="row" alignItems="center" spacing={1} onClick={() => setOpen((v) => !v)} sx={{ cursor: "pointer" }}>
+        <Iconify icon="solar:settings-bold-duotone" sx={{ color: "text.secondary" }} />
+        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Cấu hình sân theo dõi</Typography>
+        <Iconify icon={open ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} width={18} sx={{ color: "text.secondary" }} />
+      </Stack>
+      <Collapse in={open} unmountOnExit>
+        <Box sx={{ mt: 2 }}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary">Số ngày cào từ hôm nay:</Typography>
+            <Select size="small" value={days} onChange={(e) => setDays(e.target.value)} sx={{ width: 90 }}>
+              {[7, 10, 14, 21, 30, 45, 60].map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+            </Select>
+          </Stack>
+          {!dir ? <Typography variant="body2" color="text.secondary">{msg || "Đang tải…"}</Typography> : (
+            <Stack spacing={0.5}>
+              {(dir.branches || []).map((b) => (
+                <FormControlLabel key={b.id} control={<Switch size="small" checked={sel.has(b.id)} onChange={() => toggle(b.id)} />}
+                  label={<Box><Typography variant="body2" sx={{ fontWeight: 600 }}>{b.name}</Typography><Typography variant="caption" color="text.secondary">{b.id}{b.sport ? " · " + b.sport : ""}{b.has_data ? " · có dữ liệu" : ""}</Typography></Box>} />
+              ))}
+            </Stack>
+          )}
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 2 }}>
+            <Button variant="contained" disabled={busy || !dir} onClick={save}>Lưu cấu hình</Button>
+            {msg && <Typography variant="caption" color="text.secondary">{msg}</Typography>}
+          </Stack>
+        </Box>
+      </Collapse>
     </Card>
   );
 }

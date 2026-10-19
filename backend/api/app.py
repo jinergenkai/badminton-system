@@ -33,6 +33,33 @@ API_TOKEN = os.environ.get("API_TOKEN", "").strip()
 BILLBOOK_URL = os.environ.get("BILLBOOK_URL", "").strip()          # vd https://<proj>.vercel.app/api/data
 ROSTER_PUSH_URL = os.environ.get("ROSTER_PUSH_URL", "").strip()    # vd https://<proj>.vercel.app/api/roster
 ROSTER_PUSH_TOKEN = os.environ.get("ROSTER_PUSH_TOKEN", "").strip()
+# Cổng sân trống: proxy nội bộ sang service crawler (cùng docker network).
+CRAWLER_URL = os.environ.get("CRAWLER_URL", "http://crawler:8000").rstrip("/")
+CRAWLER_TOKEN = os.environ.get("CRAWLER_TOKEN", "").strip()   # để kích cào
+ADMIN_PASS = os.environ.get("ADMIN_PASS", "").strip()         # gate đổi cấu hình / kích cào
+
+
+def _pass_ok(given) -> bool:
+    import hmac
+    if not ADMIN_PASS:
+        return False
+    return hmac.compare_digest(str(given or ""), ADMIN_PASS)
+
+
+def _crawler_get(path: str):
+    req = urllib.request.Request(CRAWLER_URL + path, headers={"accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def _crawler_post(path: str, body: dict, token: str = ""):
+    data = json.dumps(body or {}).encode("utf-8")
+    headers = {"content-type": "application/json"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(CRAWLER_URL + path, data=data, headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.status, json.loads(r.read().decode("utf-8"))
 
 
 def _nets() -> list:
@@ -187,6 +214,21 @@ class Handler(BaseHTTPRequestHandler):
                 if not sid:
                     return self._send(400, {"error": "cần ?session=<id>"})
                 return self._send(200, {"session": sid, "pickup": db.pickup(sid)})
+            # --- Sân trống: proxy sang crawler (đọc công khai) ---
+            if path == "/api/courts":
+                data = _crawler_get("/api/data")
+                stamp = None
+                try:
+                    stamp = (_crawler_get("/api/crawl").get("coverage") or {}).get("last_data_at")
+                except Exception:  # noqa: BLE001
+                    pass
+                return self._send(200, {"updatedAt": stamp, "data": data})
+            if path == "/api/courts/directory":
+                return self._send(200, _crawler_get("/api/directory"))
+            if path == "/api/courts/config":
+                return self._send(200, _crawler_get("/api/config"))
+            if path == "/api/courts/status":
+                return self._send(200, _crawler_get("/api/crawl"))
             return self._send(404, {"error": "not found"})
         except Exception as e:  # noqa: BLE001
             return self._send(500, {"error": str(e)})
@@ -195,6 +237,22 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         u = urlparse(self.path)
         path = u.path.rstrip("/") or "/"
+        # Sân trống admin: gate bằng mật khẩu quản trị (ADMIN_PASS), không phải API_TOKEN.
+        if path in ("/api/courts/crawl", "/api/courts/config"):
+            body = self._read_json() or {}
+            if not _pass_ok(body.get("pass")):
+                return self._send(401, {"error": "sai mật khẩu quản trị"})
+            try:
+                if path == "/api/courts/crawl":
+                    code, j = _crawler_post("/api/crawl/run", {}, CRAWLER_TOKEN)
+                    return self._send(code, j)
+                cfg = {k: v for k, v in body.items() if k != "pass"}
+                code, j = _crawler_post("/api/config", cfg)
+                return self._send(code, j)
+            except urllib.error.HTTPError as e:
+                return self._send(e.code, {"error": e.read().decode("utf-8", "ignore")})
+            except Exception as e:  # noqa: BLE001
+                return self._send(502, {"error": "không gọi được crawler: " + str(e)})
         if not self._may_write():
             return self._send(401, {"error": "cần Authorization: Bearer <API_TOKEN>"})
         body = self._read_json()

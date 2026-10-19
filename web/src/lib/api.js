@@ -26,8 +26,18 @@ export const api = {
   saveBook: (pass, rev, data) => jpost("/api/data", { pass, rev, data }),
 
   // ----- Sân trống -----
-  getCourts: () => jget("/api/courts"),
-  triggerCrawl: (pass) => jpost("/api/courts?action=crawl", { pass }),
+  // Ưu tiên backend (gộp crawler); backend offline thì đọc cache blob qua Vercel.
+  async getCourts() {
+    if (API_BASE) { try { return await jget(`${API_BASE}/api/courts`); } catch (_) { /* offline → blob */ } }
+    return jget("/api/courts");
+  },
+  async triggerCrawl(pass) {
+    if (API_BASE) { try { return await jpost(`${API_BASE}/api/courts/crawl`, { pass }); } catch (_) { /* fallback Vercel */ } }
+    return jpost("/api/courts?action=crawl", { pass });
+  },
+  getCourtsConfig: () => (API_BASE ? jget(`${API_BASE}/api/courts/config`) : Promise.reject(new Error("cần VITE_API_BASE"))),
+  getCourtsDirectory: () => (API_BASE ? jget(`${API_BASE}/api/courts/directory`) : Promise.reject(new Error("cần VITE_API_BASE"))),
+  saveCourtsConfig: (pass, branches, days_window) => jpost(`${API_BASE}/api/courts/config`, { pass, branches, days_window }),
 
   // ----- Danh bạ (mirror luôn-online) -----
   getRoster: () => jget("/api/roster"),
