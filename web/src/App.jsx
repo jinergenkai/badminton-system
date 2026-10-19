@@ -8,6 +8,7 @@ import { useTheme, alpha } from "@mui/material/styles";
 import { Logo } from "./components/logo/index.jsx";
 import { Iconify } from "./components/iconify/index.jsx";
 import AdminButton from "./components/AdminButton.jsx";
+import PwaPrompts from "./components/PwaPrompts.jsx";
 import BillBook from "./pages/BillBook.jsx";
 import Courts from "./pages/Courts.jsx";
 import Ranking from "./pages/Ranking.jsx";
@@ -65,6 +66,7 @@ export default function App() {
           </BottomNavigation>
         </Paper>
       )}
+      <PwaPrompts />
     </Box>
   );
 }
