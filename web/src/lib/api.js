@@ -28,8 +28,15 @@ export const api = {
   // ----- Sân trống -----
   // Ưu tiên backend (gộp crawler); backend offline thì đọc cache blob qua Vercel.
   async getCourts() {
-    if (API_BASE) { try { return await jget(`${API_BASE}/api/courts`); } catch (_) { /* offline → blob */ } }
-    return jget("/api/courts");
+    const blob = () => jget("/api/courts");
+    if (!API_BASE) return blob();
+    try {
+      const j = await jget(`${API_BASE}/api/courts`);
+      if (j && j.data && (j.data.branches || []).length) return j;  // backend có data thật
+      return await blob().catch(() => j);                            // backend rỗng (chưa cào) → cache blob cũ
+    } catch (_) {
+      return blob();                                                 // backend offline → cache blob
+    }
   },
   async triggerCrawl(pass) {
     if (API_BASE) { try { return await jpost(`${API_BASE}/api/courts/crawl`, { pass }); } catch (_) { /* fallback Vercel */ } }
