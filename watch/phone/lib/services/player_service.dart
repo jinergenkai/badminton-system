@@ -59,6 +59,41 @@ class PlayerService extends GetxService {
   static PlayerService? get maybe =>
       Get.isRegistered<PlayerService>() ? Get.find<PlayerService>() : null;
 
+  static PlayerService get to => Get.find<PlayerService>();
+
+  /// Nhập danh bạ từ backend (id GỐC sổ tiền). Khớp theo externalId trước, rồi
+  /// theo tên (người chưa nối); tạo mới nếu chưa có. Luôn set externalId = id gốc.
+  /// Trả số người được tạo/cập nhật. Không đụng today/band.
+  Future<int> importBackend(List<Map<String, dynamic>> players) async {
+    int n = 0;
+    for (final bp in players) {
+      final extId = (bp['id'] ?? '').toString();
+      if (extId.isEmpty) continue;
+      final name = (bp['name'] ?? '?').toString().trim();
+      final short = (bp['short'] ?? '').toString().trim();
+      Player? p = roster.firstWhereOrNull((x) => x.externalId == extId);
+      p ??= roster.firstWhereOrNull(
+          (x) => x.externalId == null && x.name.trim().toLowerCase() == name.toLowerCase());
+      if (p == null) {
+        roster.add(Player(
+          id: 'p${_nextId++}',
+          name: name.isEmpty ? '?' : name,
+          short: short.isEmpty ? defaultShort(name) : clampShort(short),
+          externalId: extId,
+        ));
+        n++;
+      } else {
+        if (name.isNotEmpty) p.name = name;
+        if (short.isNotEmpty) p.short = clampShort(short);
+        p.externalId = extId;
+        n++;
+      }
+    }
+    roster.refresh();
+    await _save(bandVisible: false);
+    return n;
+  }
+
   Future<PlayerService> init() async {
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(_prefRoster);

@@ -11,6 +11,7 @@ import 'views/ui_kit.dart';
 import 'services/database_service.dart';
 import 'services/audio_settings.dart';
 import 'services/player_service.dart';
+import 'services/sync_service.dart';
 import 'services/voice_clip_service.dart';
 import 'services/sound_library_service.dart';
 import 'services/phone_controls_service.dart';
@@ -39,6 +40,7 @@ void main() async {
   await Get.putAsync(() => AudioSettings().init());
   await Get.putAsync(() => DisplaySettings().init());
   await Get.putAsync(() => PlayerService().init());
+  await Get.putAsync(() => SyncService().init());
   await Get.putAsync(() => VoiceClipService().init());
   await Get.putAsync(() => SoundLibraryService().init());
   Get.put(PhoneControlsService());

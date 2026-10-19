@@ -9,6 +9,7 @@ import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../controllers/score_controller.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'ui_kit.dart';
+import 'sync_screen.dart';
 
 /// Phone settings. The band is the remote: anything it can set (mode, the
 /// on/off switches, master) is mirrored here, and everything else lives
@@ -28,6 +29,19 @@ class SettingsScreen extends StatelessWidget {
           const SizedBox(height: 24),
           const UiSection('Game & display'),
           _buildGameCard().animate().fadeIn(delay: 150.ms),
+          const SizedBox(height: 24),
+          const UiSection('Đồng bộ'),
+          GestureDetector(
+            onTap: () => Get.to(() => const SyncScreen()),
+            child: _card([
+              _tile(
+                icon: Icons.leaderboard_rounded,
+                title: 'Đồng bộ ranking',
+                subtitle: 'Kéo danh bạ · đẩy trận lên backend',
+                trailing: const Icon(Icons.chevron_right, color: Colors.white38),
+              ),
+            ]),
+          ).animate().fadeIn(delay: 250.ms),
         ],
       ),
     );
