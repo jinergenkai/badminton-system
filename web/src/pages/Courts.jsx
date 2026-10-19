@@ -24,6 +24,7 @@ const LS_KEY = "alobo_prefs_mui";
 const fmtDate = (iso) => { const [, m, d] = iso.split("-"); return `${d}/${m}`; };
 const addMin = (t, m) => { let [a, b] = t.split(":").map(Number); let x = a * 60 + b + m; return String(Math.floor(x / 60)).padStart(2, "0") + ":" + String(x % 60).padStart(2, "0"); };
 function fmtPrice(n) { if (n == null) return ""; if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + "tr"; if (n >= 1000) return Math.round(n / 1000) + "k"; return "" + n; }
+function fmtStamp(updatedAt) { if (!updatedAt) return "chưa có dữ liệu"; const t = new Date(updatedAt), mins = Math.max(0, Math.round((Date.now() - t) / 60000)); return mins < 1 ? "vừa xong" : mins < 60 ? mins + "′ trước" : mins < 2880 ? Math.round(mins / 60) + "h trước" : Math.round(mins / 1440) + " ngày trước"; }
 
 // push_web.py nén occupied thành chuỗi theo sân×ngày — giải nén về shape viz cần.
 function expandCourts(p) {
@@ -129,7 +130,28 @@ export default function Courts() {
 
   if (err) return <Alert severity="error" sx={{ mt: 2 }}>Không tải được dữ liệu sân: {err}</Alert>;
   if (!data) return <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}><CircularProgress /></Box>;
-  if (!branches.length) return <Alert severity="info" sx={{ mt: 2 }}>Chưa có dữ liệu sân — máy cào chưa gửi lên lần nào.</Alert>;
+
+  const isAdmin = auth.isAdmin;
+  if (!isAdmin && (view === "crawl" || view === "config")) setView("day");
+  const tabsEl = (
+    <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, v) => v && setView(v)} sx={{ flexWrap: "wrap" }}>
+      <ToggleButton value="day">Theo ngày</ToggleButton>
+      <ToggleButton value="overview">Tổng quan</ToggleButton>
+      <ToggleButton value="finder"><Iconify icon="solar:magnifer-linear" width={16} sx={{ mr: 0.5 }} />Tìm slot</ToggleButton>
+      {isAdmin && <ToggleButton value="crawl"><Iconify icon="solar:refresh-bold" width={16} sx={{ mr: 0.5 }} />Cào</ToggleButton>}
+      {isAdmin && <ToggleButton value="config"><Iconify icon="solar:settings-bold" width={16} sx={{ mr: 0.5 }} />Cấu hình</ToggleButton>}
+    </ToggleButtonGroup>
+  );
+
+  // Tab quản trị — không cần dữ liệu sân (dùng được cả khi chưa cào gì).
+  if (isAdmin && view === "crawl") return <Stack spacing={2.5} sx={{ mt: 1 }}>{tabsEl}<CrawlPanel pass={auth.passRef} stamp={fmtStamp(updatedAt)} reload={reload} /></Stack>;
+  if (isAdmin && view === "config") return <Stack spacing={2.5} sx={{ mt: 1 }}>{tabsEl}<CourtsSettings pass={auth.passRef} /></Stack>;
+
+  if (!branches.length) return (
+    <Stack spacing={2.5} sx={{ mt: 1 }}>{tabsEl}
+      <Alert severity="info">Chưa có dữ liệu sân{isAdmin ? " — mở tab “Cào” để lấy dữ liệu mới." : " — máy cào chưa gửi lên lần nào."}</Alert>
+    </Stack>
+  );
 
   const courts = courtsOf(g, sport);
   const slots = g.slots.filter((s) => s >= range.start && s < range.end);
@@ -143,7 +165,7 @@ export default function Courts() {
   kdays.forEach((d) => courts.forEach((c) => slots.forEach((s) => { total++; if (statusG(g, c, d.date, s) === "free") free++; })));
   const daysFree = kdays.filter((d) => courts.some((c) => slots.some((s) => statusG(g, c, d.date, s) === "free"))).length;
   const bmp = branchMaxPrice(g, courts);
-  const stamp = updatedAt ? (() => { const t = new Date(updatedAt), mins = Math.max(0, Math.round((Date.now() - t) / 60000)); return mins < 1 ? "vừa xong" : mins < 60 ? mins + "′ trước" : mins < 2880 ? Math.round(mins / 60) + "h trước" : Math.round(mins / 1440) + " ngày trước"; })() : "chưa có dữ liệu";
+  const stamp = fmtStamp(updatedAt);
 
   const cell = (st) => {
     const base = { width: 30, height: 26, borderRadius: 1, position: "relative", flex: "0 0 auto" };
@@ -156,8 +178,7 @@ export default function Courts() {
 
   return (
     <Stack spacing={2.5} sx={{ mt: 1 }}>
-      {auth.isAdmin && <CrawlPanel pass={auth.passRef} stamp={stamp} reload={reload} />}
-      {auth.isAdmin && <CourtsSettings pass={auth.passRef} />}
+      {tabsEl}
       {/* KPIs */}
       <Box sx={{ display: "grid", gap: { xs: 1.5, sm: 2.5 }, gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" } }}>
         <WidgetSummary color="success" icon="solar:calendar-search-bold-duotone" title="Ô trống (T2–T6)" total={free} caption={`khung ${range.start}–${range.end} · ${total} ô`} />
@@ -191,12 +212,6 @@ export default function Courts() {
           </Stack>
 
           <Stack direction="row" flexWrap="wrap" gap={1.5} alignItems="center" sx={{ mt: 2 }}>
-            <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, v) => v && setView(v)}>
-              <ToggleButton value="day">Theo ngày</ToggleButton>
-              <ToggleButton value="overview">Tổng quan</ToggleButton>
-              <ToggleButton value="finder"><Iconify icon="solar:magnifer-linear" width={16} sx={{ mr: 0.5 }} />Tìm slot</ToggleButton>
-            </ToggleButtonGroup>
-
             {view !== "finder" && (
               <Stack direction="row" gap={1} alignItems="center">
                 <Typography variant="body2" color="text.secondary">Giờ</Typography>
@@ -392,99 +407,162 @@ function Finder({ branches, finder, setFinder, timeOpts, onOpen }) {
 
 // Bảng quản trị: cào lại dữ liệu sân (gửi lệnh qua Vercel → server cào).
 function CrawlPanel({ pass, stamp, reload }) {
+  const theme = useTheme();
+  const [st, setSt] = useState(null);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState("");
   const [toast, setToast] = useState("");
+  const [logOpen, setLogOpen] = useState(false);
+  const wasRunning = useRef(false);
+
+  // Poll trạng thái cào: 2s khi đang chạy, 15s khi nghỉ. Xong thì nạp lại data.
+  useEffect(() => {
+    let alive = true, tid;
+    const tick = async () => {
+      let s = null; try { s = await api.getCourtsStatus(); } catch { /* */ }
+      if (!alive) return;
+      if (s) setSt(s);
+      if (s && !s.running && wasRunning.current) { wasRunning.current = false; reload().catch(() => {}); setToast("Cào xong — dữ liệu mới."); }
+      if (s) wasRunning.current = s.running;
+      tid = setTimeout(tick, s && s.running ? 2000 : 15000);
+    };
+    tick();
+    return () => { alive = false; clearTimeout(tid); };
+  }, [reload]);
+
   const run = async () => {
-    setBusy(true); setMsg("Đang gửi lệnh cào…");
-    try {
-      const before = await reload().catch(() => null);
-      await api.triggerCrawl(pass.current);
-      setMsg("Server đang cào… trang tự cập nhật khi xong (vài phút).");
-      for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 20000));
-        const now = await reload().catch(() => null);
-        if (now && now !== before) { setMsg(""); setToast("Đã cào xong — dữ liệu mới."); break; }
-      }
-    } catch (e) {
-      setMsg(""); setToast("Lỗi cào: " + (e.message || e));
-    } finally { setBusy(false); }
+    setBusy(true);
+    try { await api.triggerCrawl(pass.current); wasRunning.current = true; setToast("Đã gửi lệnh cào…"); setTimeout(async () => { try { setSt(await api.getCourtsStatus()); } catch { /* */ } }, 800); }
+    catch (e) { setToast("Lỗi cào: " + (e.message || e)); }
+    finally { setBusy(false); }
   };
+
+  const cov = st?.coverage, running = !!st?.running, tracking = !!cov?.tracking;
+  const bcov = cov?.branches || [];
+  const cellTot = bcov.reduce((n, b) => n + b.total, 0);
+  const haveTot = bcov.reduce((n, b) => n + b.have, 0);
+  const freshTot = bcov.reduce((n, b) => n + (b.fresh || 0), 0);
+  const auto = st?.auto || {};
+  const dayCell = (d) => {
+    if (!d.has) return { bgcolor: alpha(theme.palette.error.main, 0.14), color: theme.palette.error.dark };
+    if (tracking && d.fresh) return { bgcolor: alpha(theme.palette.success.main, 0.2), color: theme.palette.success.dark, boxShadow: `inset 0 0 0 1.5px ${theme.palette.success.main}` };
+    if (tracking) return { bgcolor: alpha(theme.palette.text.disabled, 0.14), color: theme.palette.text.secondary, opacity: 0.6 };
+    return { bgcolor: alpha(theme.palette.success.main, 0.14), color: theme.palette.success.dark };
+  };
+  const legendItem = (bg, ring, label) => (
+    <Stack direction="row" spacing={0.5} alignItems="center"><Box sx={{ width: 14, height: 14, borderRadius: 0.5, bgcolor: bg, boxShadow: ring }} /><Typography variant="caption" color="text.secondary">{label}</Typography></Stack>
+  );
+
   return (
-    <Card sx={{ p: 2 }}>
-      <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
-        <Box sx={{ width: 40, height: 40, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: (t) => alpha(t.palette.primary.main, 0.1), color: "primary.main", flexShrink: 0 }}>
-          <Iconify icon="solar:refresh-circle-bold-duotone" width={24} />
-        </Box>
-        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-          <Typography variant="subtitle1" sx={{ lineHeight: 1.2 }}>Cào dữ liệu sân</Typography>
-          <Typography variant="caption" color="text.secondary">Lần cào gần nhất: {stamp}</Typography>
-        </Box>
-        <Button variant="contained" disabled={busy} onClick={run}
-          startIcon={<Iconify icon="solar:refresh-bold" width={18} />}>{busy ? "Đang cào…" : "Cào lại ngay"}</Button>
-      </Stack>
-      <Collapse in={!!msg}><Typography variant="body2" color="text.secondary" sx={{ mt: 1.5 }}>{msg}</Typography></Collapse>
-      <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>
-        Danh sách sân theo dõi &amp; số ngày cào được cấu hình trên máy cào (config.json của crawler).
-      </Typography>
+    <Stack spacing={2}>
+      <Card sx={{ p: 2 }}>
+        <Stack direction="row" alignItems="center" spacing={1.5} flexWrap="wrap" useFlexGap>
+          <Box sx={{ width: 40, height: 40, borderRadius: 1.5, display: "grid", placeItems: "center", bgcolor: (t) => alpha(t.palette.primary.main, 0.1), color: "primary.main", flexShrink: 0 }}>
+            {running ? <CircularProgress size={22} /> : <Iconify icon="solar:refresh-circle-bold-duotone" width={24} />}
+          </Box>
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography variant="subtitle1" sx={{ lineHeight: 1.2 }}>Cào dữ liệu sân</Typography>
+            <Typography variant="caption" color="text.secondary">
+              Lần gần nhất: {cov?.last_data_age || stamp} · {auto.enabled ? <Box component="span" sx={{ color: "success.main" }}>tự động mỗi {auto.interval_min}′</Box> : "cào tay"}
+            </Typography>
+          </Box>
+          <Button variant="contained" disabled={busy || running} onClick={run} startIcon={<Iconify icon="solar:refresh-bold" width={18} />}>{running ? "Đang cào…" : "Cào lại ngay"}</Button>
+        </Stack>
+
+        {cellTot > 0 && (
+          <Box sx={{ mt: 2 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap" useFlexGap sx={{ mb: 1 }}>
+              {running && <Typography variant="body2" sx={{ color: "primary.main", fontWeight: 600 }}>Đang cào…</Typography>}
+              <Typography variant="body2" color="text.secondary">
+                {tracking ? <>Lượt này cập nhật <Box component="b" sx={{ color: "success.main" }}>{freshTot}</Box>/{cellTot} ô</> : <>{haveTot}/{cellTot} ô có dữ liệu</>}
+              </Typography>
+              <Box flexGrow={1} />
+              {tracking && (<Stack direction="row" spacing={1.5}>
+                {legendItem(alpha(theme.palette.success.main, 0.2), `inset 0 0 0 1.5px ${theme.palette.success.main}`, "vừa cào")}
+                {legendItem(alpha(theme.palette.text.disabled, 0.14), "none", "data cũ")}
+                {legendItem(alpha(theme.palette.error.main, 0.14), "none", "chưa có")}
+              </Stack>)}
+            </Stack>
+            <Box sx={{ overflowX: "auto" }}>
+              {bcov.map((b) => (
+                <Box key={b.branch} sx={{ mb: 1.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 600 }}>{b.branch}</Typography>
+                  <Typography component="span" variant="caption" color="text.secondary"> — {b.have}/{b.total} ngày{tracking && b.fresh ? ` · ${b.fresh} vừa cào` : ""} · khoá {b.aux?.locks?.has ? b.aux.locks.age : "chưa"} · sân {b.aux?.cores?.has ? b.aux.cores.age : "chưa"}</Typography>
+                  <Stack direction="row" gap="4px" sx={{ mt: 0.5 }}>
+                    {(b.days || []).map((d) => (
+                      <Tooltip key={d.date} arrow title={`${d.date} · ${d.has ? (tracking && d.fresh ? "vừa cào " + d.age : "data cũ · " + d.age) : "chưa có"}`}>
+                        <Box sx={{ width: 42, height: 34, borderRadius: 0.75, display: "grid", placeItems: "center", textAlign: "center", lineHeight: 1, flexShrink: 0, ...dayCell(d) }}>
+                          <Box><Typography sx={{ fontSize: 10, fontWeight: 600 }}>{d.weekday}</Typography><Typography sx={{ fontSize: 10 }}>{d.date.slice(8)}</Typography></Box>
+                        </Box>
+                      </Tooltip>
+                    ))}
+                  </Stack>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+        )}
+
+        {st?.log_tail && (<Box sx={{ mt: 1.5 }}>
+          <Button size="small" color="inherit" onClick={() => setLogOpen((v) => !v)} startIcon={<Iconify icon={logOpen ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} width={16} />}>Log lần cào gần nhất{st.finished ? ` · xong ${st.finished.slice(11, 16)}${st.returncode ? " (lỗi " + st.returncode + ")" : " ✓"}` : ""}</Button>
+          <Collapse in={logOpen}><Box component="pre" sx={{ mt: 1, p: 1.5, borderRadius: 1.5, bgcolor: "background.neutral", fontSize: 11, lineHeight: 1.6, overflow: "auto", maxHeight: 300, whiteSpace: "pre-wrap", fontFamily: "'Roboto Mono', monospace" }}>{st.log_tail}</Box></Collapse>
+        </Box>)}
+
+        {!cellTot && !running && <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>Chưa có sân nào được cấu hình để cào — vào tab Cấu hình để thêm.</Typography>}
+      </Card>
       <Snackbar open={!!toast} autoHideDuration={3500} onClose={() => setToast("")} message={toast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
-    </Card>
+    </Stack>
   );
 }
 
 // Cấu hình sân cho admin: số ngày cào + chọn sân theo dõi (ghi vào config.json của crawler).
 function CourtsSettings({ pass }) {
-  const [open, setOpen] = useState(false);
   const [dir, setDir] = useState(null);
   const [days, setDays] = useState(21);
   const [sel, setSel] = useState(() => new Set());
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
   useEffect(() => {
-    if (!open || dir) return;
     Promise.all([api.getCourtsDirectory().catch(() => null), api.getCourtsConfig().catch(() => null)])
       .then(([d, c]) => {
         if (d) { setDir(d); setSel(new Set((d.branches || []).filter((b) => b.monitored).map((b) => b.id))); }
+        else setErr("Không đọc được danh bạ sân — backend/crawler chưa sẵn sàng hoặc chưa set VITE_API_BASE.");
         if (c) setDays(c.days_window || c.days_ahead || 21);
-        if (!d) setMsg("Không đọc được danh bạ sân (backend/crawler chưa sẵn sàng).");
       });
-  }, [open, dir]);
+  }, []);
   const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const save = async () => {
     setBusy(true); setMsg("Đang lưu…");
-    try { const r = await api.saveCourtsConfig(pass.current, [...sel], Math.max(1, Math.min(60, +days || 21))); setMsg(`✓ Đã lưu ${(r.branches || []).length} sân · ${r.days_window} ngày.`); }
+    try { const r = await api.saveCourtsConfig(pass.current, [...sel], Math.max(1, Math.min(60, +days || 21))); setMsg(`✓ Đã lưu ${(r.branches || []).length} sân · ${r.days_window} ngày. Vào tab Cào để chạy.`); }
     catch (e) { setMsg("Lỗi: " + (e.message || e)); }
     finally { setBusy(false); }
   };
   return (
-    <Card sx={{ p: 2 }}>
-      <Stack direction="row" alignItems="center" spacing={1} onClick={() => setOpen((v) => !v)} sx={{ cursor: "pointer" }}>
+    <Card sx={{ p: 2.5 }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
         <Iconify icon="solar:settings-bold-duotone" sx={{ color: "text.secondary" }} />
-        <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>Cấu hình sân theo dõi</Typography>
-        <Iconify icon={open ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} width={18} sx={{ color: "text.secondary" }} />
+        <Typography variant="subtitle1">Cấu hình sân theo dõi</Typography>
       </Stack>
-      <Collapse in={open} unmountOnExit>
-        <Box sx={{ mt: 2 }}>
-          <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
-            <Typography variant="body2" color="text.secondary">Số ngày cào từ hôm nay:</Typography>
-            <Select size="small" value={days} onChange={(e) => setDays(e.target.value)} sx={{ width: 90 }}>
-              {[7, 10, 14, 21, 30, 45, 60].map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
-            </Select>
-          </Stack>
-          {!dir ? <Typography variant="body2" color="text.secondary">{msg || "Đang tải…"}</Typography> : (
-            <Stack spacing={0.5}>
-              {(dir.branches || []).map((b) => (
-                <FormControlLabel key={b.id} control={<Switch size="small" checked={sel.has(b.id)} onChange={() => toggle(b.id)} />}
-                  label={<Box><Typography variant="body2" sx={{ fontWeight: 600 }}>{b.name}</Typography><Typography variant="caption" color="text.secondary">{b.id}{b.sport ? " · " + b.sport : ""}{b.has_data ? " · có dữ liệu" : ""}</Typography></Box>} />
-              ))}
-            </Stack>
-          )}
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 2 }}>
-            <Button variant="contained" disabled={busy || !dir} onClick={save}>Lưu cấu hình</Button>
-            {msg && <Typography variant="caption" color="text.secondary">{msg}</Typography>}
-          </Stack>
-        </Box>
-      </Collapse>
+      <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}>
+        <Typography variant="body2" color="text.secondary">Số ngày cào từ hôm nay:</Typography>
+        <Select size="small" value={days} onChange={(e) => setDays(e.target.value)} sx={{ width: 90 }}>
+          {[7, 10, 14, 21, 30, 45, 60].map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+        </Select>
+        <Typography variant="caption" color="text.secondary">gồm cả T7/CN</Typography>
+      </Stack>
+      {err && <Alert severity="warning" sx={{ mb: 2 }}>{err}</Alert>}
+      {!dir && !err ? <Box sx={{ display: "grid", placeItems: "center", py: 3 }}><CircularProgress size={24} /></Box> : (
+        <Stack spacing={0.5}>
+          {(dir?.branches || []).map((b) => (
+            <FormControlLabel key={b.id} control={<Switch size="small" checked={sel.has(b.id)} onChange={() => toggle(b.id)} />}
+              label={<Box><Typography variant="body2" sx={{ fontWeight: 600 }}>{b.name}</Typography><Typography variant="caption" color="text.secondary">{b.id}{b.sport ? " · " + b.sport : ""}{b.has_data ? " · có dữ liệu" : ""}</Typography></Box>} />
+          ))}
+        </Stack>
+      )}
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 2 }}>
+        <Button variant="contained" disabled={busy || !dir} onClick={save}>Lưu cấu hình</Button>
+        {msg && <Typography variant="caption" color="text.secondary">{msg}</Typography>}
+      </Stack>
     </Card>
   );
 }

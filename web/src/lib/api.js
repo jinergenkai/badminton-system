@@ -42,6 +42,7 @@ export const api = {
     if (API_BASE) { try { return await jpost(`${API_BASE}/api/courts/crawl`, { pass }); } catch (_) { /* fallback Vercel */ } }
     return jpost("/api/courts?action=crawl", { pass });
   },
+  getCourtsStatus: () => (API_BASE ? jget(`${API_BASE}/api/courts/status`) : Promise.reject(new Error("cần VITE_API_BASE"))),
   getCourtsConfig: () => (API_BASE ? jget(`${API_BASE}/api/courts/config`) : Promise.reject(new Error("cần VITE_API_BASE"))),
   getCourtsDirectory: () => (API_BASE ? jget(`${API_BASE}/api/courts/directory`) : Promise.reject(new Error("cần VITE_API_BASE"))),
   saveCourtsConfig: (pass, branches, days_window) => jpost(`${API_BASE}/api/courts/config`, { pass, branches, days_window }),
