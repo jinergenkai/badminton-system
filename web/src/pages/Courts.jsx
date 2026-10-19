@@ -9,6 +9,9 @@ import {
 } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
 import { api } from "../lib/api.js";
+import WidgetSummary from "../components/WidgetSummary.jsx";
+import { Iconify } from "../components/iconify/index.jsx";
+import { Label } from "../components/label/index.jsx";
 
 const WD_FULL = { T2: "Thứ 2", T3: "Thứ 3", T4: "Thứ 4", T5: "Thứ 5", T6: "Thứ 6", T7: "Thứ 7", CN: "Chủ nhật" };
 const WDX = ["T2", "T3", "T4", "T5", "T6", "T7", "CN"];
@@ -151,11 +154,11 @@ export default function Courts() {
   return (
     <Stack spacing={2.5} sx={{ mt: 1 }}>
       {/* KPIs */}
-      <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: { xs: "repeat(2,1fr)", sm: "repeat(4,1fr)" } }}>
-        <Stat big={free} label={`ô trống ${range.start}–${range.end} (T2–T6)`} color="success.main" />
-        <Stat big={`${daysFree}/${kdays.length}`} label="ngày T2–T6 có chỗ" />
-        <Stat big={courts.length} label="sân" />
-        <Stat big={bmp != null ? fmtPrice(bmp) : g.days.length} label={bmp != null ? "giá trần / giờ" : "ngày theo dõi"} color={bmp != null ? "primary.main" : undefined} />
+      <Box sx={{ display: "grid", gap: { xs: 1.5, sm: 2.5 }, gridTemplateColumns: { xs: "repeat(2,1fr)", md: "repeat(4,1fr)" } }}>
+        <WidgetSummary color="success" icon="solar:calendar-search-bold-duotone" title="Ô trống (T2–T6)" total={free} caption={`khung ${range.start}–${range.end} · ${total} ô`} />
+        <WidgetSummary color="primary" icon="solar:calendar-bold-duotone" title="Ngày có chỗ" total={`${daysFree}/${kdays.length}`} caption="T2–T6 còn ít nhất 1 ô" />
+        <WidgetSummary color="info" icon="solar:widget-bold-duotone" title="Số sân" total={courts.length} caption={SPORT_LABEL[sport] || sport} />
+        <WidgetSummary color="warning" icon="solar:tag-price-bold" title={bmp != null ? "Giá trần / giờ" : "Ngày theo dõi"} total={bmp != null ? fmtPrice(bmp) : g.days.length} caption={bmp != null ? "mức cao nhất bảng giá" : "ngày đã cào"} />
       </Box>
 
       {/* Controls */}
@@ -163,8 +166,15 @@ export default function Courts() {
         <CardContent sx={{ py: 2, "&:last-child": { pb: 2 } }}>
           <Stack direction="row" flexWrap="wrap" gap={1.5} alignItems="center">
             <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-              <Typography variant="h5" sx={{ lineHeight: 1 }}>{g.branch_name}</Typography>
-              <Typography variant="caption" color="text.secondary">{g.days.length} ngày · {g.courts.length} sân · cào {stamp}</Typography>
+              <Stack direction="row" alignItems="center" spacing={1}>
+                <Iconify icon="solar:map-point-bold" width={22} sx={{ color: "primary.main" }} />
+                <Typography variant="h5" sx={{ lineHeight: 1.2 }}>{g.branch_name}</Typography>
+              </Stack>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ mt: 0.75 }} flexWrap="wrap" useFlexGap>
+                <Label color="primary">{g.days.length} ngày</Label>
+                <Label color="info">{g.courts.length} sân</Label>
+                <Label startIcon={<Iconify icon="solar:refresh-bold" />}>cào {stamp}</Label>
+              </Stack>
             </Box>
             {branches.length > 1 && (
               <FormControl sx={{ minWidth: 180 }}>
@@ -179,7 +189,7 @@ export default function Courts() {
             <ToggleButtonGroup exclusive size="small" value={view} onChange={(_, v) => v && setView(v)}>
               <ToggleButton value="day">Theo ngày</ToggleButton>
               <ToggleButton value="overview">Tổng quan</ToggleButton>
-              <ToggleButton value="finder">🔍 Tìm slot</ToggleButton>
+              <ToggleButton value="finder"><Iconify icon="solar:magnifer-linear" width={16} sx={{ mr: 0.5 }} />Tìm slot</ToggleButton>
             </ToggleButtonGroup>
 
             {view !== "finder" && (
@@ -236,17 +246,6 @@ export default function Courts() {
         </CardContent>
       </Card>
     </Stack>
-  );
-}
-
-function Stat({ big, label, color }) {
-  return (
-    <Card sx={{ borderRadius: 2 }}>
-      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-        <Typography variant="h3" sx={{ color: color || "text.primary", lineHeight: 1 }}>{big}</Typography>
-        <Typography variant="caption" color="text.secondary">{label}</Typography>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -372,11 +371,11 @@ function Finder({ branches, finder, setFinder, timeOpts, onOpen }) {
           const head = r.date !== cur ? (cur = r.date, true) : false;
           return (
             <Box key={r.branch + r.date}>
-              {head && <Typography variant="subtitle2" sx={{ mt: 2 }}>{WD_FULL[r.weekday] || r.weekday} · {fmtDate(r.date)}</Typography>}
-              <Stack direction="row" gap={1.25} alignItems="center" flexWrap="wrap" sx={{ mt: 0.75, cursor: "pointer", py: 0.5 }} onClick={() => onOpen(r.branch, r.date, { start: finder.start, end: finder.end })}>
+              {head && <Typography variant="overline" color="text.secondary" sx={{ display: "block", mt: 2.5 }}>{WD_FULL[r.weekday] || r.weekday} · {fmtDate(r.date)}</Typography>}
+              <Stack direction="row" gap={1.25} alignItems="center" flexWrap="wrap" sx={{ mt: 0.75, cursor: "pointer", py: 1, px: 1.5, borderRadius: 1.5, border: (t) => `1px dashed ${t.palette.divider}`, transition: "all .15s", "&:hover": { bgcolor: "action.hover", borderColor: "primary.main" } }} onClick={() => onOpen(r.branch, r.date, { start: finder.start, end: finder.end })}>
                 <Typography sx={{ minWidth: 170, fontWeight: 600 }} variant="body2">{r.name}</Typography>
-                <Stack direction="row" gap={0.75} flexWrap="wrap">{r.freeSlots.map((s) => <Chip key={s} label={s} size="small" color="success" variant="outlined" />)}</Stack>
-                <Typography variant="caption" color="text.secondary">tối đa {r.maxFree} sân</Typography>
+                <Stack direction="row" gap={0.75} flexWrap="wrap">{r.freeSlots.map((s) => <Label key={s} color="success" sx={{ fontFamily: "'Roboto Mono', monospace" }}>{s}</Label>)}</Stack>
+                <Label color={r.maxFree > 1 ? "primary" : "warning"} variant="inverted">tối đa {r.maxFree} sân</Label>
               </Stack>
             </Box>
           );
