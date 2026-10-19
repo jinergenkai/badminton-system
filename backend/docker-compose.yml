@@ -30,8 +30,35 @@ services:
     networks:
       - dokploy-network
 
+  # API nhỏ trên SQLite: danh bạ người chơi (nguồn chung), lịch sử trận, ranking,
+  # gợi ý xoay người. id người chơi = id GỐC sổ tiền. Không dính ALOBO.
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      DB_PATH: /app/data/badminton.db
+      # Chỉ tin container + PC qua WireGuard (xem ghi chú ở service crawler).
+      TRUSTED_NETS: ${TRUSTED_NETS:-127.0.0.1/32,10.8.0.3/32}
+      # Ghi từ internet (Flutter) phải kèm Bearer token này.
+      API_TOKEN: ${API_TOKEN:-}
+      # Kéo danh bạ từ sổ tiền (Blob) lúc DB rỗng + khi gọi /api/roster/reseed.
+      BILLBOOK_URL: ${BILLBOOK_URL:-}
+      # Đẩy mirror danh bạ lên Blob để web/Flutter đọc luôn-online.
+      ROSTER_PUSH_URL: ${ROSTER_PUSH_URL:-}
+      ROSTER_PUSH_TOKEN: ${ROSTER_PUSH_TOKEN:-}
+    volumes:
+      - api-data:/app/data              # badminton.db, giữ qua redeploy
+    expose:
+      - "8000"
+    ports:
+      - "8002:8000"                     # quản trị qua WireGuard: http://10.8.0.4:8002
+    networks:
+      - dokploy-network
+
 volumes:
   crawler-data:
+  api-data:
 
 networks:
   dokploy-network:
