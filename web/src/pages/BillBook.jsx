@@ -118,6 +118,39 @@ function DueTag({ due }) {
     ? <Money sx={{ color: DUE, fontWeight: 700, fontSize: 15 }}>{money(due)}</Money>
     : <Label color="success" startIcon={<Iconify icon="solar:check-circle-bold" />}>Đã trả</Label>;
 }
+// Một dòng buổi: ô lịch ngày/tháng + mô tả + số tiền + trạng thái (bấm để đổi nếu có onToggle)
+function SesLine({ s, mid, paid, onToggle }) {
+  const raw = String(s.date || "—").trim();
+  const mt = raw.match(/^(\d{1,2})[/.-](\d{1,2})[.,]?\s*(.*)$/);
+  const rest = mt ? mt[3].replace(/^[-–·\s]+/, "") : raw;
+  const w = (s.parts.find((p) => p.mid === mid) || {}).weight;
+  const when = paid ? M.whenLabel(s.paid?.[mid]) : "";
+  return (
+    <Stack direction="row" alignItems="center" spacing={1.25} sx={{ p: 0.75, borderRadius: 1.25, bgcolor: "background.paper", "& + &": { mt: 0.75 }, opacity: paid ? 0.78 : 1 }}>
+      <Box sx={{ width: 42, height: 42, flexShrink: 0, borderRadius: 1.25, display: "grid", placeItems: "center", alignContent: "center", lineHeight: 1,
+        bgcolor: (t) => alpha(paid ? t.palette.success.main : t.palette.primary.main, 0.1), color: paid ? "success.dark" : "primary.main" }}>
+        {mt ? <><Box sx={{ fontFamily: (t) => t.typography.fontSecondaryFamily, fontWeight: 800, fontSize: 18 }}>{mt[1]}</Box><Box sx={{ fontSize: 9.5, fontWeight: 700, opacity: 0.8, mt: 0.25 }}>TH {mt[2]}</Box></>
+          : <Iconify icon="solar:calendar-bold-duotone" width={22} />}
+      </Box>
+      <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+        <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.3 }}>{mt ? `${mt[1]}/${mt[2]}` : raw}{w !== 1 && <Money sx={{ ml: 0.75, fontSize: 11, color: "warning.dark" }}>×{M.wStr(w)}</Money>}</Typography>
+        <Typography variant="caption" color="text.secondary" noWrap component="div">{mt ? rest || `${s.parts.length} người chơi` : `${s.parts.length} người chơi`}</Typography>
+      </Box>
+      <Money sx={{ fontWeight: 700, fontSize: 14, color: paid ? "text.disabled" : DUE, textDecoration: paid ? "line-through" : "none" }}>{money(M.shareIn(s, mid))}</Money>
+      {onToggle && (
+        <Box component="button" onClick={onToggle} sx={{ font: "inherit", cursor: "pointer", border: 0, flexShrink: 0, minWidth: 96, height: 30, px: 1.25, borderRadius: 4,
+          display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 0.5, fontSize: 12.5, fontWeight: 700, transition: "all .15s",
+          bgcolor: (t) => paid ? alpha(t.palette.success.main, 0.16) : "transparent", color: paid ? "success.dark" : "text.secondary",
+          boxShadow: (t) => paid ? "none" : `inset 0 0 0 1px ${alpha(t.palette.grey[500], 0.32)}`,
+          "&:hover": { boxShadow: (t) => `inset 0 0 0 1px ${paid ? t.palette.success.main : t.palette.primary.main}`, color: paid ? "success.dark" : "primary.main" } }}>
+          <Iconify icon={paid ? "solar:check-circle-bold" : "solar:clock-circle-bold"} width={15} />
+          {paid ? `Đã trả${when ? " " + when : ""}` : "Chưa trả"}
+        </Box>
+      )}
+    </Stack>
+  );
+}
+
 function SearchBox({ value, onChange, placeholder }) {
   return <TextField fullWidth placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)}
     sx={{ "& .MuiOutlinedInput-root": { bgcolor: "background.paper" } }}
@@ -581,14 +614,9 @@ function AdminMembers({ B, book, setToast, picFor, setPicFor, pickFile }) {
               </ListItem>
               {book.flags?.[m.id] && <Box sx={{ px: 2, pb: 1 }}><Typography variant="caption" sx={{ color: "error.main" }}>⚠ {book.flags[m.id]}</Typography></Box>}
               <Collapse in={isOpen} unmountOnExit>
-                <Box sx={{ px: 2, pb: 1.5 }}>
-                  {ses.length ? ses.map((s) => { const on = M.isPaid(s, m.id); return (
-                    <Stack key={s.id} direction="row" alignItems="center" spacing={1} sx={{ py: 0.75, borderTop: (t) => `1px solid ${t.palette.divider}` }}>
-                      <Typography variant="body2" sx={{ width: 58 }}>{s.date || "—"}</Typography>
-                      <Money sx={{ flexGrow: 1, fontSize: 13, color: on ? "text.disabled" : DUE, textDecoration: on ? "line-through" : "none" }}>{money(M.shareIn(s, m.id))}</Money>
-                      <Button size="small" variant={on ? "contained" : "outlined"} color={on ? "success" : "inherit"} onClick={() => toggleSes(s, m.id)} sx={{ minWidth: 92 }}>{on ? `✓ đã trả${M.whenLabel(s.paid[m.id]) ? " " + M.whenLabel(s.paid[m.id]) : ""}` : "chưa trả"}</Button>
-                    </Stack>
-                  ); }) : <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>Chưa tham gia buổi nào.</Typography>}
+                <Box sx={{ mx: 2, mb: 1.5, p: 0.75, borderRadius: 1.5, bgcolor: "background.neutral" }}>
+                  {ses.length ? ses.map((s) => <SesLine key={s.id} s={s} mid={m.id} paid={M.isPaid(s, m.id)} onToggle={() => toggleSes(s, m.id)} />)
+                    : <Typography variant="body2" color="text.secondary" sx={{ p: 1.5 }}>Chưa tham gia buổi nào.</Typography>}
                 </Box>
               </Collapse>
             </Box>
@@ -635,16 +663,26 @@ function AdminCollect({ B, book, setToast, runExport }) {
       </List></Card>
       {chosen.length > 0 && (<>
         <SectionLabel>Chi tiết {chosen.length} người đang chọn · <Money>{money(grand)}</Money></SectionLabel>
-        <Card sx={{ px: 2 }}>
+        <Card sx={{ overflow: "hidden" }}>
           {chosen.map((r, i) => (
-            <Box key={r.m.id} sx={{ py: 1.25, borderBottom: (t) => `1px solid ${t.palette.divider}` }}>
-              <Stack direction="row" alignItems="center" spacing={1}><MemAvatar m={r.m} size={28} /><Typography sx={{ flexGrow: 1, fontWeight: 700 }}>{M.fullName(book, r.m)}</Typography><Money sx={{ color: DUE, fontWeight: 700 }}>{money(r.due)}</Money></Stack>
-              {M.memberDueSessions(book, r.m.id).map((s) => { const w = (s.parts.find((p) => p.mid === r.m.id) || {}).weight; return (
-                <Stack key={s.id} direction="row" sx={{ ml: 4.5, mt: 0.5 }}><Typography variant="body2" sx={{ flexGrow: 1 }}>{s.date || "—"}{w !== 1 && <Money component="span" sx={{ ml: 0.5, fontSize: 11, opacity: 0.7 }}>×{M.wStr(w)}</Money>}</Typography><Money sx={{ fontSize: 13, color: "text.secondary" }}>{money(M.shareIn(s, r.m.id))}</Money></Stack>
-              ); })}
+            <Box key={r.m.id} sx={{ p: 1.5, borderBottom: (t) => `1px dashed ${t.palette.divider}` }}>
+              <Stack direction="row" alignItems="center" spacing={1.25} sx={{ px: 0.5, mb: 1 }}>
+                <MemAvatar m={r.m} size={36} />
+                <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                  <Typography variant="subtitle2" noWrap>{M.fullName(book, r.m)}</Typography>
+                  <Typography variant="caption" color="text.secondary">{r.n} buổi chưa trả</Typography>
+                </Box>
+                <Label color="warning" sx={{ height: 28, px: 1.25, fontSize: 14 }}><Money sx={{ fontWeight: 700 }}>{money(r.due)}</Money></Label>
+              </Stack>
+              <Box sx={{ p: 0.75, borderRadius: 1.5, bgcolor: "background.neutral" }}>
+                {M.memberDueSessions(book, r.m.id).map((s) => <SesLine key={s.id} s={s} mid={r.m.id} paid={false} />)}
+              </Box>
             </Box>
           ))}
-          <Stack direction="row" sx={{ py: 1.25 }}><Typography sx={{ flexGrow: 1, fontWeight: 700 }}>Tổng</Typography><Money sx={{ color: DUE, fontWeight: 700, fontSize: 17 }}>{money(grand)}</Money></Stack>
+          <Stack direction="row" alignItems="center" sx={{ px: 2, py: 1.5, bgcolor: (t) => alpha(t.palette.warning.main, 0.1) }}>
+            <Typography variant="overline" sx={{ flexGrow: 1, color: "warning.darker" }}>Tổng cần thu · {chosen.length} người</Typography>
+            <Money sx={{ color: DUE, fontWeight: 700, fontSize: 20 }}>{money(grand)}</Money>
+          </Stack>
         </Card>
         <Button variant="outlined" color="inherit" startIcon={<Iconify icon="solar:gallery-download-bold" />} onClick={() => runExport(() => exportBillImage(book, bookUpdatedAt(), chosen.map((r) => r.m)))}>Xuất ảnh hoá đơn{chosen.length > 1 ? ` gộp ${chosen.length} người` : ""}</Button>
       </>)}
