@@ -25,12 +25,17 @@ class SyncService extends GetxService {
   static SyncService get to => Get.find<SyncService>();
 
   static const _defaultBase = 'https://caulongdata.app.huynhhanh.com';
+  // Nhúng lúc build: flutter build --dart-define=SYNC_BASE=.. --dart-define=SYNC_TOKEN=..
+  // Không hard-code trong source; chỉ làm giá trị mặc định khi máy chưa lưu gì.
+  static const _envBase = String.fromEnvironment('SYNC_BASE', defaultValue: _defaultBase);
+  static const _envToken = String.fromEnvironment('SYNC_TOKEN');
 
   Future<SyncService> init() async {
     final prefs = await SharedPreferences.getInstance();
     final saved = prefs.getString(_kBase);
-    baseUrl.value = (saved == null || saved.isEmpty) ? _defaultBase : saved;
-    token.value = prefs.getString(_kToken) ?? '';
+    baseUrl.value = (saved == null || saved.isEmpty) ? _envBase : saved;
+    final savedTok = prefs.getString(_kToken);
+    token.value = (savedTok == null || savedTok.isEmpty) ? _envToken : savedTok;
     return this;
   }
 
