@@ -1,6 +1,5 @@
 node_modules/
 dist/
-_legacy/
 .vercel/
 *.local
 dev-data.json
