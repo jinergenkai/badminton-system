@@ -28,10 +28,14 @@ export default function App() {
 
   return (
     <Box sx={{ minHeight: "100dvh", pb: isMobile ? 9 : 0 }}>
-      <AppBar position="sticky" color="transparent" elevation={0}
-        sx={{ backdropFilter: "blur(10px)", borderBottom: 1, borderColor: "divider" }}>
+      <AppBar position="sticky" elevation={0}
+        sx={{ bgcolor: (t) => t.palette.background.paper, color: "text.primary",
+          borderBottom: 1, borderColor: "divider",
+          backdropFilter: "blur(8px)", backgroundImage: "none" }}>
         <Toolbar sx={{ gap: 1 }}>
-          <SportsTennisIcon color="primary" />
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 2, bgcolor: "primary.main", color: "primary.contrastText", boxShadow: (t) => t.customShadows?.primary }}>
+            <SportsTennisIcon fontSize="small" />
+          </Box>
           <Typography variant="h6" sx={{ flexGrow: 1 }}>Sổ Cầu Lông</Typography>
           {!isMobile && (
             <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary"

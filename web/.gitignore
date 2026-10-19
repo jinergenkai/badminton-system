@@ -4,3 +4,4 @@ _legacy/
 .vercel/
 *.local
 dev-data.json
+dev-courts.json
