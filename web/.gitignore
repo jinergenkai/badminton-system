@@ -1,7 +1,8 @@
 node_modules/
-.vercel
-.env
-.env.local
-*.log
+dist/
+_legacy/
+.vercel/
+*.local
 dev-data.json
 dev-courts.json
+.mkr-ref/
