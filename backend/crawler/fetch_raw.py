@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lấy envelope API qua một browser thật, không cần lưu x-user-app."""
+"""Lấy envelope API bằng chữ ký x-user-app sinh theo thời gian."""
 from __future__ import annotations
 
 import os
@@ -9,6 +9,8 @@ from typing import Any
 from urllib.parse import quote, urlencode
 
 import httpx
+
+from gen_x_user_app import generate_x_user_app
 
 
 _BASE_URL = "https://user-global.alobo.vn/v2/user/branch"
@@ -33,12 +35,9 @@ _SIGNATURE: str | None = None
 
 
 def fetch_raw(endpoint: str, params: dict) -> Any:
-    """Trả envelope thô cho một endpoint, dùng app thật để lấy chữ ký mới.
+    """Trả envelope thô cho một endpoint, mặc định dùng chữ ký sinh cục bộ.
 
-    App được mở một lần bằng Playwright và request bootstrap của app cung cấp
-    ``x-user-app`` mới trong bộ nhớ. Endpoint đích sau đó được gọi bằng
-    ``window.fetch`` trong chính page, nên vẫn giữ browser/CORS context. Khi
-    server trả 401/403, hàm refresh chữ ký rồi thử lại đúng một lần.
+    Có thể đặt ``ALOBO_FETCH_MODE=playwright`` để dùng lại đường browser cũ.
     """
     global _PLAYWRIGHT, _BROWSER, _CONTEXT, _PAGE, _SIGNATURE
 
@@ -59,8 +58,8 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
     if query:
         target_url = f"{target_url}?{urlencode(query, doseq=True)}"
 
-    # Fallback co chu y cho debugging/revert nhanh. Khong tu dong bat che do
-    # nay khi .env co ALOBO_X_USER_APP, vi signature cu thuong se 403.
+    # Mặc định gọi HTTP trực tiếp với chữ ký mới. Playwright vẫn có thể bật
+    # explicit bằng ALOBO_FETCH_MODE=playwright để đối chiếu/fallback.
     mode_value = os.environ.get("ALOBO_FETCH_MODE")
     if mode_value is None:
         try:
@@ -74,26 +73,9 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
                     break
         except FileNotFoundError:
             pass
-    mode = (mode_value or "playwright").lower()
-    if mode == "header":
-        signature = os.environ.get("ALOBO_X_USER_APP")
-        if signature is None:
-            env_path = Path(__file__).with_name(".env")
-            try:
-                for line in env_path.read_text(encoding="utf-8").splitlines():
-                    line = line.strip()
-                    if not line or line.startswith("#") or "=" not in line:
-                        continue
-                    name, value = line.split("=", 1)
-                    if name.strip() == "ALOBO_X_USER_APP":
-                        signature = value.strip().strip("\"'")
-                        break
-            except FileNotFoundError:
-                pass
-        if not signature:
-            raise ValueError(
-                "ALOBO_FETCH_MODE=header cần ALOBO_X_USER_APP trong .env hoặc environment."
-            )
+    mode = (mode_value or "generated").lower()
+    if mode in ("generated", "header"):
+        signature = generate_x_user_app()
         headers = {
             "accept": "*/*",
             "accept-language": "vi-VN,vi;q=0.9,en-US;q=0.6,en;q=0.5",
@@ -108,7 +90,7 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
             "x-name-app": "alobo-user",
             "x-platform": "web",
             "x-user-app": signature,
-            "x-version-app": "2.10.1",
+            "x-version-app": "2.10.4",
         }
         try:
             response = httpx.get(target_url, headers=headers, timeout=25.0)
@@ -120,7 +102,7 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
             raise RuntimeError("ALOBO response phải là JSON object/envelope.")
         return body
     if mode != "playwright":
-        raise ValueError("ALOBO_FETCH_MODE chỉ nhận 'playwright' (mặc định) hoặc 'header'.")
+        raise ValueError("ALOBO_FETCH_MODE chỉ nhận 'generated' (mặc định) hoặc 'playwright'.")
 
     if _PAGE is None or _PAGE.is_closed():
         try:

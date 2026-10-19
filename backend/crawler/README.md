@@ -10,7 +10,7 @@ báo khi bất kỳ sân nào có ô trống. Lưu SQLite time-series. VPS 1GB R
 
 | Tầng | Cách | Kết luận |
 |---|---|---|
-| Dễ — kéo API không trình duyệt | httpx + header | ❌ **Không được**. Vướng chữ ký `x-user-app` theo thời gian + decrypt (key XOR-obfuscate). |
+| Dễ — kéo API không trình duyệt | httpx + header | ✅ **Đã tích hợp**. `x-user-app` được sinh từ `PROD_KEY` trong `.env`; decrypt vẫn cần `ALOBO_KEY`. |
 | Vừa — Playwright để app ký, bắt response | `page.on("response")` | ⚠️ Bắt được envelope, **nhưng chưa decrypt được** (key build 2.10.1 chưa giải). |
 | **Khó — Playwright lái app + đọc màu lưới** | screenshot + dò màu | ✅ **Khả thi & bền nhất**. Không forge chữ ký, không token, không decrypt. **Khuyến nghị.** |
 
@@ -106,6 +106,5 @@ danh sách sân/tên sân…).
 
 ## Ranh giới (giữ nhất quán)
 
-- `fetch_raw.py` (tạo chữ ký `x-user-app` + gọi API) và `decrypt.py` (khôi phục key)
-  là **của bạn** — mình dựng mọi thứ quanh chúng nhưng không viết thân, vì đó là phần
-  hệ thống chặn (chống-bot / tấn công bên thứ ba).
+- `fetch_raw.py` (tạo chữ ký `x-user-app` + gọi API) dùng HTTP trực tiếp mặc định;
+  đặt `ALOBO_FETCH_MODE=playwright` nếu cần quay lại đường browser để đối chiếu.
