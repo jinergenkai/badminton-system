@@ -1,6 +1,7 @@
 # Bí mật + dữ liệu KHÔNG được vào image (truyền qua env / volume)
 .env
 envelope.json
+envelope_*.json
 data/
 _*.json
 __pycache__/

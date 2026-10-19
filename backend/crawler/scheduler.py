@@ -218,7 +218,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true", help="quét 1 lượt rồi dừng")
     ap.add_argument("--plan", action="store_true", help="chỉ in kế hoạch, không gọi gì")
+    ap.add_argument("--debug", action="store_true",
+                    help="in chữ ký/headers bắt được + body lỗi từng call")
     args = ap.parse_args()
+    if args.debug:
+        os.environ["ALOBO_DEBUG"] = "1"
     cfg = load_config()
 
     if args.plan:

@@ -12,6 +12,7 @@ profile/
 *.sqlite
 main.dart.js
 envelope.json
+envelope_*.json
 _*.js
 _*.json
 __pycache__/

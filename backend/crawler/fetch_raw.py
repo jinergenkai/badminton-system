@@ -21,7 +21,11 @@ _ENDPOINTS = {
     "get_lock_yards": "get_lock_yards/{branchId}",
     "get_cores": "get_cores/{branchId}",
     "get_core_types": "get_core_types/{branchId}",
-    "get_branch": "get_branch/{branchId}",
+    # 2.10.4: get_branch bị khoá -> 403 "Forbidden". App chuyển sang branch_info
+    # (cùng là thông tin sân công khai). Giữ tên key "get_branch" để không đụng
+    # scheduler/adapt; chỉ đổi PATH đích.
+    "get_branch": "branch_info/{branchId}",
+    "branch_info": "branch_info/{branchId}",
     "products": "products/{branchId}",
 }
 
@@ -32,6 +36,25 @@ _BROWSER: Any = None
 _CONTEXT: Any = None
 _PAGE: Any = None
 _SIGNATURE: str | None = None
+# Bộ header x-* mà app THẬT gửi, bắt từ bootstrap (gồm x-version-app hiện hành).
+# Không hardcode version -> ALOBO bump version cũng không gãy.
+_APP_HEADERS: dict[str, str] = {}
+_SIGNED_HEADER_KEYS = (
+    "x-user-app", "x-version-app", "x-custom-lang", "x-name-app", "x-platform",
+)
+# Chỉ dùng khi KHÔNG bắt được từ app (fallback cũ). Cập nhật nếu cần.
+_FALLBACK_VERSION = os.environ.get("ALOBO_X_VERSION_APP", "2.10.4")
+
+
+def _dbg(*a: Any) -> None:
+    if os.environ.get("ALOBO_DEBUG"):
+        print("   [debug]", *a, flush=True)
+
+
+def _mask(v: str | None) -> str:
+    if not v:
+        return repr(v)
+    return f"{v[:8]}…{v[-4:]} (len {len(v)})" if len(v) > 16 else v
 
 
 def fetch_raw(endpoint: str, params: dict) -> Any:
@@ -155,11 +178,16 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
             _PAGE.set_default_timeout(30_000)
 
             def capture_signature(request: Any) -> None:
-                global _SIGNATURE
+                global _SIGNATURE, _APP_HEADERS
                 if request.url.startswith("https://user-global.alobo.vn/"):
-                    value = request.headers.get("x-user-app")
+                    hdrs = request.headers
+                    value = hdrs.get("x-user-app")
                     if value:
                         _SIGNATURE = value
+                        # chụp nguyên bộ x-* app thật gửi (gồm x-version-app hiện hành)
+                        _APP_HEADERS = {
+                            k: hdrs[k] for k in _SIGNED_HEADER_KEYS if hdrs.get(k)
+                        }
 
             _PAGE.on("request", capture_signature)
         except Exception as exc:
@@ -173,6 +201,7 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
         _SIGNATURE = None
         branch_id = str(params.get("branchId", ""))
         bootstrap_url = f"{_WEB_BASE_URL}/san/{quote(branch_id, safe='')}" if branch_id else _WEB_BASE_URL
+        _dbg("bootstrap:", bootstrap_url)
         _PAGE.goto(bootstrap_url, wait_until="domcontentloaded", timeout=60_000)
         deadline = time.monotonic() + 12
         while _SIGNATURE is None and time.monotonic() < deadline:
@@ -184,28 +213,41 @@ def fetch_raw(endpoint: str, params: dict) -> Any:
         if not _SIGNATURE:
             refresh_signature()
 
+        _dbg("signature:", _mask(_SIGNATURE))
+        _dbg("app x-* bắt được:", {k: (_mask(v) if k == "x-user-app" else v)
+                                   for k, v in _APP_HEADERS.items()} or "(RỖNG!)")
+        _dbg("GET", target_url)
+
         result: dict[str, Any] | None = None
         for attempt in range(2):
+            # Dùng ĐÚNG bộ x-* app thật vừa gửi (gồm x-version-app hiện hành);
+            # chỉ bù mặc định nếu thiếu, không hardcode version cũ nữa.
+            headers = {"accept": "*/*"}
+            headers.update(_APP_HEADERS)
+            headers.setdefault("x-user-app", _SIGNATURE or "")
+            headers.setdefault("x-custom-lang", "vi")
+            headers.setdefault("x-name-app", "alobo-user")
+            headers.setdefault("x-platform", "web")
+            headers.setdefault("x-version-app", _FALLBACK_VERSION)
             result = _PAGE.evaluate(
-                """async ({url, signature}) => {
-                    const response = await fetch(url, {
-                      headers: {
-                        'accept': '*/*',
-                        'x-custom-lang': 'vi',
-                        'x-name-app': 'alobo-user',
-                        'x-platform': 'web',
-                        'x-user-app': signature,
-                        'x-version-app': '2.10.1',
-                      },
-                    });
-                    let body = null;
-                    try { body = await response.json(); } catch (_) {}
-                    return {status: response.status, body};
+                """async ({url, headers}) => {
+                    const response = await fetch(url, {headers});
+                    let text = null, body = null;
+                    try { text = await response.text(); } catch (_) {}
+                    try { body = JSON.parse(text); } catch (_) {}
+                    const rh = {};
+                    ['x-ratelimit-remaining','cf-ray','www-authenticate','retry-after']
+                      .forEach(k => { const v = response.headers.get(k); if (v) rh[k]=v; });
+                    return {status: response.status, body, text, respHeaders: rh};
                 }""",
-                {"url": target_url, "signature": _SIGNATURE},
+                {"url": target_url, "headers": headers},
             )
+            _dbg(f"attempt {attempt}: HTTP {result.get('status')}",
+                 "| resp-headers:", result.get("respHeaders"))
+            _dbg("  body/text:", (result.get("text") or "")[:400])
             if result.get("status") not in (401, 403) or attempt:
                 break
+            _dbg("  -> 401/403, refresh chữ ký rồi thử lại 1 lần")
             refresh_signature()
     except Exception as exc:
         raise RuntimeError(f"ALOBO GET {endpoint} thất bại qua Playwright: {exc}") from exc

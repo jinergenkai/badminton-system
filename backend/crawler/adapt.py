@@ -244,7 +244,7 @@ _PRICE_FLAT_KEYS = ("price", "pricePerHour", "amount", "unitPrice", "value", "co
 
 
 def name_from_branch(doc) -> str | None:
-    """get_branch doc -> ten chi nhanh. Ne '***' (bi redact), fallback nameEn."""
+    """branch_info/get_branch doc -> ten chi nhanh. Ne '***' (redact), fallback nameEn."""
     if isinstance(doc, dict):
         d = doc.get("data") if isinstance(doc.get("data"), dict) else doc
         for k in ("name", "nameEn", "branchName", "title"):
