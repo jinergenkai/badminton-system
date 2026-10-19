@@ -3,57 +3,63 @@ import {
   AppBar, Box, Container, Tab, Tabs, Toolbar, Typography, useMediaQuery,
   BottomNavigation, BottomNavigationAction, Paper,
 } from "@mui/material";
-import PaymentsIcon from "@mui/icons-material/Payments";
-import SportsTennisIcon from "@mui/icons-material/SportsTennis";
-import LeaderboardIcon from "@mui/icons-material/Leaderboard";
-import GroupsIcon from "@mui/icons-material/Groups";
-import { useTheme } from "@mui/material/styles";
+import { useTheme, alpha } from "@mui/material/styles";
 
+import { Logo } from "./components/logo/index.jsx";
+import { Iconify } from "./components/iconify/index.jsx";
 import BillBook from "./pages/BillBook.jsx";
 import Courts from "./pages/Courts.jsx";
 import Ranking from "./pages/Ranking.jsx";
 import Pickup from "./pages/Pickup.jsx";
 
+// maxWidth: Tiền cầu giữ cột hẹp ~600px như bản gốc (phone-first)
 const TABS = [
-  { label: "Tiền cầu", icon: <PaymentsIcon />, el: <BillBook /> },
-  { label: "Sân trống", icon: <SportsTennisIcon />, el: <Courts /> },
-  { label: "Ranking", icon: <LeaderboardIcon />, el: <Ranking /> },
-  { label: "Pickup", icon: <GroupsIcon />, el: <Pickup /> },
+  { label: "Tiền cầu", icon: "solar:wallet-money-bold-duotone", el: <BillBook />, maxWidth: 600 },
+  { label: "Sân trống", icon: "solar:calendar-search-bold-duotone", el: <Courts />, maxWidth: "lg" },
+  { label: "Ranking", icon: "solar:cup-star-bold-duotone", el: <Ranking />, maxWidth: "md" },
+  { label: "Pickup", icon: "solar:users-group-rounded-bold-duotone", el: <Pickup />, maxWidth: "md" },
 ];
 
 export default function App() {
   const [tab, setTab] = useState(0);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("sm"));
+  const cur = TABS[tab];
 
   return (
-    <Box sx={{ minHeight: "100dvh", pb: isMobile ? 9 : 0 }}>
-      <AppBar position="sticky" elevation={0}
-        sx={{ bgcolor: (t) => t.palette.background.paper, color: "text.primary",
-          borderBottom: 1, borderColor: "divider",
-          backdropFilter: "blur(8px)", backgroundImage: "none" }}>
-        <Toolbar sx={{ gap: 1 }}>
-          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 36, height: 36, borderRadius: 2, bgcolor: "primary.main", color: "primary.contrastText", boxShadow: (t) => t.customShadows?.primary }}>
-            <SportsTennisIcon fontSize="small" />
+    <Box sx={{ minHeight: "100dvh", pb: isMobile ? "calc(72px + env(safe-area-inset-bottom))" : 4 }}>
+      <AppBar position="sticky" color="inherit"
+        sx={{
+          bgcolor: alpha(theme.palette.background.default, 0.8), backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)", borderBottom: `1px dashed ${theme.palette.divider}`,
+        }}>
+        <Toolbar sx={{ gap: 1.25, minHeight: { xs: 60, sm: 68 } }}>
+          <Logo sx={{ width: 34, height: 34 }} />
+          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+            <Typography sx={{ fontFamily: theme.typography.fontSecondaryFamily, fontWeight: 800, fontSize: 21, lineHeight: 1, color: "primary.darker", letterSpacing: "-0.01em" }}>
+              Sổ Cầu Lông
+            </Typography>
+            {isMobile && <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1 }}>{cur.label}</Typography>}
           </Box>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>Sổ Cầu Lông</Typography>
           {!isMobile && (
-            <Tabs value={tab} onChange={(_, v) => setTab(v)} textColor="primary"
-              indicatorColor="primary">
-              {TABS.map((t, i) => <Tab key={i} label={t.label} icon={t.icon} iconPosition="start" />)}
+            <Tabs value={tab} onChange={(_, v) => setTab(v)}
+              TabIndicatorProps={{ sx: { height: "100%", borderRadius: 1.25, bgcolor: alpha(theme.palette.primary.main, 0.1), zIndex: 0 } }}
+              sx={{ minHeight: 44, "& .MuiTab-root": { minHeight: 44, px: 2, zIndex: 1, color: "text.secondary", "&.Mui-selected": { color: "primary.main" } } }}>
+              {TABS.map((t, i) => <Tab key={i} label={t.label} icon={<Iconify icon={t.icon} width={22} />} iconPosition="start" />)}
             </Tabs>
           )}
         </Toolbar>
       </AppBar>
 
-      <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3 } }}>
-        {TABS[tab].el}
+      <Container maxWidth={typeof cur.maxWidth === "string" ? cur.maxWidth : false}
+        sx={{ py: { xs: 2, sm: 3 }, ...(typeof cur.maxWidth === "number" && { maxWidth: cur.maxWidth }) }}>
+        {cur.el}
       </Container>
 
       {isMobile && (
-        <Paper elevation={8} sx={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10 }}>
-          <BottomNavigation showLabels value={tab} onChange={(_, v) => setTab(v)}>
-            {TABS.map((t, i) => <BottomNavigationAction key={i} label={t.label} icon={t.icon} />)}
+        <Paper sx={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 10, pb: "env(safe-area-inset-bottom)", borderTop: `1px solid ${theme.palette.divider}`, boxShadow: theme.customShadows.z16 }}>
+          <BottomNavigation showLabels value={tab} onChange={(_, v) => setTab(v)} sx={{ height: 64 }}>
+            {TABS.map((t, i) => <BottomNavigationAction key={i} label={t.label} icon={<Iconify icon={t.icon} width={24} />} />)}
           </BottomNavigation>
         </Paper>
       )}

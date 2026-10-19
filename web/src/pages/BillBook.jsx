@@ -1,19 +1,21 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
-  Alert, AppBar, Avatar, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, Divider, Fab, IconButton, InputAdornment, LinearProgress, List,
-  ListItem, ListItemAvatar, ListItemButton, ListItemText, Paper, Snackbar, Stack, Tab, Tabs,
-  TextField, ToggleButton, ToggleButtonGroup, Typography,
+  Alert, Avatar, Box, Button, Card, Checkbox, CircularProgress, Dialog, DialogActions,
+  DialogContent, DialogTitle, IconButton, InputAdornment, LinearProgress, List,
+  ListItem, ListItemAvatar, ListItemButton, ListItemText, Paper, Snackbar, Stack,
+  TextField, ToggleButton, ToggleButtonGroup, Tooltip, Typography,
 } from "@mui/material";
-import SearchIcon from "@mui/icons-material/Search";
-import AddIcon from "@mui/icons-material/Add";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
-import LockOpenIcon from "@mui/icons-material/LockOpen";
+import { alpha } from "@mui/material/styles";
 import * as M from "../lib/model.js";
 import { useBook } from "../lib/useBook.js";
+import { Iconify } from "../components/iconify/index.jsx";
+import { Label } from "../components/label/index.jsx";
+import WidgetSummary from "../components/WidgetSummary.jsx";
+import Money, { SectionLabel } from "../components/Money.jsx";
 
 const money = (x) => M.fmt(x);
 const ME_KEY = "bmw_me";
+const DUE = "warning.dark"; // màu hổ phách cho số còn nợ (như bản gốc)
 
 export default function BillBook() {
   const B = useBook();
@@ -36,11 +38,21 @@ export default function BillBook() {
   const ctx = { B, book, setToast, isAdmin };
 
   return (
-    <Box sx={{ pb: 10 }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-        <Typography variant="h5" sx={{ flexGrow: 1 }}>Tiền cầu</Typography>
+    <Box sx={{ pb: isAdmin ? 10 : 2 }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+        <Box sx={{ flexGrow: 1 }}>
+          <Typography variant="h4" sx={{ fontFamily: (t) => t.typography.fontSecondaryFamily, fontWeight: 800, lineHeight: 1.1 }}>Tiền cầu</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {book.members.length} thành viên · {book.sessions.length} buổi
+          </Typography>
+        </Box>
         {isAdmin
-          ? <Button size="small" onClick={() => { B.logout(); setAdmin(false); setSub("all"); }}>Thoát quản trị</Button>
+          ? <Stack direction="row" spacing={1} alignItems="center">
+              <Label color="primary" variant="soft" startIcon={<Iconify icon="solar:verified-check-bold" />}>Quản trị</Label>
+              <Tooltip title="Thoát quản trị">
+                <IconButton size="small" onClick={() => { B.logout(); setAdmin(false); setSub("all"); }}><Iconify icon="solar:logout-2-bold" /></IconButton>
+              </Tooltip>
+            </Stack>
           : <LoginButton B={B} />}
       </Stack>
 
@@ -48,9 +60,9 @@ export default function BillBook() {
         <Alert severity="warning" sx={{ mb: 2 }}>Mất kết nối máy chủ — đang xem số đã lưu trong máy.</Alert>
       )}
 
-      <Tabs value={sub} onChange={(_, v) => setSub(v)} variant="scrollable" allowScrollButtonsMobile sx={{ mb: 2 }}>
-        {tabs.map(([k, label]) => <Tab key={k} value={k} label={label} />)}
-      </Tabs>
+      <ToggleButtonGroup exclusive fullWidth value={sub} onChange={(_, v) => v && setSub(v)} sx={{ mb: 2.5 }}>
+        {tabs.map(([k, label]) => <ToggleButton key={k} value={k} sx={{ py: 0.9 }}>{label}</ToggleButton>)}
+      </ToggleButtonGroup>
 
       {!isAdmin && sub === "me" && <ViewMe {...ctx} />}
       {!isAdmin && sub === "all" && <ViewAll {...ctx} />}
@@ -61,19 +73,39 @@ export default function BillBook() {
       <SaveBar B={B} />
       <ConflictDialog B={B} />
       <Snackbar open={!!toast} autoHideDuration={2600} onClose={() => setToast("")}
-        message={toast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }} />
+        message={toast} anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        sx={{ bottom: { xs: 140, sm: 80 } }} />
     </Box>
   );
 }
 
-function MemAvatar({ book, m, size = 40 }) {
-  return <Avatar src={m.av || undefined} sx={{ width: size, height: size, bgcolor: M.hue(m.id), fontSize: size * 0.4 }}>
+function MemAvatar({ m, size = 40 }) {
+  return <Avatar src={m.av || undefined} sx={{ width: size, height: size, bgcolor: M.hue(m.id), fontSize: size * 0.4, color: "#fff" }}>
     {M.initials(m.name)}
   </Avatar>;
 }
 
+// trạng thái tiền một người: số hổ phách nếu còn nợ, nhãn xanh nếu đã xong
+function DueTag({ due }) {
+  return due > M.EPS
+    ? <Money sx={{ color: DUE, fontWeight: 700, fontSize: 15 }}>{money(due)}</Money>
+    : <Label color="success" startIcon={<Iconify icon="solar:check-circle-bold" />}>Đã trả</Label>;
+}
+
+function SearchBox({ value, onChange, placeholder }) {
+  return (
+    <TextField fullWidth placeholder={placeholder} value={value} onChange={(e) => onChange(e.target.value)}
+      sx={{ "& .MuiOutlinedInput-root": { bgcolor: "background.paper" } }}
+      InputProps={{ startAdornment: <InputAdornment position="start"><Iconify icon="solar:magnifer-linear" sx={{ color: "text.disabled" }} /></InputAdornment> }} />
+  );
+}
+
+function EmptyRow({ children }) {
+  return <ListItem sx={{ py: 3, justifyContent: "center" }}><Typography variant="body2" color="text.secondary">{children}</Typography></ListItem>;
+}
+
 // ---------- Viewer ----------
-function ViewAll({ book, setToast }) {
+function ViewAll({ book }) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState("due");
   const due = M.totalDue(book), got = M.totalCollected(book), all = due + got;
@@ -88,26 +120,24 @@ function ViewAll({ book, setToast }) {
   return (
     <Stack spacing={2}>
       <StatCard due={due} got={got} all={all} pct={pct} sub={`${nDue} người còn nợ · ${book.sessions.length} buổi đã chơi`} />
-      <TextField size="small" placeholder="Tìm tên…" value={q} onChange={(e) => setQ(e.target.value)}
-        InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon /></InputAdornment> }} />
-      <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)}>
+      <SearchBox placeholder="Tìm tên…" value={q} onChange={setQ} />
+      <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)} sx={{ alignSelf: "flex-start" }}>
         <ToggleButton value="due">Còn nợ · {nDue}</ToggleButton>
         <ToggleButton value="ok">Đã xong</ToggleButton>
         <ToggleButton value="all">Tất cả</ToggleButton>
       </ToggleButtonGroup>
-      <Paper>
+      <Card>
         <List disablePadding>
           {rows.map((r, i) => (
-            <ListItem key={r.m.id} divider={i < rows.length - 1}
-              secondaryAction={<Typography fontWeight={700} color={r.due > M.EPS ? "error" : "success.main"}>{r.due > M.EPS ? money(r.due) : "✓"}</Typography>}>
-              <ListItemAvatar><MemAvatar book={book} m={r.m} size={34} /></ListItemAvatar>
+            <ListItem key={r.m.id} divider={i < rows.length - 1} secondaryAction={<DueTag due={r.due} />} sx={{ py: 1.25 }}>
+              <ListItemAvatar><MemAvatar m={r.m} size={38} /></ListItemAvatar>
               <ListItemText primary={M.fullName(book, r.m)}
                 secondary={r.due > M.EPS ? `${r.n} buổi chưa trả` : `${r.tot} buổi · đã trả đủ`} />
             </ListItem>
           ))}
-          {rows.length === 0 && <ListItem><ListItemText secondary="Không có ai trong mục này." /></ListItem>}
+          {rows.length === 0 && <EmptyRow>Không có ai trong mục này.</EmptyRow>}
         </List>
-      </Paper>
+      </Card>
     </Stack>
   );
 }
@@ -123,56 +153,66 @@ function ViewMe({ book }) {
       .sort((a, b) => b.due - a.due || a.m.name.localeCompare(b.m.name, "vi"));
     return (
       <Stack spacing={2}>
-        <Alert severity="info">Bấm vào tên bạn để xem mình nợ bao nhiêu, gồm những buổi nào.</Alert>
-        <TextField size="small" placeholder="Gõ tên để tìm…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <Paper><List disablePadding>
+        <Alert severity="info" icon={<Iconify icon="solar:user-rounded-bold-duotone" />}>Bấm vào tên bạn để xem mình nợ bao nhiêu, gồm những buổi nào.</Alert>
+        <SearchBox placeholder="Gõ tên để tìm…" value={q} onChange={setQ} />
+        <Card><List disablePadding>
           {rows.map((r, i) => (
-            <ListItemButton key={r.m.id} divider={i < rows.length - 1} onClick={() => pick(r.m.id)}>
-              <ListItemAvatar><MemAvatar book={book} m={r.m} size={34} /></ListItemAvatar>
+            <ListItemButton key={r.m.id} divider={i < rows.length - 1} onClick={() => pick(r.m.id)} sx={{ py: 1.25 }}>
+              <ListItemAvatar><MemAvatar m={r.m} size={38} /></ListItemAvatar>
               <ListItemText primary={M.fullName(book, r.m)} />
-              <Typography fontWeight={700} color={r.due > M.EPS ? "error" : "success.main"}>{r.due > M.EPS ? money(r.due) : "✓"}</Typography>
+              <DueTag due={r.due} />
             </ListItemButton>
           ))}
-          {rows.length === 0 && <ListItem><ListItemText secondary="Không tìm thấy ai." /></ListItem>}
-        </List></Paper>
+          {rows.length === 0 && <EmptyRow>Không tìm thấy ai.</EmptyRow>}
+        </List></Card>
       </Stack>
     );
   }
-  const due = M.memberDue(book, m.id), paidSum = M.memberPaidSum(book, m.id);
+  const due = M.memberDue(book, m.id);
   const dueSes = M.memberDueSessions(book, m.id);
   return (
     <Stack spacing={2}>
-      <Paper sx={{ p: 3, textAlign: "center" }}>
-        <MemAvatar book={book} m={m} size={72} />
-        <Typography variant="h6" sx={{ mt: 1 }}>{M.fullName(book, m)}</Typography>
+      <Card sx={{ p: 3, textAlign: "center", overflow: "hidden" }}>
+        <Box sx={{ position: "absolute", inset: 0, height: 88, zIndex: -1, background: (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.dark})` }} />
+        <MemAvatar m={m} size={80} />
+        <Typography variant="h6" sx={{ mt: 1.5 }}>{M.fullName(book, m)}</Typography>
         {due > M.EPS ? (
           <>
-            <Typography variant="overline" color="text.secondary">Cần chuyển</Typography>
-            <Typography variant="h3" color="error" fontWeight={800}>{money(due)}</Typography>
-            <Typography variant="body2" color="text.secondary">{M.vnd(due)} · {dueSes.length} buổi</Typography>
-            <Paper variant="outlined" sx={{ mt: 2, p: 1.5, display: "inline-block" }}>
+            <Typography variant="overline" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>Cần chuyển</Typography>
+            <Money sx={{ display: "block", color: DUE, fontSize: { xs: 40, sm: 46 }, fontWeight: 700, lineHeight: 1.1 }}>{money(due)}</Money>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}><Money sx={{ fontWeight: 500 }}>{M.vnd(due)}</Money> · {dueSes.length} buổi</Typography>
+            <Box sx={{ mt: 2.5, mx: "auto", p: 1.5, maxWidth: 340, borderRadius: 1.5, bgcolor: (t) => alpha(t.palette.primary.main, 0.08), border: (t) => `1px dashed ${alpha(t.palette.primary.main, 0.32)}` }}>
               <Typography variant="caption" color="text.secondary">Nội dung chuyển khoản</Typography>
-              <Typography fontFamily="monospace" fontWeight={700}>{M.payRef(m)}</Typography>
-            </Paper>
-            {book.note && <Typography fontWeight={700} sx={{ mt: 1 }}>{book.note}</Typography>}
-            {book.qr && <Box sx={{ mt: 1 }}><img src={book.qr} alt="QR" style={{ maxWidth: 210, borderRadius: 12 }} /></Box>}
+              <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
+                <Money sx={{ fontWeight: 700, fontSize: 16, color: "primary.dark" }}>{M.payRef(m)}</Money>
+                <IconButton size="small" onClick={() => { try { navigator.clipboard.writeText(M.payRef(m)); } catch { /* */ } }}><Iconify icon="solar:copy-bold" width={16} /></IconButton>
+              </Stack>
+            </Box>
+            {book.note && <Typography fontWeight={700} sx={{ mt: 1.5 }}>{book.note}</Typography>}
+            {book.qr && <Box sx={{ mt: 1.5 }}><img src={book.qr} alt="QR" style={{ maxWidth: 210, borderRadius: 12, boxShadow: "0 8px 16px rgba(145,158,171,.24)" }} /></Box>}
           </>
         ) : (
-          <Typography variant="h4" color="success.main" sx={{ mt: 1 }}>Không nợ gì 🎉</Typography>
+          <Stack alignItems="center" spacing={1} sx={{ mt: 2 }}>
+            <Iconify icon="solar:check-circle-bold" width={48} sx={{ color: "success.main" }} />
+            <Typography variant="h5" color="success.dark">Không nợ gì 🎉</Typography>
+          </Stack>
         )}
-      </Paper>
+      </Card>
       {dueSes.length > 0 && (
-        <Paper><List disablePadding>
-          {dueSes.map((s, i) => (
-            <ListItem key={s.id} divider={i < dueSes.length - 1}
-              secondaryAction={<Typography fontWeight={700} color="error">{money(M.shareIn(s, m.id))}</Typography>}>
-              <ListItemText primary={s.date || "—"}
-                secondary={`(${s.court} + ${s.shuttles}×${s.price || M.DEFAULT_PRICE}) / ${M.wStr(M.sWeight(s))} suất`} />
-            </ListItem>
-          ))}
-        </List></Paper>
+        <>
+          <SectionLabel>Các buổi chưa trả</SectionLabel>
+          <Card><List disablePadding>
+            {dueSes.map((s, i) => (
+              <ListItem key={s.id} divider={i < dueSes.length - 1}
+                secondaryAction={<Money sx={{ color: DUE, fontWeight: 700 }}>{money(M.shareIn(s, m.id))}</Money>}>
+                <ListItemText primary={s.date || "—"}
+                  secondary={<Money sx={{ fontWeight: 400, fontSize: 12 }}>({s.court} + {s.shuttles}×{s.price || M.DEFAULT_PRICE}) / {M.wStr(M.sWeight(s))} suất</Money>} />
+              </ListItem>
+            ))}
+          </List></Card>
+        </>
       )}
-      <Button size="small" onClick={() => { setMeId(null); try { localStorage.removeItem(ME_KEY); } catch { /* */ } }}>
+      <Button color="inherit" variant="text" sx={{ color: "text.secondary" }} onClick={() => { setMeId(null); try { localStorage.removeItem(ME_KEY); } catch { /* */ } }}>
         Tôi không phải {m.name}
       </Button>
     </Stack>
@@ -189,50 +229,84 @@ function ViewSessions({ book }) {
   );
 }
 
-function SessionCard({ book, s }) {
-  const settled = M.sSettled(s), got = M.sCollected(s), tot = M.sTotal(s);
+// phần đầu thẻ buổi — dùng chung viewer/admin
+function SessionHead({ s }) {
+  const settled = M.sSettled(s);
   return (
-    <Paper sx={{ p: 2 }}>
-      <Stack direction="row" justifyContent="space-between">
-        <Typography fontWeight={700}>{s.date || "—"} <Typography component="span" variant="body2" color="text.secondary">· {s.parts.length} người</Typography></Typography>
-        <Typography fontWeight={700}>{money(tot)}</Typography>
+    <>
+      <Stack direction="row" alignItems="center" spacing={1}>
+        <Box sx={{ width: 40, height: 40, borderRadius: 1.5, display: "grid", placeItems: "center", flexShrink: 0, bgcolor: (t) => alpha(t.palette.primary.main, 0.1), color: "primary.main" }}>
+          <Iconify icon="solar:calendar-bold-duotone" width={22} />
+        </Box>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography variant="subtitle1" sx={{ lineHeight: 1.3 }}>{s.date || "(chưa đặt ngày)"}</Typography>
+          <Typography variant="caption" color="text.secondary">{s.parts.length} người</Typography>
+        </Box>
+        <Box sx={{ textAlign: "right" }}>
+          <Money sx={{ fontSize: 17, fontWeight: 700, display: "block" }}>{money(M.sTotal(s))}</Money>
+          {settled ? <Label color="success">Đã thu đủ</Label> : <Label color="warning">Còn {M.sUnpaid(s).length} người</Label>}
+        </Box>
       </Stack>
-      <Typography variant="caption" color="text.secondary">
-        ({s.court} + {s.shuttles}×{s.price || M.DEFAULT_PRICE}) / {M.wStr(M.sWeight(s))} suất = {money(M.sPerUnit(s))}/suất
-      </Typography>
-      <LinearProgress variant="determinate" value={tot > M.EPS ? Math.round((got / tot) * 100) : 0} sx={{ my: 1, height: 6, borderRadius: 3 }} />
-      <Typography variant="body2">{settled ? <b style={{ color: "#34d399" }}>✓ Đã thu đủ</b> : `Đã thu ${money(got)} / ${money(tot)} · còn ${M.sUnpaid(s).length} người`}</Typography>
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 1 }}>
-        {s.parts.map((p) => {
-          const m = M.memById(book, p.mid); if (!m) return null;
-          const on = M.isPaid(s, p.mid);
-          return <Chip key={p.mid} size="small" avatar={<MemAvatar book={book} m={m} size={18} />}
-            label={M.fullName(book, m) + (p.weight !== 1 ? ` ×${M.wStr(p.weight)}` : "")}
-            color={on ? "success" : "default"} variant={on ? "filled" : "outlined"}
-            sx={on ? { textDecoration: "line-through", opacity: 0.8 } : undefined} />;
-        })}
+      <Box sx={{ mt: 1.5, px: 1.25, py: 0.75, borderRadius: 1, bgcolor: "background.neutral" }}>
+        <Money sx={{ fontSize: 12, fontWeight: 500, color: "text.secondary", whiteSpace: "normal" }}>
+          ({s.court} + {s.shuttles}×{s.price || M.DEFAULT_PRICE}) / {M.wStr(M.sWeight(s))} suất = <Box component="b" sx={{ color: "text.primary" }}>{money(M.sPerUnit(s))}</Box>/suất
+        </Money>
       </Box>
-    </Paper>
+    </>
+  );
+}
+
+function PartChip({ book, s, p, onClick }) {
+  const m = M.memById(book, p.mid); if (!m) return null;
+  const on = M.isPaid(s, p.mid);
+  return (
+    <Box component={onClick ? "button" : "span"} onClick={onClick}
+      sx={{
+        display: "inline-flex", alignItems: "center", gap: 0.75, pl: 0.4, pr: 1.1, py: 0.4, borderRadius: 5, font: "inherit",
+        fontSize: 13, fontWeight: 600, cursor: onClick ? "pointer" : "default", transition: "all .15s",
+        border: (t) => `1px solid ${on ? "transparent" : alpha(t.palette.grey[500], 0.32)}`,
+        bgcolor: (t) => on ? alpha(t.palette.success.main, 0.16) : t.palette.background.paper,
+        color: on ? "success.dark" : "text.primary",
+        "&:hover": onClick ? { borderColor: "primary.main" } : undefined,
+      }}>
+      <MemAvatar m={m} size={22} />
+      <span style={on ? { textDecoration: "line-through", textDecorationThickness: 1 } : undefined}>{M.fullName(book, m)}</span>
+      {p.weight !== 1 && <Money sx={{ fontSize: 11, opacity: 0.7 }}>×{M.wStr(p.weight)}</Money>}
+      {on && <Iconify icon="solar:check-circle-bold" width={16} />}
+    </Box>
+  );
+}
+
+function SessionCard({ book, s }) {
+  const got = M.sCollected(s), tot = M.sTotal(s);
+  return (
+    <Card sx={{ p: 2 }}>
+      <SessionHead s={s} />
+      <LinearProgress variant="determinate" color={M.sSettled(s) ? "success" : "primary"} value={tot > M.EPS ? Math.round((got / tot) * 100) : 0} sx={{ my: 1.5, height: 6 }} />
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+        {s.parts.map((p) => <PartChip key={p.mid} book={book} s={s} p={p} />)}
+      </Box>
+    </Card>
   );
 }
 
 function StatCard({ due, got, all, pct, sub }) {
   return (
-    <Paper sx={{ p: 2 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-        <Box>
-          <Typography variant="caption" color="text.secondary" fontWeight={700}>CÒN THIẾU</Typography>
-          <Typography variant="h4" color={due > M.EPS ? "error" : "success.main"} fontWeight={700}>{due > M.EPS ? money(due) : "Xong hết 🎉"}</Typography>
-        </Box>
-        <Box textAlign="right">
-          <Typography variant="caption" color="text.secondary" fontWeight={700}>ĐÃ THU</Typography>
-          <Typography variant="h6" color="success.main" fontWeight={700}>{money(got)}</Typography>
-          <Typography variant="caption" color="text.secondary">/ {money(all)}</Typography>
-        </Box>
-      </Stack>
-      <LinearProgress variant="determinate" value={pct} sx={{ my: 1.5, height: 6, borderRadius: 3 }} />
-      <Typography variant="caption" color="text.secondary">{sub}</Typography>
-    </Paper>
+    <Box>
+      <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(2, 1fr)" }}>
+        <WidgetSummary color="warning" mono title="Còn thiếu" icon="solar:hand-money-bold-duotone"
+          total={due > M.EPS ? money(due) : "0k"} caption={due > M.EPS ? M.vnd(due) : "Xong hết 🎉"} />
+        <WidgetSummary color="primary" mono title="Đã thu" icon="solar:wallet-money-bold-duotone"
+          total={money(got)} caption={<>trên <Money sx={{ fontWeight: 600 }}>{money(all)}</Money></>} />
+      </Box>
+      <Card sx={{ mt: 1.5, px: 2, py: 1.5 }}>
+        <Stack direction="row" alignItems="center" spacing={1.5}>
+          <LinearProgress variant="determinate" value={pct} sx={{ flexGrow: 1, height: 8 }} />
+          <Money sx={{ fontWeight: 700, color: "primary.main", fontSize: 14 }}>{pct}%</Money>
+        </Stack>
+        <Typography variant="caption" color="text.secondary">{sub}</Typography>
+      </Card>
+    </Box>
   );
 }
 
@@ -244,15 +318,14 @@ function LoginButton({ B }) {
   const go = async () => { try { await B.login(pw); setOpen(false); setPw(""); setErr(""); } catch (e) { setErr(String(e.message || e)); } };
   return (
     <>
-      <Button size="small" startIcon={<LockOpenIcon />} onClick={() => setOpen(true)}>Quản trị</Button>
+      <Button size="small" variant="outlined" color="inherit" startIcon={<Iconify icon="solar:lock-keyhole-unlocked-bold" width={18} />} onClick={() => setOpen(true)}>Quản trị</Button>
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>Đăng nhập quản trị</DialogTitle>
         <DialogContent>
           <TextField autoFocus type="password" fullWidth label="Mật khẩu" value={pw}
-            onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} sx={{ mt: 1 }} />
-          {err && <Typography color="error" variant="body2" sx={{ mt: 1 }}>{err}</Typography>}
+            onChange={(e) => setPw(e.target.value)} onKeyDown={(e) => e.key === "Enter" && go()} sx={{ mt: 1 }} error={!!err} helperText={err || " "} />
         </DialogContent>
-        <DialogActions><Button onClick={() => setOpen(false)}>Đóng</Button><Button variant="contained" onClick={go}>Mở khóa</Button></DialogActions>
+        <DialogActions><Button color="inherit" onClick={() => setOpen(false)}>Đóng</Button><Button variant="contained" onClick={go}>Mở khóa</Button></DialogActions>
       </Dialog>
     </>
   );
@@ -282,36 +355,26 @@ function AdminSessions({ B, book, setToast }) {
     <Stack spacing={2}>
       <StatCard due={due} got={got} all={all} pct={all > M.EPS ? Math.round(got / all * 100) : 0}
         sub={`${M.debtors(book).length} người còn nợ · ${openN}/${book.sessions.length} buổi chưa thu xong`} />
-      <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEdit(newSession())}>Thêm buổi chơi</Button>
-      <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)}>
+      <Button variant="contained" size="large" startIcon={<Iconify icon="mingcute:add-line" />} onClick={() => setEdit(newSession())}>Thêm buổi chơi</Button>
+      <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)} sx={{ alignSelf: "flex-start" }}>
         <ToggleButton value="open">Chưa xong · {openN}</ToggleButton>
         <ToggleButton value="done">Đã xong · {book.sessions.length - openN}</ToggleButton>
         <ToggleButton value="all">Tất cả · {book.sessions.length}</ToggleButton>
       </ToggleButtonGroup>
       {list.map((s) => (
-        <Paper key={s.id} sx={{ p: 2 }}>
-          <Stack direction="row" justifyContent="space-between">
-            <Typography fontWeight={700}>{s.date || "(chưa đặt ngày)"} <Typography component="span" variant="body2" color="text.secondary">· {s.parts.length} người</Typography></Typography>
-            <Typography fontWeight={700}>{money(M.sTotal(s))}</Typography>
-          </Stack>
-          <Typography variant="caption" color="text.secondary">({s.court} + {s.shuttles}×{s.price || M.DEFAULT_PRICE}) / {M.wStr(M.sWeight(s))} suất = {money(M.sPerUnit(s))}/suất</Typography>
-          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, my: 1 }}>
-            {s.parts.map((p) => {
-              const m = M.memById(book, p.mid); if (!m) return null;
-              const on = M.isPaid(s, p.mid);
-              return <Chip key={p.mid} size="small" clickable onClick={() => togglePaid(s, p.mid)}
-                avatar={<MemAvatar book={book} m={m} size={18} />}
-                label={(on ? "✓ " : "") + M.fullName(book, m) + (p.weight !== 1 ? ` ×${M.wStr(p.weight)}` : "")}
-                color={on ? "success" : "default"} variant={on ? "filled" : "outlined"} />;
-            })}
+        <Card key={s.id} sx={{ p: 2 }}>
+          <SessionHead s={s} />
+          <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1.5, mb: 0.75 }}>Bấm tên để đánh dấu đã trả</Typography>
+          <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+            {s.parts.map((p) => <PartChip key={p.mid} book={book} s={s} p={p} onClick={() => togglePaid(s, p.mid)} />)}
           </Box>
-          <Stack direction="row" spacing={1} flexWrap="wrap">
-            {!M.sSettled(s) && <Button size="small" variant="outlined" onClick={() => payAll(s)}>Thu hết {money(M.sDue(s))}</Button>}
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 2, pt: 1.5, borderTop: (t) => `1px dashed ${t.palette.divider}` }}>
+            {!M.sSettled(s) && <Button size="small" variant="contained" color="inherit" onClick={() => payAll(s)}>Thu hết <Money sx={{ ml: 0.75 }}>{money(M.sDue(s))}</Money></Button>}
             <Box flexGrow={1} />
-            <Button size="small" onClick={() => setEdit(clone(s))}>Sửa</Button>
-            <Button size="small" color="error" onClick={() => del(s)}>Xóa</Button>
+            <Tooltip title="Sửa"><IconButton size="small" onClick={() => setEdit(clone(s))}><Iconify icon="solar:pen-bold" width={18} /></IconButton></Tooltip>
+            <Tooltip title="Xóa"><IconButton size="small" color="error" onClick={() => del(s)}><Iconify icon="solar:trash-bin-trash-bold" width={18} /></IconButton></Tooltip>
           </Stack>
-        </Paper>
+        </Card>
       ))}
       {list.length === 0 && <Alert severity="info">{book.sessions.length === 0 ? "Chưa có buổi nào." : "Không có buổi nào ở mục này."}</Alert>}
       {edit && <SessionDialog B={B} book={book} draft={edit} onClose={() => setEdit(null)} setToast={setToast} />}
@@ -321,6 +384,7 @@ function AdminSessions({ B, book, setToast }) {
 
 const newSession = () => ({ id: M.id(), date: "", court: 0, price: M.DEFAULT_PRICE, shuttles: 0, parts: [], paid: {} });
 const clone = (o) => JSON.parse(JSON.stringify(o));
+const numInput = { inputProps: { inputMode: "numeric", style: { fontFamily: "'Roboto Mono', monospace", fontVariantNumeric: "tabular-nums" } } };
 
 function SessionDialog({ B, book, draft, onClose, setToast }) {
   const [d, setD] = useState(draft);
@@ -352,43 +416,45 @@ function SessionDialog({ B, book, draft, onClose, setToast }) {
     <Dialog open onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{editing ? "Sửa buổi" : "Buổi mới"}</DialogTitle>
       <DialogContent>
-        <Stack direction="row" spacing={1.5} sx={{ mt: 1 }}>
-          <TextField label="Ngày" placeholder="vd: 20/6" value={d.date} onChange={(e) => upd({ date: e.target.value })} fullWidth />
-          <TextField label="Tiền sân" type="number" value={d.court || ""} onChange={(e) => upd({ court: +e.target.value || 0 })} fullWidth />
-        </Stack>
-        <Stack direction="row" spacing={1.5} sx={{ mt: 1.5 }}>
-          <TextField label="Số cầu" type="number" value={d.shuttles || ""} onChange={(e) => upd({ shuttles: +e.target.value || 0 })} fullWidth />
-          <TextField label="Giá 1 cầu" type="number" value={d.price} onChange={(e) => upd({ price: +e.target.value || M.DEFAULT_PRICE })} fullWidth />
-        </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 2 }}>Người chơi & hệ số</Typography>
-        <Paper variant="outlined" sx={{ maxHeight: 280, overflow: "auto", mt: 0.5 }}>
+        <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "1fr 1fr", mt: 1 }}>
+          <TextField label="Ngày" placeholder="vd: 20/6" value={d.date} onChange={(e) => upd({ date: e.target.value })} />
+          <TextField label="Tiền sân (k)" type="number" value={d.court || ""} onChange={(e) => upd({ court: +e.target.value || 0 })} {...numInput} />
+          <TextField label="Số cầu" type="number" value={d.shuttles || ""} onChange={(e) => upd({ shuttles: +e.target.value || 0 })} {...numInput} />
+          <TextField label="Giá 1 cầu (k)" type="number" value={d.price} onChange={(e) => upd({ price: +e.target.value || M.DEFAULT_PRICE })} {...numInput} />
+        </Box>
+        <SectionLabel sx={{ mt: 2.5 }} right={<Typography variant="caption" color="text.secondary">{d.parts.length} đã chọn</Typography>}>Người chơi & hệ số</SectionLabel>
+        <Paper variant="outlined" sx={{ maxHeight: 300, overflow: "auto", borderRadius: 1.5 }}>
           <List dense disablePadding>
             {book.members.map((m) => {
               const on = chosen.has(m.id), wt = on ? chosen.get(m.id) : 1;
               return (
-                <ListItem key={m.id} divider
+                <ListItem key={m.id} divider sx={{ bgcolor: (t) => on ? alpha(t.palette.primary.main, 0.05) : undefined }}
                   secondaryAction={on &&
-                    <ToggleButtonGroup size="small" exclusive value={wt} onChange={(_, v) => v != null && setW(m.id, v)}>
-                      {[0.5, 1, 2].map((q) => <ToggleButton key={q} value={q} sx={{ px: 1, py: 0.2 }}>{q === 0.5 ? "½" : q}</ToggleButton>)}
+                    <ToggleButtonGroup size="small" exclusive value={wt} onChange={(_, v) => v != null && setW(m.id, v)} sx={{ p: 0.4, gap: 0.4 }}>
+                      {[0.5, 1, 2].map((q) => <ToggleButton key={q} value={q} sx={{ px: 1.1, py: 0.1, minWidth: 30, fontFamily: "'Roboto Mono', monospace" }}>{q === 0.5 ? "½" : q}</ToggleButton>)}
                     </ToggleButtonGroup>}>
                   <Checkbox edge="start" checked={on} onChange={() => toggle(m.id)} />
-                  <ListItemAvatar sx={{ minWidth: 40 }}><MemAvatar book={book} m={m} size={28} /></ListItemAvatar>
-                  <ListItemText primary={M.fullName(book, m)} />
+                  <ListItemAvatar sx={{ minWidth: 40 }}><MemAvatar m={m} size={28} /></ListItemAvatar>
+                  <ListItemText primary={M.fullName(book, m)} onClick={() => toggle(m.id)} sx={{ cursor: "pointer" }} />
                 </ListItem>
               );
             })}
           </List>
         </Paper>
-        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-          <TextField size="small" placeholder="Thêm người mới" value={newMem} onChange={(e) => setNewMem(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addMem()} fullWidth />
-          <Button onClick={addMem}>Thêm</Button>
+        <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+          <TextField placeholder="Thêm người mới" value={newMem} onChange={(e) => setNewMem(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addMem()} fullWidth
+            InputProps={{ startAdornment: <InputAdornment position="start"><Iconify icon="solar:user-plus-bold" sx={{ color: "text.disabled" }} /></InputAdornment> }} />
+          <Button variant="outlined" onClick={addMem}>Thêm</Button>
         </Stack>
-        <Paper variant="outlined" sx={{ mt: 2, p: 1.5, bgcolor: "action.hover" }}>
-          <Typography variant="body2">Tổng {money(M.sTotal(d))} · {M.wStr(M.sWeight(d))} suất · <b>{money(M.sPerUnit(d))}</b>/suất</Typography>
-        </Paper>
+        <Stack direction="row" alignItems="center" sx={{ mt: 2, p: 1.5, borderRadius: 1.5, bgcolor: (t) => alpha(t.palette.primary.main, 0.08), color: "primary.darker" }}>
+          <Typography variant="body2" sx={{ flexGrow: 1 }}>
+            Tổng <Money sx={{ fontWeight: 700 }}>{money(M.sTotal(d))}</Money> · <Money>{M.wStr(M.sWeight(d))}</Money> suất
+          </Typography>
+          <Money sx={{ fontWeight: 700, fontSize: 18 }}>{money(M.sPerUnit(d))}<Typography component="span" variant="caption">/suất</Typography></Money>
+        </Stack>
       </DialogContent>
-      <DialogActions><Button onClick={onClose}>Đóng</Button><Button variant="contained" onClick={save}>Lưu buổi</Button></DialogActions>
+      <DialogActions><Button color="inherit" onClick={onClose}>Đóng</Button><Button variant="contained" onClick={save}>Lưu buổi</Button></DialogActions>
     </Dialog>
   );
 }
@@ -417,33 +483,36 @@ function AdminMembers({ B, book, setToast }) {
   return (
     <Stack spacing={2}>
       <Stack direction="row" spacing={1}>
-        <TextField size="small" placeholder="Tên thành viên mới" value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} fullWidth />
-        <Button onClick={add}>Thêm</Button>
+        <TextField placeholder="Tên thành viên mới" value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && add()} fullWidth
+          sx={{ "& .MuiOutlinedInput-root": { bgcolor: "background.paper" } }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><Iconify icon="solar:user-plus-bold" sx={{ color: "text.disabled" }} /></InputAdornment> }} />
+        <Button variant="contained" onClick={add}>Thêm</Button>
       </Stack>
-      <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)}>
+      <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)} sx={{ alignSelf: "flex-start" }}>
         <ToggleButton value="due">Còn nợ · {rows.filter((r) => r.due > M.EPS).length}</ToggleButton>
         <ToggleButton value="all">Tất cả · {rows.length}</ToggleButton>
       </ToggleButtonGroup>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={onFile} />
-      <Paper><List disablePadding>
+      <Card><List disablePadding>
         {list.map((r, i) => (
-          <ListItem key={r.m.id} divider={i < list.length - 1}
-            secondaryAction={
-              <Stack direction="row" spacing={0.5}>
-                {r.due > M.EPS && <Button size="small" onClick={() => payAll(r.m)}>Thu {money(r.due)}</Button>}
-                <Button size="small" onClick={() => rename(r.m)}>Đổi tên</Button>
-                <IconButton size="small" color="error" onClick={() => del(r.m)}><DeleteOutlineIcon fontSize="small" /></IconButton>
-              </Stack>}>
+          <ListItem key={r.m.id} divider={i < list.length - 1} sx={{ py: 1.25, pr: 1, flexWrap: "wrap" }}>
             <ListItemAvatar>
-              <IconButton onClick={() => { setPicFor(r.m.id); fileRef.current?.click(); }} sx={{ p: 0 }}><MemAvatar book={book} m={r.m} size={40} /></IconButton>
+              <Tooltip title="Đổi ảnh">
+                <IconButton onClick={() => { setPicFor(r.m.id); fileRef.current?.click(); }} sx={{ p: 0 }}><MemAvatar m={r.m} size={40} /></IconButton>
+              </Tooltip>
             </ListItemAvatar>
-            <ListItemText primary={M.fullName(book, r.m)}
-              secondary={r.due > M.EPS ? `nợ ${money(r.due)} · ${r.n} buổi` : `${r.n} buổi · đã trả đủ`} />
+            <ListItemText sx={{ minWidth: 0 }} primary={M.fullName(book, r.m)}
+              secondary={r.due > M.EPS ? <>nợ <Money sx={{ color: DUE }}>{money(r.due)}</Money> · {r.n} buổi</> : `${r.n} buổi · đã trả đủ`} />
+            <Stack direction="row" spacing={0.25} alignItems="center">
+              {r.due > M.EPS && <Button size="small" color="warning" onClick={() => payAll(r.m)} sx={{ bgcolor: (t) => alpha(t.palette.warning.main, 0.16), color: "warning.dark", "&:hover": { bgcolor: (t) => alpha(t.palette.warning.main, 0.28) } }}>Thu <Money sx={{ ml: 0.5 }}>{money(r.due)}</Money></Button>}
+              <Tooltip title="Đổi tên"><IconButton size="small" onClick={() => rename(r.m)}><Iconify icon="solar:pen-bold" width={18} /></IconButton></Tooltip>
+              <Tooltip title="Xóa"><IconButton size="small" color="error" onClick={() => del(r.m)}><Iconify icon="solar:trash-bin-trash-bold" width={18} /></IconButton></Tooltip>
+            </Stack>
           </ListItem>
         ))}
-        {list.length === 0 && <ListItem><ListItemText secondary={rows.length ? "Không ai còn nợ 🎉" : "Chưa có thành viên nào."} /></ListItem>}
-      </List></Paper>
-      <Typography variant="caption" color="text.secondary">Bấm ảnh đại diện để đổi ảnh (chọn file). QR / xuất ảnh hoá đơn sẽ port tiếp.</Typography>
+        {list.length === 0 && <EmptyRow>{rows.length ? "Không ai còn nợ 🎉" : "Chưa có thành viên nào."}</EmptyRow>}
+      </List></Card>
+      <Typography variant="caption" color="text.secondary">Bấm ảnh đại diện để đổi ảnh (chọn file).</Typography>
     </Stack>
   );
 }
@@ -462,25 +531,28 @@ function AdminCollect({ B, book, setToast }) {
   };
   return (
     <Stack spacing={2}>
-      <Alert severity="info">Tick người vừa chuyển khoản rồi bấm Đã nhận tiền. Sổ tự lưu lên web.</Alert>
-      <Stack direction="row" spacing={1}>
-        <Button size="small" onClick={() => setSel(new Set(owing.map((r) => r.m.id)))}>Chọn hết</Button>
-        <Button size="small" onClick={() => setSel(new Set())}>Bỏ chọn</Button>
-      </Stack>
-      <Typography variant="overline" color="text.secondary">Đang nợ · {owing.length} người · {money(owing.reduce((a, r) => a + r.due, 0))}</Typography>
-      <Paper><List disablePadding>
+      <Alert severity="info" icon={<Iconify icon="solar:card-transfer-bold-duotone" />}>Tick người vừa chuyển khoản rồi bấm Đã nhận tiền. Sổ tự lưu lên web.</Alert>
+      <SectionLabel right={
+        <Stack direction="row" spacing={0.5}>
+          <Button size="small" onClick={() => setSel(new Set(owing.map((r) => r.m.id)))}>Chọn hết</Button>
+          <Button size="small" color="inherit" onClick={() => setSel(new Set())}>Bỏ chọn</Button>
+        </Stack>}>
+        Đang nợ · {owing.length} người · <Money>{money(owing.reduce((a, r) => a + r.due, 0))}</Money>
+      </SectionLabel>
+      <Card><List disablePadding>
         {owing.map((r, i) => (
-          <ListItemButton key={r.m.id} divider={i < owing.length - 1} selected={sel.has(r.m.id)} onClick={() => toggle(r.m.id)}>
+          <ListItemButton key={r.m.id} divider={i < owing.length - 1} selected={sel.has(r.m.id)} onClick={() => toggle(r.m.id)}
+            sx={{ py: 1, "&.Mui-selected": { bgcolor: (t) => alpha(t.palette.primary.main, 0.08) } }}>
             <Checkbox edge="start" checked={sel.has(r.m.id)} tabIndex={-1} />
-            <ListItemAvatar><MemAvatar book={book} m={r.m} size={32} /></ListItemAvatar>
+            <ListItemAvatar><MemAvatar m={r.m} size={34} /></ListItemAvatar>
             <ListItemText primary={M.fullName(book, r.m)} secondary={`${r.n} buổi chưa trả`} />
-            <Typography fontWeight={700} color="error">{money(r.due)}</Typography>
+            <Money sx={{ color: DUE, fontWeight: 700 }}>{money(r.due)}</Money>
           </ListItemButton>
         ))}
-        {owing.length === 0 && <ListItem><ListItemText secondary="Không ai còn nợ 🎉" /></ListItem>}
-      </List></Paper>
-      <Button variant="contained" disabled={!chosen.length} onClick={go}>
-        ✓ Đã nhận tiền{chosen.length ? ` · ${money(grand)} · ${chosen.length} người` : ""}
+        {owing.length === 0 && <EmptyRow>Không ai còn nợ 🎉</EmptyRow>}
+      </List></Card>
+      <Button variant="contained" size="large" disabled={!chosen.length} onClick={go} startIcon={<Iconify icon="solar:check-circle-bold" />}>
+        Đã nhận tiền{chosen.length ? <>&nbsp;· <Money sx={{ mx: 0.5 }}>{money(grand)}</Money> · {chosen.length} người</> : ""}
       </Button>
       <SettingsCard B={B} book={book} setToast={setToast} />
     </Stack>
@@ -504,21 +576,24 @@ function SettingsCard({ B, book, setToast }) {
   };
   const exportJson = () => { const b = new Blob([JSON.stringify(book, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = "so-cau-long-" + new Date().toISOString().slice(0, 10) + ".json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
   return (
-    <Paper sx={{ p: 2 }}>
-      <Typography variant="overline" color="text.secondary">Cài đặt</Typography>
-      <TextField fullWidth size="small" label="Tên · ngân hàng · số tài khoản" defaultValue={book.note || ""}
-        onBlur={(e) => { if (e.target.value !== (book.note || "")) B.mutate((d) => { d.note = e.target.value; }, "Sửa thông tin ngân hàng"); }} sx={{ my: 1 }} />
-      <Stack direction="row" spacing={1} flexWrap="wrap">
+    <Card sx={{ p: 2.5 }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
+        <Iconify icon="solar:settings-bold-duotone" sx={{ color: "text.secondary" }} />
+        <Typography variant="subtitle1">Cài đặt</Typography>
+      </Stack>
+      <TextField fullWidth label="Tên · ngân hàng · số tài khoản" defaultValue={book.note || ""}
+        onBlur={(e) => { if (e.target.value !== (book.note || "")) B.mutate((d) => { d.note = e.target.value; }, "Sửa thông tin ngân hàng"); }} sx={{ mb: 1.5 }} />
+      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         <input ref={qrRef} type="file" accept="image/*" hidden onChange={onQr} />
         <input ref={jsonRef} type="file" accept="application/json,.json" hidden onChange={onJson} />
-        <Button size="small" onClick={() => qrRef.current?.click()}>{book.qr ? "Đổi QR" : "Tải QR lên"}</Button>
+        <Button size="small" variant="outlined" startIcon={<Iconify icon="solar:qr-code-bold" width={18} />} onClick={() => qrRef.current?.click()}>{book.qr ? "Đổi QR" : "Tải QR lên"}</Button>
         {book.qr && <Button size="small" color="error" onClick={() => B.mutate((d) => { d.qr = ""; }, "Xóa mã QR")}>Xóa QR</Button>}
         <Box flexGrow={1} />
-        <Button size="small" onClick={() => jsonRef.current?.click()}>Nhập JSON</Button>
-        <Button size="small" onClick={exportJson}>Xuất JSON</Button>
+        <Button size="small" color="inherit" startIcon={<Iconify icon="solar:upload-bold" width={18} />} onClick={() => jsonRef.current?.click()}>Nhập JSON</Button>
+        <Button size="small" color="inherit" startIcon={<Iconify icon="solar:download-bold" width={18} />} onClick={exportJson}>Xuất JSON</Button>
       </Stack>
-      {book.qr && <Box sx={{ textAlign: "center", mt: 1 }}><img src={book.qr} alt="QR" style={{ maxWidth: 180, borderRadius: 12 }} /></Box>}
-    </Paper>
+      {book.qr && <Box sx={{ textAlign: "center", mt: 2 }}><img src={book.qr} alt="QR" style={{ maxWidth: 180, borderRadius: 12 }} /></Box>}
+    </Card>
   );
 }
 
@@ -526,16 +601,21 @@ function SettingsCard({ B, book, setToast }) {
 function SaveBar({ B }) {
   if (!B.isAdmin) return null;
   const { save, rev } = B;
-  let color = "#8FD3AE", txt;
-  if (save.err) { color = "#F2A0A0"; txt = "Lưu lỗi: " + save.err + (save.retries && save.retries < 3 ? ` (thử lại lần ${save.retries}…)` : ""); }
-  else if (save.saving) { color = "#E8C07A"; txt = "Đang lưu lên web…"; }
-  else if (save.dirty) { color = "#E8C07A"; txt = "Có thay đổi chưa lưu"; }
-  else txt = `Đã lưu${save.savedAt ? " lúc " + new Date(save.savedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : ""} · phiên bản ${rev}`;
+  let color = "success", txt, icon = "solar:cloud-check-bold";
+  if (save.err) { color = "error"; icon = "solar:danger-triangle-bold"; txt = "Lưu lỗi: " + save.err + (save.retries && save.retries < 3 ? ` (thử lại lần ${save.retries}…)` : ""); }
+  else if (save.saving) { color = "warning"; icon = "solar:cloud-upload-bold"; txt = "Đang lưu lên web…"; }
+  else if (save.dirty) { color = "warning"; icon = "solar:clock-circle-bold"; txt = "Có thay đổi chưa lưu"; }
+  else txt = `Đã lưu${save.savedAt ? " lúc " + new Date(save.savedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }) : ""}`;
   return (
-    <Paper elevation={8} sx={{ position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: { xs: 72, sm: 16 }, zIndex: 20, px: 2, py: 1, display: "flex", alignItems: "center", gap: 1.5, maxWidth: "94vw" }}>
-      <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: color }} />
-      <Typography variant="body2" sx={{ flex: 1 }}>{txt}</Typography>
-      {(save.dirty || save.err) && <Button size="small" onClick={B.saveNow}>Lưu ngay</Button>}
+    <Paper sx={{
+      position: "fixed", left: "50%", transform: "translateX(-50%)", bottom: { xs: "calc(76px + env(safe-area-inset-bottom))", sm: 20 }, zIndex: 20,
+      pl: 1.5, pr: 1, py: 0.75, display: "flex", alignItems: "center", gap: 1.25, width: "max-content", maxWidth: "min(94vw, 560px)",
+      borderRadius: 5, bgcolor: "grey.800", color: "common.white", boxShadow: (t) => t.customShadows.z20,
+    }}>
+      <Iconify icon={icon} width={20} sx={{ color: `${color}.light` }} />
+      <Typography variant="body2" sx={{ flex: 1, fontWeight: 500 }}>{txt}</Typography>
+      {!save.dirty && !save.err && !save.saving && <Label variant="filled" sx={{ bgcolor: "rgba(255,255,255,.14)", color: "grey.300", fontFamily: "'Roboto Mono', monospace" }}>v{rev}</Label>}
+      {(save.dirty || save.err) && <Button size="small" variant="contained" onClick={B.saveNow} sx={{ borderRadius: 4, boxShadow: "none" }}>Lưu ngay</Button>}
     </Paper>
   );
 }
@@ -545,15 +625,19 @@ function ConflictDialog({ B }) {
   const lines = c.data ? M.diffSummary(B.book, c.data).slice(0, 10) : [];
   return (
     <Dialog open onClose={() => {}} fullWidth maxWidth="sm">
-      <DialogTitle>Sổ đã bị sửa ở nơi khác</DialogTitle>
+      <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+        <Iconify icon="solar:danger-triangle-bold" sx={{ color: "warning.main" }} width={26} /> Sổ đã bị sửa ở nơi khác
+      </DialogTitle>
       <DialogContent>
-        <Typography variant="body2" color="text.secondary">Trên web đang là phiên bản {c.rev}, máy này giữ phiên bản {B.rev}. Thường do bạn mở ở tab/máy khác.</Typography>
-        {lines.length > 0 && <Paper variant="outlined" sx={{ mt: 1.5, p: 1.5 }}>
-          {lines.map((l, i) => <Typography key={i} variant="body2">• {l}</Typography>)}
-        </Paper>}
+        <Typography variant="body2" color="text.secondary">
+          Trên web đang là phiên bản <Label color="info">v{c.rev}</Label>, máy này giữ phiên bản <Label>v{B.rev}</Label>. Thường do bạn mở ở tab/máy khác.
+        </Typography>
+        {lines.length > 0 && <Box sx={{ mt: 2, p: 1.5, borderRadius: 1.5, bgcolor: "background.neutral" }}>
+          {lines.map((l, i) => <Typography key={i} variant="body2" sx={{ py: 0.25 }}>• {l}</Typography>)}
+        </Box>}
       </DialogContent>
       <DialogActions>
-        <Button onClick={() => B.resolveConflict(true)}>Lấy bản trên web</Button>
+        <Button variant="contained" onClick={() => B.resolveConflict(true)}>Lấy bản trên web</Button>
         <Button color="error" onClick={() => B.resolveConflict(false)}>Ghi đè bằng bản của tôi</Button>
       </DialogActions>
     </Dialog>
