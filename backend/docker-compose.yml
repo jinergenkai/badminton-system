@@ -48,9 +48,12 @@ services:
       # Đẩy mirror danh bạ lên Blob để web/Flutter đọc luôn-online.
       ROSTER_PUSH_URL: ${ROSTER_PUSH_URL:-}
       ROSTER_PUSH_TOKEN: ${ROSTER_PUSH_TOKEN:-}
-      # Cổng Sân trống: proxy sang service crawler (cùng network). Token để kích cào,
-      # ADMIN_PASS (= mật khẩu sổ) để gate đổi cấu hình / kích cào từ web.
+      # Cổng Sân trống: proxy sang service crawler (cùng network). Token phải KHỚP
+      # token crawler kiểm (TRIGGER_TOKEN/PUSH_TOKEN). ADMIN_PASS trống thì api uỷ
+      # quyền kiểm mật khẩu về Vercel (BILLBOOK_URL).
       CRAWLER_URL: ${CRAWLER_URL:-http://crawler:8000}
+      TRIGGER_TOKEN: ${TRIGGER_TOKEN:-}
+      PUSH_TOKEN: ${PUSH_TOKEN:-}
       CRAWLER_TOKEN: ${CRAWLER_TOKEN:-}
       ADMIN_PASS: ${ADMIN_PASS:-}
     volumes:

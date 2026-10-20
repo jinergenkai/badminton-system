@@ -35,7 +35,8 @@ ROSTER_PUSH_URL = os.environ.get("ROSTER_PUSH_URL", "").strip()    # vd https://
 ROSTER_PUSH_TOKEN = os.environ.get("ROSTER_PUSH_TOKEN", "").strip()
 # Cổng sân trống: proxy nội bộ sang service crawler (cùng docker network).
 CRAWLER_URL = os.environ.get("CRAWLER_URL", "http://crawler:8000").rstrip("/")
-CRAWLER_TOKEN = os.environ.get("CRAWLER_TOKEN", "").strip()   # để kích cào
+# Token kích cào/đổi cấu hình — PHẢI khớp token crawler kiểm (TRIGGER_TOKEN/PUSH_TOKEN).
+CRAWLER_TOKEN = (os.environ.get("CRAWLER_TOKEN") or os.environ.get("TRIGGER_TOKEN") or os.environ.get("PUSH_TOKEN") or "").strip()
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "").strip()         # gate đổi cấu hình / kích cào
 
 
