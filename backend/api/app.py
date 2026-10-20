@@ -40,10 +40,24 @@ ADMIN_PASS = os.environ.get("ADMIN_PASS", "").strip()         # gate đổi cấ
 
 
 def _pass_ok(given) -> bool:
-    import hmac
-    if not ADMIN_PASS:
+    """Mật khẩu quản trị. Có ADMIN_PASS riêng thì so trực tiếp; không thì uỷ quyền
+    về Vercel (BILLBOOK_URL = /api/data) — cùng nguồn mật khẩu sổ, khỏi lệch."""
+    given = str(given or "")
+    if not given:
         return False
-    return hmac.compare_digest(str(given or ""), ADMIN_PASS)
+    if ADMIN_PASS:
+        import hmac
+        return hmac.compare_digest(given, ADMIN_PASS)
+    if BILLBOOK_URL:
+        try:
+            data = json.dumps({"pass": given, "check": 1}).encode("utf-8")
+            req = urllib.request.Request(BILLBOOK_URL, data=data,
+                                         headers={"content-type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status == 200
+        except Exception:  # noqa: BLE001  (HTTPError 401 / mạng lỗi → coi như sai)
+            return False
+    return False
 
 
 def _crawler_get(path: str):

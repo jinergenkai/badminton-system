@@ -5,3 +5,4 @@ dist/
 dev-data.json
 dev-courts.json
 .mkr-ref/
+.env

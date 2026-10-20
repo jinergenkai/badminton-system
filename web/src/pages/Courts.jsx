@@ -7,7 +7,7 @@ import {
   ToggleButton, ToggleButtonGroup, Switch, FormControlLabel, Chip, Tooltip,
   CircularProgress, Alert, useMediaQuery,
 } from "@mui/material";
-import { Button, Collapse, Snackbar } from "@mui/material";
+import { Button, Collapse, Snackbar, TextField, IconButton } from "@mui/material";
 import { useTheme, alpha } from "@mui/material/styles";
 import { api } from "../lib/api.js";
 import { useAuth } from "../lib/auth.jsx";
@@ -519,6 +519,8 @@ function CourtsSettings({ pass }) {
   const [dir, setDir] = useState(null);
   const [days, setDays] = useState(21);
   const [sel, setSel] = useState(() => new Set());
+  const [extra, setExtra] = useState([]);   // sân nhập tay chưa có trong danh bạ
+  const [newId, setNewId] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -531,12 +533,21 @@ function CourtsSettings({ pass }) {
       });
   }, []);
   const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const addBranch = () => {
+    const id = newId.trim().toLowerCase();
+    if (!/^[a-z0-9_-]{2,80}$/.test(id)) { setMsg('branchId không hợp lệ (vd sport_xyz_badminton)'); return; }
+    const known = (dir?.branches || []).some((b) => b.id === id) || extra.some((b) => b.id === id);
+    if (!known) setExtra((e) => [{ id, name: id, sport: "", has_data: false, custom: true }, ...e]);
+    setSel((s) => new Set(s).add(id)); setNewId(""); setMsg("");
+  };
+  const removeExtra = (id) => { setExtra((e) => e.filter((b) => b.id !== id)); setSel((s) => { const n = new Set(s); n.delete(id); return n; }); };
   const save = async () => {
     setBusy(true); setMsg("Đang lưu…");
     try { const r = await api.saveCourtsConfig(pass.current, [...sel], Math.max(1, Math.min(60, +days || 21))); setMsg(`✓ Đã lưu ${(r.branches || []).length} sân · ${r.days_window} ngày. Vào tab Cào để chạy.`); }
     catch (e) { setMsg("Lỗi: " + (e.message || e)); }
     finally { setBusy(false); }
   };
+  const list = [...extra, ...(dir?.branches || [])];
   return (
     <Card sx={{ p: 2.5 }}>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
@@ -551,17 +562,31 @@ function CourtsSettings({ pass }) {
         <Typography variant="caption" color="text.secondary">gồm cả T7/CN</Typography>
       </Stack>
       {err && <Alert severity="warning" sx={{ mb: 2 }}>{err}</Alert>}
-      {!dir && !err ? <Box sx={{ display: "grid", placeItems: "center", py: 3 }}><CircularProgress size={24} /></Box> : (
-        <Stack spacing={0.5}>
-          {(dir?.branches || []).map((b) => (
-            <FormControlLabel key={b.id} control={<Switch size="small" checked={sel.has(b.id)} onChange={() => toggle(b.id)} />}
-              label={<Box><Typography variant="body2" sx={{ fontWeight: 600 }}>{b.name}</Typography><Typography variant="caption" color="text.secondary">{b.id}{b.sport ? " · " + b.sport : ""}{b.has_data ? " · có dữ liệu" : ""}</Typography></Box>} />
+      {!dir && !err ? <Box sx={{ display: "grid", placeItems: "center", py: 3 }}><CircularProgress size={24} /></Box> : (<>
+        <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>Bật = theo dõi &amp; cào. Tắt = ngừng cào sân đó.</Typography>
+        <Stack divider={<Box sx={{ borderBottom: (t) => `1px solid ${t.palette.divider}` }} />}>
+          {list.map((b) => (
+            <Stack key={b.id} direction="row" alignItems="center" spacing={1} sx={{ py: 0.75 }}>
+              <Switch size="small" checked={sel.has(b.id)} onChange={() => toggle(b.id)} />
+              <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{b.name}</Typography>
+                <Typography variant="caption" color="text.secondary">{b.id}{b.sport ? " · " + b.sport : ""}</Typography>
+              </Box>
+              <Label color={b.has_data ? "success" : "default"} variant={b.has_data ? "soft" : "outlined"}>{b.has_data ? "có dữ liệu" : "chưa có"}</Label>
+              {b.custom && <Tooltip title="Bỏ khỏi danh sách"><IconButton size="small" color="error" onClick={() => removeExtra(b.id)}><Iconify icon="solar:close-circle-bold" width={18} /></IconButton></Tooltip>}
+            </Stack>
           ))}
+          {list.length === 0 && <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>Danh bạ trống — thêm branchId bên dưới.</Typography>}
         </Stack>
-      )}
+        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
+          <TextField size="small" fullWidth placeholder="Thêm branchId (vd sport_xyz_badminton)" value={newId}
+            onChange={(e) => setNewId(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addBranch()} />
+          <Button variant="outlined" onClick={addBranch} sx={{ flexShrink: 0 }}>Thêm</Button>
+        </Stack>
+      </>)}
       <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mt: 2 }}>
         <Button variant="contained" disabled={busy || !dir} onClick={save}>Lưu cấu hình</Button>
-        {msg && <Typography variant="caption" color="text.secondary">{msg}</Typography>}
+        {msg && <Typography variant="caption" color={/Lỗi|hợp lệ/.test(msg) ? "error" : "text.secondary"}>{msg}</Typography>}
       </Stack>
     </Card>
   );
