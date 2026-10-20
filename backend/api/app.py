@@ -261,7 +261,7 @@ class Handler(BaseHTTPRequestHandler):
                     code, j = _crawler_post("/api/crawl/run", {}, CRAWLER_TOKEN)
                     return self._send(code, j)
                 cfg = {k: v for k, v in body.items() if k != "pass"}
-                code, j = _crawler_post("/api/config", cfg)
+                code, j = _crawler_post("/api/config", cfg, CRAWLER_TOKEN)
                 return self._send(code, j)
             except urllib.error.HTTPError as e:
                 return self._send(e.code, {"error": e.read().decode("utf-8", "ignore")})

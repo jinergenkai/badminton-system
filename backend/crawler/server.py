@@ -386,9 +386,9 @@ def auto_crawl_loop(interval_min: int, crawl_now: bool = True):
 
 # ---- bảo vệ khi mở server ra internet (--host 0.0.0.0) ----
 # Máy trong nhà / LAN / Tailscale: dùng như cũ, không cần gì.
-# Từ ngoài internet: CHỈ được gọi POST /api/crawl/run, và phải kèm
-#   Authorization: Bearer <TRIGGER_TOKEN>   (mặc định = PUSH_TOKEN trong .env)
-# POST /api/config (đổi danh sách sân) thì không bao giờ cho từ ngoài.
+# Từ ngoài (qua cổng api / Vercel): được gọi POST /api/crawl/run và /api/config,
+#   phải kèm Authorization: Bearer <TRIGGER_TOKEN> (mặc định = PUSH_TOKEN trong .env).
+#   Cổng api đã kiểm mật khẩu quản trị trước khi proxy, token là lớp thứ hai.
 _TAILSCALE = ipaddress.ip_network("100.64.0.0/10")
 PUBLIC_COOLDOWN_SEC = 120          # chặn bấm dồn từ web → né rate limit Alobo
 _last_public_trigger = [0.0]
@@ -510,17 +510,19 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = self.path.split("?", 1)[0]
         if not _is_local(self.client_address[0]):
-            # gọi từ internet (Vercel): chỉ cho kích cào, có token, có giãn cách
-            if path != "/api/crawl/run" or not _token_ok(self.headers.get("Authorization", "")):
+            # gọi từ ngoài (qua cổng api / Vercel): chỉ /api/crawl/run và /api/config,
+            # phải kèm token hợp lệ. Cào có thêm giãn cách chống spam.
+            if path not in ("/api/crawl/run", "/api/config") or not _token_ok(self.headers.get("Authorization", "")):
                 self._send(401, json.dumps({"ok": False, "error": "không có quyền"}).encode(),
                            "application/json; charset=utf-8")
                 return
-            wait = PUBLIC_COOLDOWN_SEC - (time.time() - _last_public_trigger[0])
-            if wait > 0:
-                self._send(429, json.dumps({"ok": False, "error": f"vừa cào xong, đợi {int(wait)}s"},
-                                           ensure_ascii=False).encode("utf-8"),
-                           "application/json; charset=utf-8")
-                return
+            if path == "/api/crawl/run":
+                wait = PUBLIC_COOLDOWN_SEC - (time.time() - _last_public_trigger[0])
+                if wait > 0:
+                    self._send(429, json.dumps({"ok": False, "error": f"vừa cào xong, đợi {int(wait)}s"},
+                                               ensure_ascii=False).encode("utf-8"),
+                               "application/json; charset=utf-8")
+                    return
         if path == "/api/crawl/run":
             res = start_crawl()
             if res.get("ok") and not _is_local(self.client_address[0]):
