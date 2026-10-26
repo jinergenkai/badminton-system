@@ -255,59 +255,61 @@ function ViewMe({ book, setToast, runExport }) {
   const paidSes = M.memberSessions(book, m.id).filter((s) => M.isPaid(s, m.id)).reverse();
   const flag = book.flags?.[m.id];
   const shareLink = () => { const url = location.origin + location.pathname + "?me=" + m.id; try { navigator.clipboard.writeText(url); } catch { /* */ } setToast("Đã chép link riêng của " + m.name); };
+  const copyRef = () => { try { navigator.clipboard.writeText(M.payRef(m)); } catch { /* */ } setToast("Đã chép nội dung chuyển khoản"); };
   return (
     <Stack spacing={2}>
-      <Card sx={{ p: 3, textAlign: "center", overflow: "hidden" }}>
-        <Box sx={{ position: "absolute", inset: 0, height: 88, zIndex: -1, background: (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.dark})` }} />
-        <MemAvatar m={m} size={80} />
-        <Typography variant="h6" sx={{ mt: 1.5 }}>{M.fullName(book, m)}</Typography>
-        {due > M.EPS ? (
-          <>
-            <Typography variant="overline" color="text.secondary" sx={{ display: "block", mt: 1.5 }}>Cần chuyển</Typography>
-            <Money sx={{ display: "block", color: DUE, fontSize: { xs: 40, sm: 46 }, fontWeight: 700, lineHeight: 1.1 }}>{money(due)}</Money>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}><Money sx={{ fontWeight: 500 }}>{M.vnd(due)}</Money> · {dueSes.length} buổi</Typography>
-            <Box sx={{ mt: 2.5, mx: "auto", p: 1.5, maxWidth: 340, borderRadius: 1.5, bgcolor: (t) => alpha(t.palette.primary.main, 0.08), border: (t) => `1px dashed ${alpha(t.palette.primary.main, 0.32)}` }}>
-              <Typography variant="caption" color="text.secondary">Nội dung chuyển khoản</Typography>
-              <Stack direction="row" alignItems="center" justifyContent="center" spacing={0.5}>
-                <Money sx={{ fontWeight: 700, fontSize: 16, color: "primary.dark" }}>{M.payRef(m)}</Money>
-                <IconButton size="small" onClick={() => { try { navigator.clipboard.writeText(M.payRef(m)); } catch { /* */ } setToast("Đã chép nội dung chuyển khoản"); }}><Iconify icon="solar:copy-bold" width={16} /></IconButton>
-              </Stack>
+      <Card sx={{ overflow: "hidden" }}>
+        <Box sx={{ px: 2.5, pt: 2.5, pb: 3, color: "#fff", background: (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.darker})` }}>
+          <Stack direction="row" alignItems="center" spacing={1.75}>
+            <Box sx={{ p: "3px", borderRadius: "50%", bgcolor: "rgba(255,255,255,.9)", lineHeight: 0 }}><MemAvatar m={m} size={56} /></Box>
+            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+              <Typography variant="overline" sx={{ opacity: 0.72, lineHeight: 1.6 }}>Phiếu tiền cầu</Typography>
+              <Typography variant="h5" noWrap>{M.fullName(book, m)}</Typography>
+              <Typography variant="caption" sx={{ opacity: 0.8 }}>{M.memberSessions(book, m.id).length} buổi đã chơi · đã trả {money(paidSum)}</Typography>
             </Box>
-            {book.note && <Typography fontWeight={700} sx={{ mt: 1.5 }}>{book.note}</Typography>}
-            {book.qr && <Box sx={{ mt: 1.5 }}><img src={book.qr} alt="QR" style={{ maxWidth: 210, borderRadius: 12, boxShadow: "0 8px 16px rgba(145,158,171,.24)" }} /></Box>}
-          </>
-        ) : (
-          <Stack alignItems="center" spacing={1} sx={{ mt: 2 }}>
-            <Iconify icon="solar:check-circle-bold" width={48} sx={{ color: "success.main" }} />
-            <Typography variant="h5" color="success.dark">Không nợ gì 🎉</Typography>
-            {paidSum > M.EPS && <Typography variant="body2" color="text.secondary">Đã trả đủ {money(paidSum)}</Typography>}
           </Stack>
-        )}
+        </Box>
+        <Box sx={{ px: 2.5, mt: -1.5 }}>
+          {due > M.EPS ? (
+            <Box sx={{ p: 2, borderRadius: 2, textAlign: "center", bgcolor: (t) => alpha(t.palette.warning.main, 0.12), border: (t) => `1px solid ${alpha(t.palette.warning.main, 0.32)}`, backdropFilter: "blur(6px)", position: "relative", background: (t) => `linear-gradient(${alpha(t.palette.warning.main, 0.14)}, ${alpha(t.palette.warning.main, 0.14)}), #fff` }}>
+              <Typography variant="overline" sx={{ color: "warning.darker" }}>Cần chuyển</Typography>
+              <Money sx={{ display: "block", color: DUE, fontSize: { xs: 38, sm: 44 }, fontWeight: 700, lineHeight: 1.1 }}>{money(due)}</Money>
+              <Typography variant="caption" sx={{ color: "warning.darker" }}><Money sx={{ fontWeight: 600 }}>{M.vnd(due)}</Money> · {dueSes.length} buổi chưa trả</Typography>
+            </Box>
+          ) : (
+            <Box sx={{ p: 2, borderRadius: 2, textAlign: "center", background: (t) => `linear-gradient(${alpha(t.palette.success.main, 0.12)}, ${alpha(t.palette.success.main, 0.12)}), #fff`, border: (t) => `1px solid ${alpha(t.palette.success.main, 0.3)}` }}>
+              <Iconify icon="solar:check-circle-bold" width={40} sx={{ color: "success.main" }} />
+              <Typography variant="h5" color="success.dark">Không nợ gì 🎉</Typography>
+              {paidSum > M.EPS && <Typography variant="caption" color="text.secondary">Đã trả đủ {money(paidSum)}</Typography>}
+            </Box>
+          )}
+        </Box>
+        {due > M.EPS && (<>
+          <TearLine />
+          <Stack direction="row" spacing={2} alignItems="center" sx={{ px: 2.5, pb: 2.5 }}>
+            <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+              <Typography variant="overline" color="text.secondary">Nội dung chuyển khoản</Typography>
+              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ mt: 0.25, px: 1.25, py: 0.75, borderRadius: 1.25, bgcolor: (t) => alpha(t.palette.primary.main, 0.08), border: (t) => `1px dashed ${alpha(t.palette.primary.main, 0.36)}` }}>
+                <Money sx={{ flexGrow: 1, fontWeight: 700, fontSize: 15, color: "primary.dark", overflow: "hidden", textOverflow: "ellipsis" }}>{M.payRef(m)}</Money>
+                <IconButton size="small" onClick={copyRef}><Iconify icon="solar:copy-bold" width={16} /></IconButton>
+              </Stack>
+              {book.note && <Typography variant="body2" fontWeight={700} sx={{ mt: 1.25, whiteSpace: "pre-line" }}>{book.note}</Typography>}
+            </Box>
+            {book.qr && <Box sx={{ p: 0.75, borderRadius: 1.5, bgcolor: "#fff", border: (t) => `1px solid ${alpha(t.palette.grey[500], 0.24)}`, lineHeight: 0, flexShrink: 0 }}>
+              <img src={book.qr} alt="QR" style={{ width: 132, height: 132, objectFit: "contain", imageRendering: "pixelated" }} /></Box>}
+          </Stack>
+        </>)}
+        {due <= M.EPS && <Box sx={{ pb: 2.5 }} />}
       </Card>
 
       {dueSes.length > 0 && (<>
         <SectionLabel>Các buổi chưa trả · {dueSes.length}</SectionLabel>
-        <Card><List disablePadding>
-          {dueSes.map((s, i) => (
-            <ListItem key={s.id} divider={i < dueSes.length - 1} secondaryAction={<Money sx={{ color: DUE, fontWeight: 700 }}>{money(M.shareIn(s, m.id))}</Money>}>
-              <ListItemText primary={s.date || "—"}
-                secondary={<Money sx={{ fontWeight: 400, fontSize: 12 }}>({s.court} + {s.shuttles}×{s.price || M.DEFAULT_PRICE}) / {M.wStr(M.sWeight(s))} suất{(s.parts.find((p) => p.mid === m.id) || {}).weight !== 1 ? ` × ${M.wStr((s.parts.find((p) => p.mid === m.id) || {}).weight)} suất của bạn` : ""}</Money>} />
-            </ListItem>
-          ))}
-        </List></Card>
+        <Stack spacing={1.25}>{dueSes.map((s) => <MeSession key={s.id} book={book} s={s} mid={m.id} />)}</Stack>
       </>)}
 
       {paidSes.length > 0 && (<>
         <SectionLabel>Đã trả rồi · {paidSes.length} buổi · {money(paidSum)}</SectionLabel>
-        <Card><List disablePadding>
-          {paidSes.map((s, i) => (
-            <ListItem key={s.id} divider={i < paidSes.length - 1}
-              secondaryAction={<Label color="success" startIcon={<Iconify icon="solar:check-circle-bold" />}>{M.whenLabel(s.paid[m.id]) ? "ghi nhận " + M.whenLabel(s.paid[m.id]) : "đã trả"}</Label>}>
-              <ListItemText primary={s.date || "—"} primaryTypographyProps={{ color: "text.secondary" }}
-                secondary={<Money sx={{ fontSize: 12, textDecoration: "line-through", color: "text.disabled" }}>{money(M.shareIn(s, m.id))}</Money>} />
-            </ListItem>
-          ))}
-        </List></Card>
+        <Stack spacing={1.25}>{paidSes.map((s) => <MeSession key={s.id} book={book} s={s} mid={m.id} paid />)}</Stack>
       </>)}
 
       {flag && <Alert severity="warning" icon={<Iconify icon="solar:danger-triangle-bold" />}>{flag}</Alert>}
@@ -319,6 +321,68 @@ function ViewMe({ book, setToast, runExport }) {
         <Button size="small" color="inherit" startIcon={<Iconify icon="solar:link-bold" width={18} />} onClick={shareLink}>Chép link riêng</Button>
       </Stack>
     </Stack>
+  );
+}
+
+// Đường xé vé: nét đứt + 2 khuyết tròn ở mép (như ảnh hoá đơn)
+function TearLine() {
+  const notch = { position: "absolute", top: -10, width: 20, height: 20, borderRadius: "50%", bgcolor: "background.default" };
+  return (
+    <Box sx={{ position: "relative", my: 2.5, mx: 0 }}>
+      <Box sx={{ ...notch, left: -10 }} /><Box sx={{ ...notch, right: -10 }} />
+      <Box sx={{ mx: 2.5, borderTop: (t) => `2px dashed ${alpha(t.palette.grey[500], 0.28)}` }} />
+    </Box>
+  );
+}
+// Thẻ 1 buổi cho trang cá nhân: ngày + số tiền + công thức + những người chơi cùng
+function MeSession({ book, s, mid, paid }) {
+  const raw = String(s.date || "—").trim();
+  const mt = raw.match(/^(\d{1,2})[/.-](\d{1,2})[.,]?\s*(.*)$/);
+  const rest = mt ? mt[3].replace(/^[-–·\s]+/, "") : "";
+  const w = (s.parts.find((p) => p.mid === mid) || {}).weight;
+  const others = s.parts.filter((p) => p.mid !== mid).map((p) => ({ p, m: M.memById(book, p.mid) })).filter((x) => x.m);
+  const when = paid ? M.whenLabel(s.paid?.[mid]) : "";
+  const tone = paid ? "success" : "primary";
+  return (
+    <Card sx={{ p: 1.75, opacity: paid ? 0.85 : 1, borderLeft: (t) => `4px solid ${paid ? t.palette.success.main : t.palette.warning.main}` }}>
+      <Stack direction="row" alignItems="center" spacing={1.5}>
+        <Box sx={{ width: 48, height: 48, flexShrink: 0, borderRadius: 1.5, overflow: "hidden", textAlign: "center", lineHeight: 1,
+          border: (t) => `1px solid ${alpha(t.palette[tone].main, 0.24)}`, bgcolor: "background.paper" }}>
+          <Box sx={{ bgcolor: `${tone}.main`, color: "#fff", fontSize: 9.5, fontWeight: 700, py: "3px" }}>{mt ? `TH ${mt[2]}` : "BUỔI"}</Box>
+          <Box sx={{ fontFamily: (t) => t.typography.fontSecondaryFamily, fontWeight: 800, fontSize: 20, mt: "5px", color: `${tone}.dark` }}>
+            {mt ? mt[1] : <Iconify icon="solar:calendar-bold-duotone" width={20} />}
+          </Box>
+        </Box>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography variant="subtitle1" noWrap sx={{ lineHeight: 1.3 }}>
+            {mt ? `Ngày ${mt[1]}/${mt[2]}` : raw}
+            {w !== 1 && <Money sx={{ ml: 0.75, fontSize: 12, color: "warning.dark" }}>×{M.wStr(w)} suất</Money>}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" noWrap component="div">{rest ? rest + " · " : ""}{s.parts.length} người chơi</Typography>
+        </Box>
+        <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+          <Money sx={{ display: "block", fontWeight: 700, fontSize: 16, color: paid ? "text.disabled" : DUE, textDecoration: paid ? "line-through" : "none" }}>{money(M.shareIn(s, mid))}</Money>
+          {paid && <Label color="success" startIcon={<Iconify icon="solar:check-circle-bold" />}>{when ? "trả " + when : "đã trả"}</Label>}
+        </Box>
+      </Stack>
+      <Box sx={{ mt: 1.25, px: 1.25, py: 0.6, borderRadius: 1, bgcolor: "background.neutral" }}>
+        <Money sx={{ fontSize: 11.5, fontWeight: 500, color: "text.secondary", whiteSpace: "normal" }}>
+          ({s.court} + {s.shuttles}×{s.price || M.DEFAULT_PRICE}) / {M.wStr(M.sWeight(s))} suất = <Box component="b" sx={{ color: "text.primary" }}>{money(M.sPerUnit(s))}</Box>/suất
+        </Money>
+      </Box>
+      {others.length > 0 && (<>
+        <Typography variant="overline" color="text.disabled" sx={{ display: "block", mt: 1.25, mb: 0.5, fontSize: 10.5 }}>Chơi cùng · {others.length}</Typography>
+        <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.6 }}>
+          {others.map(({ p, m }) => (
+            <Box key={p.mid} sx={{ display: "inline-flex", alignItems: "center", gap: 0.6, pl: 0.35, pr: 1, py: 0.35, borderRadius: 5, fontSize: 12.5, fontWeight: 600,
+              bgcolor: (t) => alpha(t.palette.grey[500], 0.08) }}>
+              <MemAvatar m={m} size={20} />{M.fullName(book, m)}
+              {p.weight !== 1 && <Money sx={{ fontSize: 10.5, opacity: 0.7 }}>×{M.wStr(p.weight)}</Money>}
+            </Box>
+          ))}
+        </Box>
+      </>)}
+    </Card>
   );
 }
 
