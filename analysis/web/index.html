@@ -128,24 +128,25 @@
       <p class="muted">Thời gian để phân tích <b>1 phút video 30 fps</b> (1800 frame), khung xương 5 lần/giây. Hàng đầu là số
         đo thật, các hàng khác là ước lượng theo sức tính toán. Bấm <i>Đo tốc độ máy</i> ở bước 3 để có số của chính máy bạn.</p>
       <div class="table-wrap"><table id="device-table"></table></div>
-      <p class="muted small">Bắt cầu (TrackNetV3, 15M tham số) tốn ~134 GFLOP mỗi frame ở 512×288, chiếm gần hết thời gian.
+      <p class="muted small">Bắt cầu (TrackNetV3 chính thức: ảnh nền + 8 frame, 11M tham số) tốn ~28 GFLOP mỗi frame ở 512×288.
         Khung xương (RTMO-s) tốn ít hơn nhiều. Điện thoại chạy lâu sẽ nóng và tự giảm xung, nên số thật có thể chậm hơn.</p>
     </section>
 
     <section class="card">
       <h2>Bản web khác bản đầy đủ thế nào?</h2>
       <ul class="muted">
-        <li><b>Bản web (trang này):</b> TrackNetV3 bắt cầu, RTMO-s khung xương, sân từ 4+ điểm bạn chọn, theo dõi
+        <li><b>Bản web (trang này):</b> TrackNetV3 (ảnh nền + 8 frame) bắt cầu, RTMO-s khung xương, sân từ 4+ điểm bạn chọn, theo dõi
           đường cầu, ước lượng cú đánh từ chỗ đường cầu đổi hướng, vị trí/quãng đường người chơi, điểm rơi.</li>
         <li><b>Bản đầy đủ (máy GPU):</b> thêm tự hiệu chỉnh camera từ vạch trắng, YOLOX-x + RTMPose-x, cú chạm vợt
           kiểm tra bằng cổ tay 3D, <b>đường bay 3D theo vật lý</b> (trọng lực + lực cản), tốc độ cú đánh km/h, cảnh 3D.
-          Trên RTX 5060 Ti: video 2.5 phút mất ~10 phút (khung xương bản lớn chiếm 2/3 thời gian).</li>
+          Thêm danh tính P1–P4 theo màu áo, loại cú (đập, phông, bỏ nhỏ, lốp, tạt…), tư thế chờ, phản ứng, bật nhảy.
+          Trên RTX 5060 Ti: video 2.5 phút mất ~9 phút (khung xương bản lớn chiếm phần lớn thời gian).</li>
       </ul>
     </section>
   </main>
 
   <footer class="wrap muted small">
-    Mô hình: <a href="https://github.com/alenzenx/TrackNetV3" target="_blank" rel="noopener">TrackNetV3</a> (MIT) ·
+    Mô hình: <a href="https://github.com/qaz812345/TrackNetV3" target="_blank" rel="noopener">TrackNetV3</a> (MIT) ·
     <a href="https://github.com/open-mmlab/mmpose/tree/main/projects/rtmo" target="_blank" rel="noopener">RTMO</a> (Apache-2.0) ·
     chạy bằng <a href="https://onnxruntime.ai/docs/tutorials/web/" target="_blank" rel="noopener">onnxruntime-web</a>.
   </footer>

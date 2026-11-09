@@ -18,11 +18,12 @@ import cv2
 import numpy as np
 import pandas as pd
 
-from . import background, calibrate, flight, hits, landing, players, render, shuttle, track
+from . import analytics, background, calibrate, flight, hits, identity, landing, players, render, shuttle, shuttle_v3, track
 from .calibrate import Camera
 
 ROOT = Path(__file__).resolve().parent.parent
-STEPS = ['background', 'calibrate', 'detect', 'track', 'pose', 'players', 'hits', 'flight', 'landing', 'render']
+STEPS = ['background', 'calibrate', 'detect', 'track', 'pose', 'players', 'hits', 'flight', 'landing', 'analytics',
+         'render']
 
 
 def ffmpeg():
@@ -56,7 +57,7 @@ def main():
     files = {'background': out / 'background.png', 'calibrate': out / 'calib.json',
              'detect': out / 'candidates.csv', 'track': out / 'shuttle.csv',
              'pose': out / 'pose.npz', 'players': out / 'players.csv', 'hits': out / 'hits.json', 'flight': out / 'flights.json',
-             'landing': out / 'landings.json', 'render': out / f'{name}_3d.mp4'}
+             'landing': out / 'landings.json', 'analytics': out / 'report.json', 'render': out / f'{name}_3d.mp4'}
 
     def todo(step):
         if args.only is not None and step not in args.only:
@@ -83,7 +84,12 @@ def main():
             calib['fit_cost_px'], calib['seed_cost_px'], *calib['camera_m']))
     if todo('detect'):
         t0 = time.time()
-        cands, n = shuttle.detect(video, str(ROOT / 'models' / 'tracknet_v3.pt'))
+        official = ROOT / 'models' / 'tracknetv3_official' / 'ckpts' / 'TrackNet_best.pt'
+        if cfg.get('detector', 'official') == 'official' and official.exists():
+            # official TrackNetV3 (background + 8 frames): ~20% more shuttle explained by physics, 2.5x faster
+            cands, n = shuttle_v3.detect(video, str(official), bg, stride=4)
+        else:
+            cands, n = shuttle.detect(video, str(ROOT / 'models' / 'tracknet_v3.pt'))
         cands.to_csv(files['detect'], index=False)
         log('detect', t0, f'{len(cands)} candidates in {n} frames ({n / (time.time() - t0):.0f} fps)')
 
@@ -108,13 +114,16 @@ def main():
         t0 = time.time()
         cam, z = load_cam(), np.load(files['pose'])
         pl, k3d = players.track_players(cam, z['frame'], z['kpts'], z['scores'])
+        # stable identities P1..Pn from shirt/shorts colours (the floor tracker breaks ids constantly)
+        feats = identity.appearance(video, pl, z['kpts'], z['scores'])
+        pl, _, per_side = identity.assign(pl, feats, cv2.VideoCapture(video).get(cv2.CAP_PROP_FPS))
         pl.to_csv(files['players'], index=False)
         np.save(out / 'players_k3d.npy', k3d)
-        log('players', t0, f'{pl.pid.nunique()} ids on/around our court')
-        for pid, g in pl.groupby('pid'):
-            if len(g) > 300:
-                print('             player %d: %5d frames, side %-4s, head height ~%.2f m' % (
-                    pid, len(g), g.side.mode()[0], g.nose_z.quantile(0.9) + 0.12))
+        log('players', t0, f'{pl.pid.nunique()} track ids -> {per_side["near"]} + {per_side["far"]} players, '
+                           f'{100 * (pl.player >= 0).mean():.0f}% of detections identified')
+        for p, g in pl[pl.player >= 0].groupby('player'):
+            print('             P%d: %5d frames, side %-4s, head height ~%.2f m' % (
+                p + 1, len(g), g.side.mode()[0], g.nose_z.quantile(0.9) + 0.12))
 
     if todo('hits'):
         t0 = time.time()
@@ -172,6 +181,23 @@ def main():
                 e['frame'] / fps, *e['court'], 'IN' if e['in'] else 'OUT', e['source'],
                 ', %.2fs extrapolated' % e['extrapolated_s'] if 'extrapolated_s' in e else ''))
 
+    if todo('analytics'):
+        t0 = time.time()
+        fps = cv2.VideoCapture(video).get(cv2.CAP_PROP_FPS)
+        z = np.load(files['pose'])
+        rep = analytics.analyse(json.load(open(files['flight'])), json.load(open(files['hits'])),
+                                pd.read_csv(files['players']), np.load(out / 'players_k3d.npy'),
+                                z['kpts'], z['scores'], json.load(open(files['landing'])), fps)
+        save_json(rep, files['analytics'])
+        (out / 'report.md').write_text(analytics.to_markdown(rep, name), encoding='utf8')
+        s = rep['summary']
+        log('analytics', t0, f"{s['players']} players, {s['rallies']} rallies, {s['shots']} shots {s['shot_types']}")
+        for k, p in sorted(rep['players'].items()):
+            a = p['at_opponent_contact']
+            print(f"             {k} ({p['side']}): {p['distance_m']:.0f} m run, top {p['top_speed_ms']} m/s, "
+                  f"{p['shots']} shots, smash {p['smash_kmh']['mean']} km/h, ready {a['ready_stance_pct']}%, "
+                  f"reaction {a['reaction_s']} s")
+
     if todo('render'):
         t0 = time.time()
         cam, df, events = load_cam(), pd.read_csv(files['track']), json.load(open(files['landing']))
@@ -183,8 +209,11 @@ def main():
             extra['shots'] = [s for s in json.load(open(files['flight'])) if s['good']]
             for s in extra['shots']:            # recovered (previously missed) hits get a marker too
                 if s.get('inferred_hit') and 'hits' in extra:
-                    extra['hits'].append({'frame': s['hit_frame'], 'pid': s['pid'], 'px': cam.project([s['p0']])[0].tolist(),
+                    extra['hits'].append({'frame': s['hit_frame'], 'pid': s['pid'], 'player': s.get('player', -1),
+                                          'px': cam.project([s['p0']])[0].tolist(),
                                           'contact': s['p0'], 'recovered': True})
+        if files['analytics'].exists():
+            extra['report'] = json.load(open(files['analytics'], encoding='utf8'))
         raw = out / 'render_raw.mp4'
         n = render.render_video(video, str(raw), cam, df, events, **extra)
         ff = ffmpeg()

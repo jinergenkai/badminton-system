@@ -166,7 +166,7 @@ class Panel3D:
 
 
 def render_video(video, out_path, cam, shuttle_df, landings, trail_len=10, hits=(), players=None,
-                 k3d=None, kpts=None, shots=()):
+                 k3d=None, kpts=None, shots=(), report=None):
     """players: players.csv rows (with 'det' index into kpts), k3d aligned with players rows."""
     cap = cv2.VideoCapture(video)
     fps = cap.get(cv2.CAP_PROP_FPS)
@@ -184,6 +184,8 @@ def render_video(video, out_path, cam, shuttle_df, landings, trail_len=10, hits=
         for r, row in enumerate(players.itertuples()):
             per_frame.setdefault(int(row.frame), []).append((r, row))
     pos = {int(r.frame): (r.x, r.y) for r in shuttle_df.itertuples()}
+    # analytics per shot (type, speed, hitter) keyed by hit frame, for the hit labels
+    info = {c['frame']: c for c in (report or {}).get('shots', [])}
     out = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w + pw, h))
     f = 0
     while True:
@@ -202,16 +204,25 @@ def render_video(video, out_path, cam, shuttle_df, landings, trail_len=10, hits=
             k2 = kpts[int(row.det)]
             for a, b in BONES:
                 cv2.line(left, tuple(map(int, k2[a])), tuple(map(int, k2[b])), col, 2, cv2.LINE_AA)
-            cv2.putText(left, 'P%d' % row.pid, (int(k2[0][0]) - 10, int(k2[0][1]) - 14),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, col, 2, cv2.LINE_AA)
+            who = getattr(row, 'player', -1)
+            label = 'P%d' % (who + 1) if who is not None and who >= 0 else '?'
+            cv2.putText(left, label, (int(k2[0][0]) - 10, int(k2[0][1]) - 14),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, col, 2, cv2.LINE_AA)
             people3d.append((row.side, k3d[r]))
         for hh in hits:
             if 0 <= f - hh['frame'] < HIT_SHOW:
                 c = tuple(map(int, hh['px']))
                 cv2.circle(left, c, 16, HIT_COL, 2, cv2.LINE_AA)
-                cv2.putText(left, '%s P%d  %.2fm' % ('HIT*' if hh.get('recovered') else 'HIT', hh['pid'], hh['contact'][2]),
-                            (c[0] + 18, c[1] - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, HIT_COL, 2, cv2.LINE_AA)
+                sh = info.get(hh['frame'])
+                if sh:
+                    text = 'P%s %s %.0fkm/h @%.2fm%s' % (sh['player'] or '?', sh['type'].upper(), sh['speed_kmh'],
+                                                       sh['contact_height_m'], ' JUMP' if sh.get('jump') else '')
+                else:
+                    who = hh.get('player', -1)
+                    text = '%s %s  %.2fm' % ('HIT*' if hh.get('recovered') else 'HIT',
+                                             'P%d' % (who + 1) if who is not None and who >= 0 else '', hh['contact'][2])
+                cv2.putText(left, text, (c[0] + 18, c[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 4, cv2.LINE_AA)
+                cv2.putText(left, text, (c[0] + 18, c[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, HIT_COL, 2, cv2.LINE_AA)
         for e in landings:
             if e['frame'] <= f:
                 cv2.drawMarker(left, tuple(map(int, e['px'])), IN_COL if e['in'] else OUT_COL,

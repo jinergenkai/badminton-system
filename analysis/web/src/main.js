@@ -44,7 +44,8 @@ async function ensureModels() {
   if (readyKey === key && state.ready) return state.ready;
   state.ready = null;
   const p = new Promise((res) => { onReady = res; });
-  worker.postMessage({ type: 'init', want: $('#opt-backend').value, pose: $('#opt-pose').value !== '0' });
+  worker.postMessage({ type: 'init', want: $('#opt-backend').value, pose: $('#opt-pose').value !== '0',
+                       fp32: new URLSearchParams(location.search).has('fp32') });
   const r = await p;
   readyKey = key;
   describeDevice(r);
@@ -287,7 +288,7 @@ const poseEvery = () => Number($('#opt-pose').value);
 function rangeFrames() {
   const lim = Number($('#opt-range').value);
   const sec = lim ? Math.min(lim, state.duration) : state.duration;
-  return Math.max(3, Math.floor((sec * state.fps) / 3) * 3);
+  return Math.max(SEQ, Math.floor((sec * state.fps) / SEQ) * SEQ);
 }
 
 function setProgress(frac, label) {
@@ -297,9 +298,10 @@ function setProgress(frac, label) {
   el.querySelector('span').textContent = label || '';
 }
 
-const SEEK_MS = 12;   // measured frame grab cost (seek + draw + readback) per frame, refined while running
+const SEQ = 8;        // official TrackNetV3: one inference covers 8 frames
+const SEEK_MS = 12;   // measured frame grab cost (seek + draw + readback) per frame
 function estimateSeconds(b, frames, every) {
-  return (frames / 3) * b.tracknetMs / 1000 + (every ? (frames / every) * b.poseMs / 1000 : 0) + frames * SEEK_MS / 1000;
+  return (frames / SEQ) * b.tracknetMs / 1000 + (every ? (frames / every) * b.poseMs / 1000 : 0) + frames * SEEK_MS / 1000;
 }
 
 $('#btn-bench').onclick = async () => {
@@ -320,10 +322,10 @@ function renderEstimate() {
   const b = state.bench;
   const frames = rangeFrames();
   const every = poseEvery();
-  const tFrame = (b.tracknetMs / 3 + (every ? b.poseMs / every : 0) + SEEK_MS) / 1000;
+  const tFrame = (b.tracknetMs / SEQ + (every ? b.poseMs / every : 0) + SEEK_MS) / 1000;
   const el = $('#estimate');
   el.innerHTML = `
-    <div class="kpi"><b>${b.tracknetMs.toFixed(0)} ms</b><span>bắt cầu / 3 frame (${b.w}×${b.h})</span></div>
+    <div class="kpi"><b>${b.tracknetMs.toFixed(0)} ms</b><span>bắt cầu / 8 frame (${b.w}×${b.h})</span></div>
     <div class="kpi"><b>${every ? b.poseMs.toFixed(0) + ' ms' : '—'}</b><span>khung xương / lần</span></div>
     <div class="kpi"><b>${(1 / tFrame).toFixed(1)} fps</b><span>tốc độ xử lý ≈ ${(1 / tFrame / state.fps).toFixed(2)}× thời gian thực</span></div>
     <div class="kpi"><b>${fmtTime(estimateSeconds(b, frames, every))}</b><span>cho đoạn đã chọn (${fmtTime(frames / state.fps)})</span></div>
@@ -368,11 +370,32 @@ async function analyse() {
   let tnMs = 0, poseMs = 0;
   proc.pause();
 
-  for (let g = 0; g < N; g += 3) {
+  // median background of the analysed stretch (the official TrackNetV3 looks at it to ignore static
+  // white things: lines, lights, logos). 25 frames spread over the range.
+  {
+    const K = 25, samples = [];
+    for (let i = 0; i < K; i++) {
+      await seek(proc, ((i + 0.5) / K) * (N / state.fps));
+      tn.drawImage(proc, 0, 0, tw, th);
+      samples.push(tn.getImageData(0, 0, tw, th).data);
+      setProgress(i / K * 0.02, `Tính ảnh nền sân trống… ${i + 1}/${K}`);
+    }
+    const bg = new Uint8ClampedArray(tw * th * 4);
+    const col = new Uint8Array(K);
+    for (let p = 0; p < tw * th * 4; p++) {
+      if ((p & 3) === 3) { bg[p] = 255; continue; }
+      for (let i = 0; i < K; i++) col[i] = samples[i][p];
+      col.sort();
+      bg[p] = col[K >> 1];
+    }
+    worker.postMessage({ type: 'background', image: bg }, [bg.buffer]);
+  }
+
+  for (let g = 0; g < N; g += SEQ) {
     if (cancelled) { setProgress(g / N, 'Đã dừng.'); return null; }
     if (failure) throw failure;
     const frames = [];
-    for (let k = 0; k < 3; k++) {
+    for (let k = 0; k < SEQ; k++) {
       const f = g + k;
       await seek(proc, (f + 0.5) / state.fps);
       tn.drawImage(proc, 0, 0, tw, th);
@@ -393,8 +416,8 @@ async function analyse() {
     }));
     // keep at most ~2 groups queued so grabbing overlaps with inference without piling up memory
     while (inflight.length > 4) await inflight.shift();
-    const done = g + 3, el = (performance.now() - t0) / 1000;
-    setProgress(done / N, `Frame ${done}/${N} · ${(done / el).toFixed(1)} fps · còn ~${fmtTime((el / done) * (N - done))} · bắt cầu ${(tnMs / Math.max(1, Math.ceil(done / 3))).toFixed(0)} ms/lần`);
+    const done = g + SEQ, el = (performance.now() - t0) / 1000;
+    setProgress(done / N, `Frame ${done}/${N} · ${(done / el).toFixed(1)} fps · còn ~${fmtTime((el / done) * (N - done))} · bắt cầu ${(tnMs / Math.max(1, Math.ceil(done / SEQ))).toFixed(0)} ms/lần`);
   }
   await Promise.all(inflight);
   if (failure) throw failure;
@@ -406,13 +429,13 @@ async function analyse() {
   const byFrame = new Map(shuttle.map((r) => [r.frame, r]));
   const players = trackPlayers(poses, state.Hinv, state.VH / 720).map((s) => ({ ...s, stats: playerStats(s, state.fps) }));
   const ral = rallies(shuttle, state.fps, state.Hinv, poses, every);
-  window.__result = { shuttle, ral };   // handy for debugging in devtools
+  window.__result = { shuttle, ral, cands };   // handy for debugging in devtools
   setProgress(1, `Xong ${N} frame trong ${fmtTime(total)} (${(N / total).toFixed(1)} fps) bằng ${state.ready.backend === 'webgpu' ? 'GPU' : 'CPU'}.`);
   return {
     N, fps: state.fps, W: state.W, H: state.VH, every, total, backend: state.ready.backend, res: [tw, th],
     cands, shuttle, byFrame, poses, players, rallies: ral,
     hitFrames: ral.flatMap((r) => r.hits.map((h) => h.frame)),
-    timings: { tracknetMs: tnMs / Math.ceil(N / 3), poseMs: every ? poseMs / Math.ceil(N / every) : 0 },
+    timings: { tracknetMs: tnMs / Math.ceil(N / SEQ), poseMs: every ? poseMs / Math.ceil(N / every) : 0 },
   };
 }
 

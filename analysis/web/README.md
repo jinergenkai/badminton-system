@@ -4,7 +4,8 @@ Bản "lite" của pipeline `analysis/` chạy **hoàn toàn trên máy người
 Vercel chỉ phục vụ file tĩnh, video không rời khỏi thiết bị và server không tốn GPU.
 
 ```
-video ─► chọn ≥4 điểm sân (homography) ─► mỗi 3 frame: TrackNetV3 (worker, WebGPU FP16 / WASM FP32)
+video ─► chọn ≥4 điểm sân (homography) ─► ảnh nền trung vị (25 frame)
+      ─► mỗi 8 frame: TrackNetV3 chính thức (nền + 8 frame; worker, WebGPU FP16 / WASM FP32)
                                         └► mỗi N frame: RTMO-s (người + 17 khớp, 1 lượt)
       ─► track.py port sang JS (multi-target, chọn đường bay) ─► cú đánh = đổi hướng 2D gần cổ tay
       ─► vị trí người trên sân (cổ chân → H⁻¹), quãng đường, điểm rơi thô ─► overlay + xuất MP4 (WebCodecs)
@@ -23,7 +24,7 @@ Model (không nằm trong git, tạo một lần):
 
 | File | Cách tạo |
 |---|---|
-| `../models/web/out/tracknet_fp32.onnx`, `tracknet_fp16.onnx` | export từ `models/tracknet_v3.pt`, input động `(1, 9, H, W)`, opset 17; fp16 bằng `onnxconverter_common.float16` (`keep_io_types`) |
+| `../models/web/out/tracknet3_fp32.onnx`, `tracknet3_fp16.onnx` | export từ `models/tracknetv3_official/ckpts/TrackNet_best.pt` (qua `badminton/shuttle_v3.py`), input động `(1, 27, H, W)`, opset 17; fp16 bằng `onnxconverter_common.float16` (`keep_io_types`) |
 | `../models/web/dl/x/rtmo-s/end2end.onnx` | `rtmo-s_8xb32-600e_body7-640x640-dac2bf74_20231211.zip` trên download.openmmlab.com |
 
 `public/samples/demo.mp4` + `demo.json` (nút "Thử với video mẫu") là tuỳ chọn và **chỉ dùng local**.
@@ -31,22 +32,23 @@ Video mẫu hiện tại là clip repost từ TikTok, không được đưa lên
 
 ## Số đo (2026-11-09, Chromium, clip 20 s 1024×576 30 fps)
 
-| | Bắt cầu / 3 frame | Khung xương / lần | 20 s video |
-|---|---|---|---|
-| RTX 5060 Ti, WebGPU FP16, 512×288 | 104 ms | 31 ms | **27 s** (22 fps) |
-| RTX 5060 Ti, WebGPU, 384×216 / 256×144 | 55 / 29 ms | | |
-| i5-12400F, WASM 8 luồng, 512×288 | 2131 ms | 185 ms | ~7.5 phút |
-| i5-12400F, WASM, 384×216 / 256×144 | 1233 / 568 ms | | |
-| *Desktop Python (`analysis/`), RTX 5060 Ti* | *~39 ms (PyTorch FP16)* | *YOLOX-x + RTMPose-x ~86 ms/frame* | *150 s video: 9.9 phút* |
+TrackNetV3 chính thức (nền + 8 frame), 512×288:
 
-Thời gian tỉ lệ gần đúng theo số pixel đầu vào của TrackNet (~134 GFLOP/frame ở 512×288).
-Độ phân giải thấp làm mất cầu: trên 322 frame mà bản desktop thấy cầu, 512×288 bắt lại được 100%,
-384×216 được 90%, 256×144 được 77% (cùng model, ngưỡng 0.5, lệch ≤ 20 px).
-Bảng ước lượng cho laptop và điện thoại nằm trong `src/devices.js`.
+| | Bắt cầu / 8 frame | Khung xương / lần | 20 s video | Frame thấy cầu |
+|---|---|---|---|---|
+| RTX 5060 Ti, WebGPU FP16 | 90 ms | 31 ms | **17 s** (36 fps, nhanh hơn thời gian thực) | 64% |
+| i5-12400F, WASM 8 luồng | 1190 ms | 187 ms | ~2 phút | 66% |
+| *Bản cũ (alenzenx, 3 frame), RTX 5060 Ti* | *104 ms / 3 frame* | | *27 s* | *48%* |
 
-So với bản desktop trên cùng 20 s: tỉ lệ frame thấy cầu là 48% (desktop 54%), 14 cú đánh ước tính (desktop 14),
-1 điểm rơi IN (desktop 1). Điểm rơi bản web lệch ~1–2 m vì lấy điểm cuối của cầu trên ảnh và coi như cầu đã
-chạm sàn, không có vật lý 3D.
+28 GFLOP/frame (bản cũ 134). Bảng ước lượng cho laptop và điện thoại: `src/devices.js` (iPhone 15 Pro /
+laptop GPU tích hợp ~4 phút cho 1 phút video, Android tầm trung ~11 phút, chỉ CPU 6–24 phút).
+
+**Lỗi onnxruntime-web WebGPU (1.30):** conv có **27 kênh đầu vào** cho kết quả sai (heatmap gần như
+trống; WASM thì đúng). Bản export độn lên 32 kênh (5 kênh 0, trọng số 0), và gộp BatchNorm vào conv;
+worker gửi tensor 32 kênh. Nếu export lại model, giữ cả hai bước này.
+
+So với bản desktop trên cùng 20 s: bản web không có vật lý 3D, nên cú đánh là ước lượng 2D (đổi hướng
+gần cổ tay), điểm rơi lệch ~1–2 m (coi điểm cuối trên ảnh như đã chạm sàn).
 
 ## Deploy Vercel
 

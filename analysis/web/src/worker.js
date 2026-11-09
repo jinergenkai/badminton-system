@@ -1,4 +1,4 @@
-// Inference worker: TrackNetV3 (shuttle) + RTMO-s (players' pose) via onnxruntime-web.
+// Inference worker: official TrackNetV3 (shuttle; Chen & Wang 2023, MIT) + RTMO-s (players' pose) via onnxruntime-web.
 // Everything runs on the visitor's own GPU (WebGPU) or CPU (WASM) — the video never leaves the device.
 import * as ort from 'onnxruntime-web/webgpu';
 
@@ -6,7 +6,7 @@ ort.env.wasm.wasmPaths = new URL('/ort/', self.location.origin).href;
 ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardwareConcurrency || 4) : 1;
 ort.env.logLevel = 'error';
 
-const MODEL_CACHE = 'badminton-models-v1';
+const MODEL_CACHE = 'badminton-models-v4';
 let tracknet = null;
 let rtmo = null;
 let backend = 'wasm';
@@ -23,6 +23,8 @@ async function fetchModel(url, label) {
   }
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Không tải được ${url} (${res.status})`);
+  // a missing file is served as the SPA's index.html with 200: refuse it instead of hanging on it
+  if ((res.headers.get('content-type') || '').includes('text/html')) throw new Error(`Thiếu file mô hình ${url}`);
   const total = Number(res.headers.get('content-length')) || 0;
   const reader = res.body.getReader();
   const chunks = [];
@@ -51,12 +53,12 @@ async function gpuInfo() {
   } catch { return null; }
 }
 
-async function init({ want, pose }) {
+async function init({ want, pose, fp32 }) {
   const gpu = await gpuInfo();
   backend = want === 'wasm' || !gpu ? 'wasm' : 'webgpu';
   const ep = backend === 'webgpu' ? ['webgpu', 'wasm'] : ['wasm'];
   // fp16 halves the download and doubles GPU speed; CPU kernels are fp32 only
-  const tnFile = backend === 'webgpu' && gpu.f16 ? 'tracknet_fp16.onnx' : 'tracknet_fp32.onnx';
+  const tnFile = backend === 'webgpu' && gpu.f16 && !fp32 ? 'tracknet3_fp16.onnx' : 'tracknet3_fp32.onnx';
   const opts = { executionProviders: ep, graphOptimizationLevel: 'all' };
   tracknet?.release?.();
   rtmo?.release?.();
@@ -67,18 +69,23 @@ async function init({ want, pose }) {
 
 // ---------- TrackNet ----------
 
-// 3 RGBA frames (w*h*4) -> (1, 9, h, w) float, BGR order /255 (the weights were trained on cv2 frames)
+// Official TrackNetV3 input: median background + 8 frames, RGB / 255 -> (1, 27, h, w)
+const SEQ = 8;
+const IN_CH = 32;
+let background = null;   // RGBA of the median frame at the model resolution
 function tracknetInput(frames, w, h) {
   const n = w * h;
-  const x = new Float32Array(9 * n);
-  for (let k = 0; k < 3; k++) {
-    const f = frames[k];
-    const b = x.subarray((k * 3) * n), g = x.subarray((k * 3 + 1) * n), r = x.subarray((k * 3 + 2) * n);
+  // 27 channels padded to 32 (zeros): onnxruntime-web's WebGPU conv computes a 27-channel input wrongly
+  const x = new Float32Array(IN_CH * n);
+  const all = [background, ...frames];
+  for (let k = 0; k <= SEQ; k++) {
+    const f = all[Math.min(k, all.length - 1)];
+    const r = x.subarray((k * 3) * n), g = x.subarray((k * 3 + 1) * n), b = x.subarray((k * 3 + 2) * n);
     for (let i = 0, j = 0; i < n; i++, j += 4) {
       r[i] = f[j] / 255; g[i] = f[j + 1] / 255; b[i] = f[j + 2] / 255;
     }
   }
-  return new ort.Tensor('float32', x, [1, 9, h, w]);
+  return new ort.Tensor('float32', x, [1, IN_CH, h, w]);
 }
 
 // every blob > thr (8-connected), like the desktop pipeline: the tracker decides which one is ours
@@ -111,7 +118,7 @@ async function runTracknet({ frames, w, h }) {
   const out = await tracknet.run({ [tracknet.inputNames[0]]: tracknetInput(frames, w, h) });
   const heat = out[tracknet.outputNames[0]].data;
   const n = w * h;
-  const res = [0, 1, 2].map((k) => blobs(heat.subarray(k * n, (k + 1) * n), w, h));
+  const res = frames.map((_, k) => blobs(heat.subarray(k * n, (k + 1) * n), w, h));
   return { cands: res, ms: performance.now() - t0 };
 }
 
@@ -148,7 +155,8 @@ async function runPose({ image }) {
 }
 
 async function bench({ w, h, pose }) {
-  const frames = [0, 1, 2].map(() => new Uint8ClampedArray(w * h * 4).map((_, i) => (i * 37) & 255));
+  const frames = Array.from({ length: SEQ }, () => new Uint8ClampedArray(w * h * 4).map((_, i) => (i * 37) & 255));
+  if (!background || background.length !== w * h * 4) background = new Uint8ClampedArray(w * h * 4).fill(90);
   const img = new Uint8ClampedArray(640 * 640 * 4).fill(114);
   const time = async (fn, n) => {
     await fn();                                  // warm-up: shader compilation / allocation
@@ -168,6 +176,7 @@ self.onmessage = ({ data }) => {
   queue = queue.then(async () => {
     try {
       if (data.type === 'init') await init(data);
+      else if (data.type === 'background') background = data.image;
       else if (data.type === 'bench') post('bench', await bench(data));
       else if (data.type === 'tracknet') post('tracknet', { id: data.id, ...(await runTracknet(data)) });
       else if (data.type === 'pose') post('pose', { id: data.id, ...(await runPose(data)) });

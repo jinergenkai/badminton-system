@@ -9,8 +9,8 @@ const web = resolve(here, '..');
 const models = resolve(web, '..', 'models', 'web');
 
 const MODELS = {
-  'tracknet_fp16.onnx': join(models, 'out', 'tracknet_fp16.onnx'),
-  'tracknet_fp32.onnx': join(models, 'out', 'tracknet_fp32.onnx'),
+  'tracknet3_fp16.onnx': join(models, 'out', 'tracknet3_fp16.onnx'),
+  'tracknet3_fp32.onnx': join(models, 'out', 'tracknet3_fp32.onnx'),
   'rtmo_s.onnx': join(models, 'dl', 'x', 'rtmo-s', 'end2end.onnx'),
 };
 

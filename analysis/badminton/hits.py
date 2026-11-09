@@ -8,7 +8,7 @@ Rule of the game: the same side cannot hit twice in a row, so near-duplicates ar
 """
 import numpy as np
 
-from .players import L_WR, R_WR
+from .players import L_ANK, L_WR, R_ANK, R_WR
 from .track import turn_points
 
 
@@ -27,11 +27,14 @@ def best_contact(cam, f, px, rows, by_frame, k3d, window=3, max_dist=1.0, min_z=
     """Player wrist closest (in 3D) to the shuttle's view ray around frame f -> hit dict or None.
     side='near'/'far' restricts the search to one half of the court."""
     d = cam.ray(px)
-    best = None
+    best, best_score = None, np.inf
     for ff in range(f - window, f + window + 1):
         for r in by_frame.get(ff, []):
             if side is not None and rows.side[r] != side:
                 continue
+            # body height in pixels, to judge "near the racket" on the image at any depth
+            head, la, ra = cam.project(k3d[r, [0, L_ANK, R_ANK]])
+            body_px = max(np.linalg.norm(head - (la + ra) / 2), 20.0)
             for name, j in (('L', L_WR), ('R', R_WR)):
                 Wp = k3d[r, j] - cam.pos
                 along = Wp @ d
@@ -41,8 +44,14 @@ def best_contact(cam, f, px, rows, by_frame, k3d, window=3, max_dist=1.0, min_z=
                 contact = cam.pos + along * d
                 if contact[2] < min_z:          # at floor level: picking the shuttle up, not a stroke
                     continue
-                if dist < max_dist and (best is None or dist < best['wrist_dist']):
+                # teammates stand at different depths on the same view ray, so the 3D distance alone can
+                # pick the wrong one; the shuttle must also be within a racket length on the image
+                img = np.linalg.norm(cam.project(k3d[r, j][None])[0] - px) / body_px
+                score = dist + 0.8 * img
+                if dist < max_dist and score < best_score:
+                    best_score = score
                     best = {'frame': int(f), 'pid': int(rows.pid[r]), 'side': rows.side[r], 'hand': name,
+                            'player': int(rows.player[r]) if 'player' in rows else -1,
                             'px': [round(float(px[0]), 1), round(float(px[1]), 1)],
                             'wrist_dist': round(float(dist), 2),
                             'wrist_z': round(float(k3d[r, j, 2]), 2),
