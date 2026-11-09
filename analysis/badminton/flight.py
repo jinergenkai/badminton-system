@@ -102,7 +102,7 @@ def _init_velocities(p0, towards_far):
                 yield speed * np.array([np.cos(el) * np.cos(az), np.cos(el) * np.sin(az), np.sin(el)])
 
 
-def fit_shot(cam, frames, px, fps, hit, next_hit=None, w=None, allow_landing=True, _retry=True):
+def fit_shot(cam, frames, px, fps, hit, next_hit=None, w=None, allow_landing=True, _retry=True, pin_m=1.2):
     """Fit one shot. frames/px: TrackNet observations after the hit. Returns a dict or None.
     If only the first part of the observations fits (a missed hit merged two shots), refit on that part."""
     w = w or {'anchor': np.array([0.25, 0.25, 0.25]), 'end': 0.4}
@@ -123,6 +123,13 @@ def fit_shot(cam, frames, px, fps, hit, next_hit=None, w=None, allow_landing=Tru
     # physical bounds: contact between 0.3 and 3.5 m high, launch speed below ~430 km/h
     lo = np.r_[-2, -HALF - 2.5, 0.3, -120, -120, -120]
     hi = np.r_[W + 2, HALF + 2.5, 3.5, 120, 120, 120]
+    # pin the start near the racket contact. The soft-L1 loss also down-weights the anchor term once it
+    # is large, so on its own the anchor cannot stop the fit sliding along the view rays (one camera has
+    # no depth): pixel-perfect paths starting metres away from any player.
+    lo[:3] = np.maximum(lo[:3], p_anchor - pin_m)
+    hi[:3] = np.minimum(hi[:3], p_anchor + pin_m)
+    if np.any(lo[:3] >= hi[:3]):
+        return None
     p_start = np.clip(p_anchor, lo[:3] + 1e-3, hi[:3] - 1e-3)
     starts = [np.r_[p_start, v] for v in _init_velocities(p_start, towards_far)]
     costs = [np.sum(_residuals(x, *args) ** 2) for x in starts]
@@ -162,7 +169,7 @@ def fit_shot(cam, frames, px, fps, hit, next_hit=None, w=None, allow_landing=Tru
     return res
 
 
-def fit_rally(cam, shuttle, hits, fps, max_shot_s=3.0):
+def fit_rally(cam, shuttle, hits, fps, max_shot_s=3.0, top_px=30):
     """Split into shots between consecutive hits and fit each."""
     obs = shuttle[shuttle.detected]
     out = []
@@ -175,16 +182,34 @@ def fit_rally(cam, shuttle, hits, fps, max_shot_s=3.0):
         landing_ok = nxt is None
         if len(seg):
             # follow only the flight that starts right after the hit, up to its first gap
-            f = seg.frame.to_numpy()
-            gaps = np.nonzero(np.diff(f) > 6)[0]
+            f, y = seg.frame.to_numpy(), seg.y.to_numpy()
+            # a high clear leaves through the top of the frame and falls back in: same flight, and the
+            # falling half is what pins the physics down, so such a gap does not end the shot
+            through_top = (y[:-1] < top_px) & (y[1:] < top_px)
+            gaps = np.nonzero((np.diff(f) > 6) & ~through_top)[0]
             if len(gaps):
                 seg = seg.iloc[:gaps[0] + 1]
                 if nxt is not None and nxt['frame'] - seg.frame.iloc[-1] > 8:
                     nxt = None                           # lost before the next hit: no end anchor
-        r = fit_shot(cam, seg.frame.to_numpy(), seg[['x', 'y']].to_numpy(), fps, h, nxt,
-                     allow_landing=landing_ok)
-        if r:
-            out.append(validate(cam, r, obs, fps))
+        # who hit it? the closest wrist to the view ray is ambiguous (near and far players overlap
+        # on the image): fit the flight from every candidate contact and keep the one physics agrees with
+        prev_side = hits[i - 1]['side'] if i and (h['frame'] - hits[i - 1]['frame']) / fps <= max_shot_s else None
+        best, best_key, best_h = None, None, h
+        for cand in [h] + h.get('alts', []):
+            r = fit_shot(cam, seg.frame.to_numpy(), seg[['x', 'y']].to_numpy(), fps, cand, nxt,
+                         allow_landing=landing_ok)
+            if not r:
+                continue
+            key = (not r['good'], r['median_px'] + (1.5 if cand['side'] == prev_side else 0) + 2 * r['anchor_shift_m'])
+            if best is None or key < best_key:
+                best, best_key, best_h = r, key, cand
+        if best_h is not h:                              # physics picked the other player: swap
+            swapped = {k: v for k, v in best_h.items() if k != 'alts'}
+            swapped['alts'] = [{k: v for k, v in h.items() if k != 'alts'}]
+            swapped['side_by'] = 'flight fit'
+            hits[i] = swapped
+        if best:
+            out.append(validate(cam, best, obs, fps))
     return out
 
 
@@ -211,7 +236,9 @@ def recover_missed(cam, shots, shuttle, hits, players, k3d, fps, min_obs=8, pass
         f = free.frame.to_numpy()
         if not len(f):
             break
-        runs = np.split(np.arange(len(f)), np.nonzero(np.diff(f) > 6)[0] + 1)
+        y = free.y.to_numpy()
+        through_top = (y[:-1] < 30) & (y[1:] < 30)          # out through the top and back: same flight
+        runs = np.split(np.arange(len(f)), np.nonzero((np.diff(f) > 6) & ~through_top)[0] + 1)
         pieces = []
         for r in runs:                          # an orphan run can hold several shots: split at sharp turns
             seg = free.iloc[r]

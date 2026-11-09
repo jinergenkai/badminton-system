@@ -119,9 +119,9 @@ def main():
     if todo('hits'):
         t0 = time.time()
         cam, df, pl = load_cam(), pd.read_csv(files['track']), pd.read_csv(files['players'])
-        events = hits.find_hits(cam, df, pl, np.load(out / 'players_k3d.npy'))
-        save_json(events, files['hits'])
         fps = cv2.VideoCapture(video).get(cv2.CAP_PROP_FPS)
+        events = hits.find_hits(cam, df, pl, np.load(out / 'players_k3d.npy'), fps=fps)
+        save_json(events, files['hits'])
         log('hits', t0, f'{len(events)} hits')
         for e in events[:40]:
             print('             t=%6.1fs  player %d (%s)  contact ~%.2f m high, %.2f m from wrist' % (
@@ -131,8 +131,12 @@ def main():
         t0 = time.time()
         cam, df, hh = load_cam(), pd.read_csv(files['track']), json.load(open(files['hits']))
         fps = cv2.VideoCapture(video).get(cv2.CAP_PROP_FPS)
-        shots = flight.fit_rally(cam, df, hh, fps)
+        shots = flight.fit_rally(cam, df, hh, fps)          # may swap the hitter of ambiguous hits
+        save_json(hh, files['hits'])
         n_direct = sum(s['good'] for s in shots)
+        swapped = sum(h.get('side_by') == 'flight fit' for h in hh)
+        if swapped:
+            print(f'             physics re-assigned the hitter of {swapped} hits')
         shots, added = flight.recover_missed(cam, shots, df, hh, pd.read_csv(files['players']),
                                              np.load(out / 'players_k3d.npy'), fps)
         save_json(shots, files['flight'])

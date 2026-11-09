@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Phân tích cầu lông</title>
+  <meta name="description" content="Phân tích video cầu lông ngay trên máy bạn: đường cầu, khung xương, vị trí, quãng đường chạy, điểm rơi. Video không rời khỏi thiết bị." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='22' r='6' fill='%23f4f1e8'/%3E%3Cpath d='M10 20 16 4l6 16z' fill='%23d9ff3f'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <div class="brand"><span class="dot"></span> Phân tích cầu lông <small>beta</small></div>
+      <p class="lede">Đường cầu, khung xương, vị trí trên sân, quãng đường chạy và điểm rơi. Chạy hoàn toàn bằng
+        <b>GPU/CPU của máy bạn</b>, video không được tải lên đâu cả.</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- 1 -->
+    <section class="card" id="step-video">
+      <h2><span class="n">1</span> Chọn video</h2>
+      <label class="drop" id="drop">
+        <input type="file" id="file" accept="video/*" hidden />
+        <strong>Kéo thả video vào đây</strong> hoặc bấm để chọn
+        <span class="hint">Quay bằng điện thoại trên tripod, đặt sau đường cuối sân, càng cao càng tốt. 30–60 fps.</span>
+      </label>
+      <div class="row" id="demo-row" hidden>
+        <button id="btn-demo" class="ghost">🏸 Thử với video mẫu (20 giây, sân đã đánh dấu sẵn)</button>
+      </div>
+      <div id="video-info" class="info" hidden></div>
+    </section>
+
+    <!-- 2 -->
+    <section class="card" id="step-court" hidden>
+      <h2><span class="n">2</span> Đánh dấu sân</h2>
+      <p class="muted">Chọn một điểm trên sơ đồ (bên phải), rồi bấm vào đúng điểm đó trên video. Cần <b>ít nhất 4 điểm</b>,
+        càng xa nhau càng tốt. Điểm có thể nằm ngoài khung hình (vùng tối). Kéo để chỉnh. Vạch vàng phải trùng vạch trắng.</p>
+      <div class="calib">
+        <div class="calib-main">
+          <canvas id="calib-canvas"></canvas>
+          <input type="range" id="calib-time" min="0" max="1" step="0.001" value="0.1" aria-label="Chọn khung hình" />
+        </div>
+        <div class="calib-side">
+          <canvas id="pick-canvas" width="220" height="440"></canvas>
+          <div id="calib-status" class="muted small"></div>
+          <div class="row">
+            <button id="calib-undo" class="ghost">Hoàn tác</button>
+            <button id="calib-reset" class="ghost">Xoá hết</button>
+          </div>
+        </div>
+      </div>
+      <div class="row end">
+        <button id="calib-skip" class="ghost">Bỏ qua (chỉ đường cầu + khung xương)</button>
+        <button id="calib-ok" disabled>Dùng sân này →</button>
+      </div>
+    </section>
+
+    <!-- 3 -->
+    <section class="card" id="step-run" hidden>
+      <h2><span class="n">3</span> Cấu hình &amp; ước lượng thời gian</h2>
+      <div class="grid3">
+        <label>Thiết bị xử lý
+          <select id="opt-backend">
+            <option value="auto">Tự động (GPU nếu có)</option>
+            <option value="webgpu">GPU (WebGPU)</option>
+            <option value="wasm">CPU (WASM)</option>
+          </select>
+        </label>
+        <label>Độ phân giải bắt cầu
+          <select id="opt-res">
+            <option value="512x288">Chuẩn 512×288 (chính xác nhất)</option>
+            <option value="384x216">Nhanh 384×216 (~1.8× nhanh hơn, mất ~10% điểm cầu)</option>
+            <option value="256x144">Siêu nhanh 256×144 (~4× nhanh hơn, mất ~23% điểm cầu)</option>
+          </select>
+        </label>
+        <label>Khung xương người
+          <select id="opt-pose">
+            <option value="3">10 lần/giây</option>
+            <option value="6" selected>5 lần/giây</option>
+            <option value="15">2 lần/giây</option>
+            <option value="0">Tắt</option>
+          </select>
+        </label>
+        <label>Đoạn phân tích
+          <select id="opt-range">
+            <option value="15">15 giây đầu</option>
+            <option value="30" selected>30 giây đầu</option>
+            <option value="60">1 phút đầu</option>
+            <option value="0">Cả video</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <button id="btn-bench" class="ghost">⚡ Đo tốc độ máy &amp; ước lượng</button>
+        <button id="btn-run">▶ Bắt đầu phân tích</button>
+        <button id="btn-cancel" class="ghost" hidden>Dừng</button>
+      </div>
+      <div id="device" class="info small" hidden></div>
+      <div id="estimate" class="estimate" hidden></div>
+      <div id="progress" class="progress" hidden><div class="bar"><i></i></div><span></span></div>
+    </section>
+
+    <!-- 4 -->
+    <section class="card" id="step-result" hidden>
+      <h2><span class="n">4</span> Kết quả</h2>
+      <div class="result">
+        <div class="player">
+          <video id="player" controls playsinline muted></video>
+          <canvas id="overlay"></canvas>
+        </div>
+        <div class="mini">
+          <canvas id="minimap" width="240" height="480"></canvas>
+          <label class="small"><input type="checkbox" id="opt-heat" /> Bản đồ nhiệt di chuyển</label>
+        </div>
+      </div>
+      <div id="stats" class="stats"></div>
+      <div class="row">
+        <button id="btn-export">⬇ Xuất video MP4 có overlay</button>
+        <button id="btn-json" class="ghost">⬇ Dữ liệu JSON</button>
+        <span id="export-status" class="muted small"></span>
+      </div>
+    </section>
+
+    <section class="card" id="devices">
+      <h2>Mất bao lâu trên máy tôi?</h2>
+      <p class="muted">Thời gian để phân tích <b>1 phút video 30 fps</b> (1800 frame), khung xương 5 lần/giây. Hàng đầu là số
+        đo thật, các hàng khác là ước lượng theo sức tính toán. Bấm <i>Đo tốc độ máy</i> ở bước 3 để có số của chính máy bạn.</p>
+      <div class="table-wrap"><table id="device-table"></table></div>
+      <p class="muted small">Bắt cầu (TrackNetV3, 15M tham số) tốn ~134 GFLOP mỗi frame ở 512×288, chiếm gần hết thời gian.
+        Khung xương (RTMO-s) tốn ít hơn nhiều. Điện thoại chạy lâu sẽ nóng và tự giảm xung, nên số thật có thể chậm hơn.</p>
+    </section>
+
+    <section class="card">
+      <h2>Bản web khác bản đầy đủ thế nào?</h2>
+      <ul class="muted">
+        <li><b>Bản web (trang này):</b> TrackNetV3 bắt cầu, RTMO-s khung xương, sân từ 4+ điểm bạn chọn, theo dõi
+          đường cầu, ước lượng cú đánh từ chỗ đường cầu đổi hướng, vị trí/quãng đường người chơi, điểm rơi.</li>
+        <li><b>Bản đầy đủ (máy GPU):</b> thêm tự hiệu chỉnh camera từ vạch trắng, YOLOX-x + RTMPose-x, cú chạm vợt
+          kiểm tra bằng cổ tay 3D, <b>đường bay 3D theo vật lý</b> (trọng lực + lực cản), tốc độ cú đánh km/h, cảnh 3D.
+          Trên RTX 5060 Ti: video 2.5 phút mất ~10 phút (khung xương bản lớn chiếm 2/3 thời gian).</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="wrap muted small">
+    Mô hình: <a href="https://github.com/alenzenx/TrackNetV3" target="_blank" rel="noopener">TrackNetV3</a> (MIT) ·
+    <a href="https://github.com/open-mmlab/mmpose/tree/main/projects/rtmo" target="_blank" rel="noopener">RTMO</a> (Apache-2.0) ·
+    chạy bằng <a href="https://onnxruntime.ai/docs/tutorials/web/" target="_blank" rel="noopener">onnxruntime-web</a>.
+  </footer>
+
+  <video id="proc" muted playsinline preload="auto" hidden></video>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>

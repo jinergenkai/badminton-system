@@ -226,13 +226,23 @@ và để bộ theo dõi quyết định. Chạy FP16 và không ghi video trung
 
 ### 3.7 Cú chạm vợt (`hits`)
 
-1. **Thời điểm ứng viên:** đầu mỗi đường bay, và các điểm mà hướng bay trên ảnh **đổi > 50°** hoặc tốc
-   độ **tăng > 2.5×** (so 3 frame trước/sau).
+1. **Thời điểm ứng viên:** đầu **và cuối** mỗi đường bay, và các điểm mà hướng bay trên ảnh **đổi > 50°**
+   hoặc tốc độ **tăng > 2.5×** (so 3 frame trước/sau). Điểm cuối cần thiết vì lúc vợt chạm cầu thường
+   rơi vào khoảng TrackNet mất dấu vài frame (nhòe, vợt che): track mới bắt đầu đã cách vợt ~200 px,
+   còn track cũ kết thúc ngay ở vợt.
 2. **Kiểm tra 3D:** tia nhìn tới cầu `C + t·d` phải đi **gần cổ tay** của ai đó (±3 frame). Khoảng
    cách điểm–tia: `‖(W − C) − ((W − C)·d)·d‖ < 1.0 m` (đầu vợt cách cổ tay ~0.6 m).
-3. **Điểm chạm** = điểm trên tia gần cổ tay nhất ⇒ **độ cao điểm chạm từ một camera**.
-4. **Luật chơi:** gộp ứng viên trong 8 frame; một bên không đánh hai lần liên tiếp (< 20 frame);
+3. **Ai đánh?** Một camera nhìn người gần và người xa chồng lên nhau, nên tia nhìn thường đi gần cổ tay
+   của **cả hai**, và cổ tay gần nhất hay là người sai. Vì vậy giữ ứng viên tốt nhất **của mỗi bên**, rồi
+   chọn bên bằng quy hoạch động (Viterbi) trên cả pha cầu: chi phí = khoảng cách cổ tay, cộng 0.8 nếu
+   cùng một bên đánh 2 cú liền (chỉ xảy ra khi có cú bị sót ở giữa). Bước `flight` còn khớp vật lý cho
+   cả hai bên và **đổi người đánh** nếu bên kia khớp tốt hơn.
+4. **Điểm chạm** = điểm trên tia gần cổ tay đã chọn ⇒ **độ cao điểm chạm từ một camera**.
+5. **Luật chơi:** gộp ứng viên trong 8 frame; một bên không đánh hai lần liên tiếp (< 20 frame);
    "chạm" dưới 0.25 m là nhặt cầu, bị bỏ.
+
+Người chơi được giữ nếu đứng trong sân ± 1.2 m ở hai bên hông và **± 2.5 m sau đường cuối** (cầu cao
+thường được đánh từ sau vạch cuối; giới hạn 1.2 m cũ loại mất người đánh).
 
 Âm thanh (tiếng vợt) đã thử nhưng không dùng: cả hai video đều lẫn nhạc nền/tiếng sân khác
 (~3 "tiếng tách" mỗi giây).
@@ -264,7 +274,13 @@ một camera thuần tuý không có.
 | `max(1.524 − Z_lưới, 0) / 0.05` | qua lưới nếu cú đổi bên |
 
 - Hàm mất mát **soft-L1** (f_scale 6 px) để điểm nhiễu không kéo lệch.
-- **Giới hạn cứng:** điểm chạm cao 0.3–3.5 m, vận tốc ≤ 120 m/s.
+- **Giới hạn cứng:** điểm chạm cao 0.3–3.5 m, vận tốc ≤ 120 m/s, và **điểm xuất phát nằm trong ±1.2 m
+  quanh điểm chạm vợt**. Ràng buộc cuối rất quan trọng: soft-L1 áp lên *mọi* số hạng, kể cả số hạng
+  neo, nên khi điểm đầu lệch xa thì neo bị coi là "nhiễu" và mất tác dụng. Khi đó nghiệm trượt dọc
+  tia nhìn, ra đường bay khớp pixel rất đẹp nhưng xuất phát cách người đánh vài mét, và bị cổng
+  "good" loại. Ví dụ: cú phông cao từ sau cuối sân ở t = 3.2 s video 02 xuất phát giữa sân, lệch 5 m.
+- **Cầu bay ra khỏi mép trên khung hình rồi rơi lại** (cầu cao) vẫn là cùng một cú: khoảng trống đó không
+  cắt đường bay, và nửa rơi xuống là phần ràng buộc vật lý tốt nhất.
 - **Khởi tạo đa điểm:** lưới 3 hướng × 5 góc nâng × 4 tốc độ (6–40 m/s); chọn 4 điểm đầu tốt nhất để
   tối ưu (`least_squares`, trust-region) — tránh cực tiểu địa phương.
 - **Cổng chất lượng ("good"):** trung vị chiếu lại < 6 px, > 70% điểm trong 8 px, ≥ 8 quan sát,
@@ -321,13 +337,17 @@ Tạt ngang yếu nhất: đi thẳng, ít cong nên vật lý ít ràng buộc 
 | | `danh-cau` (1280×720, nhiều sân) | `danh-cau-02` (1024×576, 1 sân) |
 |---|---|---|
 | Camera | X −0.77, Y −6.35, cao 1.32 m | X −0.97, Y −7.64, cao 1.12 m |
-| Cú chạm phát hiện | 56 | 98 |
-| Cú bay 3D đạt chuẩn | 39 (18 trực tiếp + 21 khôi phục) | 88 (68 + 20) |
-| Sai số chiếu lại (trung vị) | 1.9 px | 1.5 px |
-| Điểm TrackNet lệch > 25 px khỏi đường 3D | 3.0% | 2.7% |
-| Điểm TrackNet được đường 3D giải thích | 32% | 65% |
-| Tốc độ cú đánh (trung vị / max) | 49 / 216 km/h | 55 / 252 km/h |
-| Điểm rơi | 8 | 6 |
+| Cú chạm phát hiện | 56 → 96 | 98 → 131 |
+| Cú bay 3D đạt chuẩn | 39 → **56** (35 trực tiếp + 21 khôi phục) | 88 → **106** (83 + 23) |
+| Sai số chiếu lại (trung vị) | 1.9 px | 1.3 px |
+| Điểm TrackNet lệch > 25 px khỏi đường 3D | 3.0% → 1.8% | 2.7% → 1.5% |
+| Điểm TrackNet được đường 3D giải thích (< 8 px) | 30% → **45%** | 62% → **76%** |
+| Tốc độ cú đánh (trung vị / max) | 55 / 266 km/h | 53 / 291 km/h |
+
+*Số trước → sau bản sửa 2026-11-09: ghim điểm xuất phát quanh điểm chạm, chọn người đánh theo cả hai
+bên + vật lý, thêm ứng viên chạm ở cuối track, nới giới hạn sau đường cuối, không cắt cú khi cầu ra khỏi
+mép trên khung hình.*
+| Điểm rơi | 8 → 7 (4 OUT ở X 7.6–9.4 m: nhiều khả năng cầu sân bên) | 6 → 10 |
 
 **Đối chiếu độc lập:** pha 51.3 s của `danh-cau` — vật lý dự đoán rơi ở (1.74, 2.15); quả cầu thật
 xác nhận bằng mắt trên sàn ở khoảng (1.5–1.7, 1.7–2.6) ⇒ lệch ~0.3–0.5 m.
