@@ -1,7 +1,12 @@
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { apply, COURT_LINES, COURT_W, HALF_L, homography, invert3, NET, projectSegment } from './geom.js';
-import { buildTracks, playerStats, rallies, selectTracks, shuttleGate, trackPlayers } from './analysis.js';
-import { DEVICE_TABLE, renderDeviceTable } from './devices.js';
+import { renderDeviceTable } from './devices.js';
+import { calibrateFromHomography } from './core/camera.js';
+import { fitCourt } from './core/courtfit.js';
+import { reportHtml } from './core/report.js';
+import { buildPoses, createRenderer } from './ui/render.js';
+
+const SEQ = 8;   // TrackNetV3: frames per inference
 
 const $ = (s) => document.querySelector(s);
 const show = (el, on = true) => { el.hidden = !on; };
@@ -40,11 +45,11 @@ const call = (msg, transfer) => new Promise((resolve, reject) => {
 });
 let readyKey = '';
 async function ensureModels() {
-  const key = `${$('#opt-backend').value}|${$('#opt-pose').value !== '0'}`;
+  const key = `${$('#opt-backend').value}|${preset().pose}`;
   if (readyKey === key && state.ready) return state.ready;
   state.ready = null;
   const p = new Promise((res) => { onReady = res; });
-  worker.postMessage({ type: 'init', want: $('#opt-backend').value, pose: $('#opt-pose').value !== '0',
+  worker.postMessage({ type: 'init', want: $('#opt-backend').value, pose: preset().pose,
                        fp32: new URLSearchParams(location.search).has('fp32') });
   const r = await p;
   readyKey = key;
@@ -57,7 +62,7 @@ function describeDevice(r) {
   const gpu = r.gpu ? `${r.gpu.vendor} ${r.gpu.arch} ${r.gpu.desc}`.trim() || 'có WebGPU' : 'không có WebGPU';
   el.innerHTML = `Đang chạy bằng <b>${r.backend === 'webgpu' ? 'GPU (WebGPU)' : 'CPU (WASM)'}</b> · GPU: ${gpu}` +
     ` · CPU: ${navigator.hardwareConcurrency || '?'} luồng (dùng ${r.threads}${r.isolated ? '' : ', thiếu cross-origin isolation'})` +
-    ` · mô hình ${r.model.includes('fp16') ? 'FP16' : 'FP32'}`;
+    ` · mô hình ${r.model.includes('fp16') ? 'FP16' : 'FP32'}, khung xương ${r.poseModel || '—'}`;
   show(el);
 }
 
@@ -280,15 +285,20 @@ pc.addEventListener('click', (e) => {
 $('#calib-undo').onclick = () => { state.pairs.pop(); state.pick = nextDefaultPick(); updateH(); drawCalib(); };
 $('#calib-reset').onclick = () => { state.pairs = []; state.pick = nextDefaultPick(); updateH(); drawCalib(); };
 $('#calib-ok').onclick = () => { show($('#step-run')); $('#step-run').scrollIntoView({ behavior: 'smooth' }); };
-$('#calib-skip').onclick = () => { state.pairs = []; updateH(); drawCalib(); show($('#step-run')); $('#step-run').scrollIntoView({ behavior: 'smooth' }); };
 
-// ---------- step 3: bench + run ----------
-const resWH = () => $('#opt-res').value.split('x').map(Number);
-const poseEvery = () => Number($('#opt-pose').value);
+// ---------- step 3: presets, bench, run ----------
+// Every level runs the full analysis; higher levels detect more carefully and use a better pose model.
+const PRESETS = {
+  fast:     { label: 'Nhanh',     stride: 8, pose: 's', poseEvery: 6, farZoom: false, courtFit: false, starts: 2, maxNfev: 200 },
+  balanced: { label: 'Cân bằng',  stride: 8, pose: 'm', poseEvery: 3, farZoom: true,  courtFit: true,  starts: 4, maxNfev: 300 },
+  max:      { label: 'Tối đa',    stride: 4, pose: 'l', poseEvery: 1, farZoom: true,  courtFit: true,  starts: 4, maxNfev: 300 },
+};
+const preset = () => PRESETS[document.querySelector('input[name=preset]:checked')?.value || 'balanced'];
+const TW = 512, TH = 288;
 function rangeFrames() {
   const lim = Number($('#opt-range').value);
   const sec = lim ? Math.min(lim, state.duration) : state.duration;
-  return Math.max(SEQ, Math.floor((sec * state.fps) / SEQ) * SEQ);
+  return Math.max(SEQ, Math.floor(sec * state.fps));
 }
 
 function setProgress(frac, label) {
@@ -298,10 +308,11 @@ function setProgress(frac, label) {
   el.querySelector('span').textContent = label || '';
 }
 
-const SEQ = 8;        // official TrackNetV3: one inference covers 8 frames
-const SEEK_MS = 12;   // measured frame grab cost (seek + draw + readback) per frame
-function estimateSeconds(b, frames, every) {
-  return (frames / SEQ) * b.tracknetMs / 1000 + (every ? (frames / every) * b.poseMs / 1000 : 0) + frames * SEEK_MS / 1000;
+const SEEK_MS = 12;   // frame grab cost (seek + draw + readback) per frame
+// CPU analysis after inference, measured: ~5 s for 150 s of video on a desktop CPU (~0.035 s per video second)
+function estimateSeconds(b, frames, p) {
+  const calls = Math.ceil(frames / p.stride);
+  return (calls * b.tracknetMs + (frames / p.poseEvery) * b.poseMs + frames * SEEK_MS) / 1000 + (frames / state.fps) * 0.05;
 }
 
 $('#btn-bench').onclick = async () => {
@@ -310,9 +321,8 @@ $('#btn-bench').onclick = async () => {
   try {
     await ensureModels();
     setProgress(0, 'Đang đo tốc độ… (lần đầu GPU phải biên dịch shader, có thể mất 10–30 giây)');
-    const [w, h] = resWH();
-    const b = await new Promise((res) => { onBench = res; worker.postMessage({ type: 'bench', w, h, pose: poseEvery() > 0 }); });
-    state.bench = { ...b, w, h, backend: state.ready.backend };
+    const b = await new Promise((res) => { onBench = res; worker.postMessage({ type: 'bench', w: TW, h: TH, pose: true }); });
+    state.bench = { ...b, backend: state.ready.backend, pose: preset().pose };
     show($('#progress'), false);
     renderEstimate();
   } catch (e) { alert(e.message); } finally { btn.disabled = false; }
@@ -320,21 +330,24 @@ $('#btn-bench').onclick = async () => {
 
 function renderEstimate() {
   const b = state.bench;
+  if (!b) return;
+  const p = preset();
   const frames = rangeFrames();
-  const every = poseEvery();
-  const tFrame = (b.tracknetMs / SEQ + (every ? b.poseMs / every : 0) + SEEK_MS) / 1000;
   const el = $('#estimate');
   el.innerHTML = `
-    <div class="kpi"><b>${b.tracknetMs.toFixed(0)} ms</b><span>bắt cầu / 8 frame (${b.w}×${b.h})</span></div>
-    <div class="kpi"><b>${every ? b.poseMs.toFixed(0) + ' ms' : '—'}</b><span>khung xương / lần</span></div>
-    <div class="kpi"><b>${(1 / tFrame).toFixed(1)} fps</b><span>tốc độ xử lý ≈ ${(1 / tFrame / state.fps).toFixed(2)}× thời gian thực</span></div>
-    <div class="kpi"><b>${fmtTime(estimateSeconds(b, frames, every))}</b><span>cho đoạn đã chọn (${fmtTime(frames / state.fps)})</span></div>
-    <div class="kpi"><b>${fmtTime(estimateSeconds(b, state.duration * state.fps, every))}</b><span>cho cả video (${fmtTime(state.duration)})</span></div>
-    <div class="kpi"><b>${fmtTime(estimateSeconds(b, 1800, every))}</b><span>cho 1 phút video 30 fps</span></div>`;
+    <div class="kpi"><b>${b.tracknetMs.toFixed(0)} ms</b><span>bắt cầu / 8 frame</span></div>
+    <div class="kpi"><b>${b.poseMs.toFixed(0)} ms</b><span>khung xương RTMO-${b.pose} / lần</span></div>
+    <div class="kpi"><b>${fmtTime(estimateSeconds(b, frames, p))}</b><span>mức ${p.label}, đoạn đã chọn (${fmtTime(frames / state.fps)})</span></div>
+    <div class="kpi"><b>${fmtTime(estimateSeconds(b, 1800, p))}</b><span>mức ${p.label}, 1 phút video 30 fps</span></div>`;
   show(el);
-  renderDeviceTable($('#device-table'), { ...b, every, label: `Máy này (${b.backend === 'webgpu' ? 'GPU' : 'CPU'}, ${b.w}×${b.h})` });
+  renderDeviceTable($('#device-table'), { ...b, every: p.poseEvery, w: TW, h: TH,
+    label: `Máy này (${b.backend === 'webgpu' ? 'GPU' : 'CPU'})` });
 }
-['#opt-res', '#opt-pose', '#opt-range'].forEach((s) => $(s).addEventListener('change', () => state.bench && renderEstimate()));
+['#opt-range'].forEach((s) => $(s).addEventListener('change', renderEstimate));
+document.querySelectorAll('input[name=preset]').forEach((r) => r.addEventListener('change', () => {
+  if (state.bench && state.bench.pose !== preset().pose) state.bench = null, show($('#estimate'), false);
+  else renderEstimate();
+}));
 
 let cancelled = false;
 $('#btn-cancel').onclick = () => { cancelled = true; };
@@ -345,8 +358,12 @@ $('#btn-run').onclick = async () => {
   cancelled = false;
   try {
     await ensureModels();
-    state.result = await analyse();
-    if (state.result) showResult();
+    const t0 = performance.now();
+    const input = await infer();
+    if (!input) return;
+    const out = await analysePipeline(input);
+    state.result = { ...out, input, seconds: (performance.now() - t0) / 1000, preset: preset().label };
+    showResult();
   } catch (e) {
     console.error(e); alert('Lỗi khi phân tích: ' + e.message);
   } finally {
@@ -354,248 +371,227 @@ $('#btn-run').onclick = async () => {
   }
 };
 
-async function analyse() {
-  const [tw, th] = resWH();
-  const every = poseEvery();
+// median of K frames spread over [0, sec] at w x h (RGBA)
+async function medianFrame(sec, w, h, K, label) {
+  const ctx = new OffscreenCanvas(w, h).getContext('2d', { willReadFrequently: true });
+  const samples = [];
+  for (let i = 0; i < K; i++) {
+    await seek(proc, ((i + 0.5) / K) * sec);
+    ctx.drawImage(proc, 0, 0, w, h);
+    samples.push(ctx.getImageData(0, 0, w, h).data);
+    setProgress(0, `${label} ${i + 1}/${K}`);
+  }
+  const bg = new Uint8ClampedArray(w * h * 4);
+  const col = new Uint8Array(K);
+  for (let q = 0; q < w * h * 4; q++) {
+    if ((q & 3) === 3) { bg[q] = 255; continue; }
+    for (let i = 0; i < K; i++) col[i] = samples[i][q];
+    col.sort();
+    bg[q] = col[K >> 1];
+  }
+  return bg;
+}
+
+/** Runs the models over the video: shuttle candidates, poses + appearance; snaps the court if asked. */
+async function infer() {
+  const p = preset();
   const N = rangeFrames();
-  const tn = new OffscreenCanvas(tw, th).getContext('2d', { willReadFrequently: true });
+  const tn = new OffscreenCanvas(TW, TH).getContext('2d', { willReadFrequently: true });
   const S = 640, ratio = Math.min(S / state.W, S / state.VH);
   const pz = new OffscreenCanvas(S, S).getContext('2d', { willReadFrequently: true });
-  const cands = new Array(N);
-  const poses = new Map();
+  const cands = [];
+  const poses = { frame: [], kpts: [], scores: [] }, feats = [];
   const inflight = [];
   let failure = null;
-  const track = (p) => inflight.push(p.catch((e) => { failure = failure || e; }));
-  const t0 = performance.now();
-  let tnMs = 0, poseMs = 0;
+  const track = (pr) => inflight.push(pr.catch((e) => { failure = failure || e; }));
   proc.pause();
 
-  // median background of the analysed stretch (the official TrackNetV3 looks at it to ignore static
-  // white things: lines, lights, logos). 25 frames spread over the range.
-  {
-    const K = 25, samples = [];
-    for (let i = 0; i < K; i++) {
-      await seek(proc, ((i + 0.5) / K) * (N / state.fps));
-      tn.drawImage(proc, 0, 0, tw, th);
-      samples.push(tn.getImageData(0, 0, tw, th).data);
-      setProgress(i / K * 0.02, `Tính ảnh nền sân trống… ${i + 1}/${K}`);
+  // court: the clicked points, optionally snapped onto the white lines of the empty court
+  // geom.js gives a flat 9-vector; the core works with 3x3
+  let H = state.Hc ? [state.Hc.slice(0, 3), state.Hc.slice(3, 6), state.Hc.slice(6, 9)] : null;
+  if (!H) throw new Error('Cần đánh dấu sân (ít nhất 4 điểm) để dựng camera 3D.');
+  if (H && p.courtFit && state.pairs.length >= 4) {
+    const cw = Math.min(state.W, 1280), ch = Math.round(state.VH * cw / state.W), k = cw / state.W;
+    const bgFull = await medianFrame(N / state.fps, cw, ch, 25, 'Ảnh nền sân trống (khớp sân)');
+    const fit = fitCourt(bgFull, cw, ch, state.pairs.map((q) => [q.court, [q.px[0] * k, q.px[1] * k]]));
+    if (fit.cost < fit.seedCost) {
+      // back to full resolution: scale the image side of the homography
+      H = fit.H.map((row, i) => (i < 2 ? row.map((v) => v / k) : row));
+      state.courtFit = fit;
     }
-    const bg = new Uint8ClampedArray(tw * th * 4);
-    const col = new Uint8Array(K);
-    for (let p = 0; p < tw * th * 4; p++) {
-      if ((p & 3) === 3) { bg[p] = 255; continue; }
-      for (let i = 0; i < K; i++) col[i] = samples[i][p];
-      col.sort();
-      bg[p] = col[K >> 1];
-    }
-    worker.postMessage({ type: 'background', image: bg }, [bg.buffer]);
   }
 
-  for (let g = 0; g < N; g += SEQ) {
+  const bg = await medianFrame(N / state.fps, TW, TH, 25, 'Ảnh nền cho bắt cầu');
+  worker.postMessage({ type: 'background', image: bg }, [bg.buffer]);
+
+  const t0 = performance.now();
+  let tnMs = 0, poseMs = 0, done = 0;
+  const cache = new Map();            // frame -> TW x TH RGBA (overlapping windows reuse frames)
+  // far-half zoom (SAHI-style second pose pass): far players are small, and a one-stage pose model on the
+  // whole frame letterboxed to 640 misses them (e.g. a deep clear hit 2 m behind the far baseline)
+  let roi = null;
+  if (p.farZoom) {
+    const cam = calibrateFromHomography(H, state.W, state.VH);
+    const pts = [];
+    for (const X of [-1.5, 3.05, 7.6]) for (const Y of [0, 4.5, 9.2]) for (const Z of [0, 2.3])
+      if (cam.depth([X, Y, Z]) > 0.5) pts.push(cam.project([[X, Y, Z]])[0]);
+    if (pts.length >= 4) {
+      const xs = pts.map((q) => q[0]), ys = pts.map((q) => q[1]);
+      const x0 = Math.max(0, Math.min(...xs) - 20), x1 = Math.min(state.W, Math.max(...xs) + 20);
+      const y0 = Math.max(0, Math.min(...ys) - 30), y1 = Math.min(state.VH, Math.max(...ys) + 20);
+      const r2 = Math.min(S / (x1 - x0), S / (y1 - y0));
+      if (x1 - x0 > 50 && y1 - y0 > 50 && r2 > ratio * 1.25) roi = { x0, y0, w: x1 - x0, h: y1 - y0, r: r2 };
+    }
+  }
+  const people = new Map();           // frame -> [{k2, sc, feat, box}] from both passes, deduplicated at the end
+  const addPeople = (f, list, sx, sy, sc) => {
+    const arr = people.get(f) || [];
+    for (const person of list) {
+      const k2 = [], s2 = [];
+      for (let j = 0; j < 17; j++) { k2.push([sx + person.kp[j * 3] / sc, sy + person.kp[j * 3 + 1] / sc]); s2.push(person.kp[j * 3 + 2]); }
+      const vis = k2.filter((_, j) => s2[j] > 0.3);
+      if (!vis.length) continue;
+      const box = [Math.min(...vis.map((q) => q[0])), Math.min(...vis.map((q) => q[1])), Math.max(...vis.map((q) => q[0])), Math.max(...vis.map((q) => q[1]))];
+      arr.push({ k2, sc: s2, feat: person.feat, box, conf: s2.reduce((a, b) => a + b, 0) / 17 });
+    }
+    people.set(f, arr);
+  };
+  const runPose = (f, ctx, sx, sy, sc, draw) => {
+    ctx.fillStyle = 'rgb(114,114,114)'; ctx.fillRect(0, 0, S, S);
+    draw();
+    const im = ctx.getImageData(0, 0, S, S).data;
+    track(call({ type: 'pose', image: im }, [im.buffer]).then((r) => { poseMs += r.ms; addPeople(f, r.people, sx, sy, sc); }));
+  };
+  const grab = async (f) => {
+    if (cache.has(f)) return cache.get(f);
+    await seek(proc, (f + 0.5) / state.fps);
+    tn.drawImage(proc, 0, 0, TW, TH);
+    const img = tn.getImageData(0, 0, TW, TH).data;
+    cache.set(f, img);
+    if (f % p.poseEvery === 0) {
+      runPose(f, pz, 0, 0, ratio, () => pz.drawImage(proc, 0, 0, state.W * ratio, state.VH * ratio));
+      if (roi) runPose(f, pz, roi.x0, roi.y0, roi.r,
+        () => pz.drawImage(proc, roi.x0, roi.y0, roi.w, roi.h, 0, 0, roi.w * roi.r, roi.h * roi.r));
+    }
+    return img;
+  };
+
+  for (let g = 0; g < N; g += p.stride) {
     if (cancelled) { setProgress(g / N, 'Đã dừng.'); return null; }
     if (failure) throw failure;
     const frames = [];
-    for (let k = 0; k < SEQ; k++) {
-      const f = g + k;
-      await seek(proc, (f + 0.5) / state.fps);
-      tn.drawImage(proc, 0, 0, tw, th);
-      frames.push(tn.getImageData(0, 0, tw, th).data);
-      if (every && f % every === 0) {
-        pz.fillStyle = 'rgb(114,114,114)'; pz.fillRect(0, 0, S, S);
-        pz.drawImage(proc, 0, 0, state.W * ratio, state.VH * ratio);
-        const img = pz.getImageData(0, 0, S, S).data;
-        track(call({ type: 'pose', image: img }, [img.buffer]).then((r) => {
-          poseMs += r.ms;
-          poses.set(f, r.people.map((p) => ({ score: p.score, box: p.box.map((v) => v / ratio), kp: p.kp.map((v, i) => (i % 3 === 2 ? v : v / ratio)) })));
-        }));
-      }
-    }
-    track(call({ type: 'tracknet', frames, w: tw, h: th }, frames.map((f) => f.buffer)).then((r) => {
+    for (let k = 0; k < SEQ; k++) frames.push((await grab(Math.min(g + k, N - 1))).slice());
+    for (const f of [...cache.keys()]) if (f < g + p.stride) cache.delete(f);
+    const last = g + p.stride >= N;
+    track(call({ type: 'tracknet', frames, w: TW, h: TH, start: g, stride: p.stride, last }, frames.map((x) => x.buffer)).then((r) => {
       tnMs += r.ms;
-      r.cands.forEach((list, k) => { cands[g + k] = list.map((c) => ({ ...c, x: c.x * state.W, y: c.y * state.VH })); });
+      for (const [f, list] of Object.entries(r.cands)) {
+        if (+f >= N) continue;
+        for (const c of list) cands.push({ frame: +f, x: c.x * state.W, y: c.y * state.VH, area: c.area, score: c.score });
+      }
     }));
-    // keep at most ~2 groups queued so grabbing overlaps with inference without piling up memory
-    while (inflight.length > 4) await inflight.shift();
-    const done = g + SEQ, el = (performance.now() - t0) / 1000;
-    setProgress(done / N, `Frame ${done}/${N} · ${(done / el).toFixed(1)} fps · còn ~${fmtTime((el / done) * (N - done))} · bắt cầu ${(tnMs / Math.max(1, Math.ceil(done / SEQ))).toFixed(0)} ms/lần`);
+    while (inflight.length > 6) await inflight.shift();
+    done = Math.min(N, g + p.stride);
+    const el = (performance.now() - t0) / 1000;
+    setProgress(0.85 * done / N, `Mức ${p.label} · frame ${done}/${N} · ${(done / el).toFixed(1)} fps · còn ~${fmtTime((el / done) * (N - done))}`);
   }
   await Promise.all(inflight);
   if (failure) throw failure;
-  const total = (performance.now() - t0) / 1000;
-
-  // post-processing (fast)
-  const gate = shuttleGate(state.Hc, state.W, state.VH);
-  const shuttle = selectTracks(buildTracks(cands, gate));
-  const byFrame = new Map(shuttle.map((r) => [r.frame, r]));
-  const players = trackPlayers(poses, state.Hinv, state.VH / 720).map((s) => ({ ...s, stats: playerStats(s, state.fps) }));
-  const ral = rallies(shuttle, state.fps, state.Hinv, poses, every);
-  window.__result = { shuttle, ral, cands };   // handy for debugging in devtools
-  setProgress(1, `Xong ${N} frame trong ${fmtTime(total)} (${(N / total).toFixed(1)} fps) bằng ${state.ready.backend === 'webgpu' ? 'GPU' : 'CPU'}.`);
+  cands.sort((a, b) => a.frame - b.frame);
+  // merge the two pose passes: the same person found twice -> keep the more confident skeleton
+  const iou = (a, b) => {
+    const w = Math.max(0, Math.min(a[2], b[2]) - Math.max(a[0], b[0])), h = Math.max(0, Math.min(a[3], b[3]) - Math.max(a[1], b[1]));
+    const u = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - w * h;
+    return u > 0 ? (w * h) / u : 0;
+  };
+  for (const f of [...people.keys()].sort((a, b) => a - b)) {
+    const kept = [];
+    for (const q of people.get(f).sort((a, b) => b.conf - a.conf)) if (kept.every((k) => iou(k.box, q.box) < 0.45)) kept.push(q);
+    for (const q of kept) { poses.frame.push(f); poses.kpts.push(q.k2); poses.scores.push(q.sc); feats.push(q.feat); }
+  }
+  const order = poses.frame.map((_, i) => i);
   return {
-    N, fps: state.fps, W: state.W, H: state.VH, every, total, backend: state.ready.backend, res: [tw, th],
-    cands, shuttle, byFrame, poses, players, rallies: ral,
-    hitFrames: ral.flatMap((r) => r.hits.map((h) => h.frame)),
-    timings: { tracknetMs: tnMs / Math.ceil(N / SEQ), poseMs: every ? poseMs / Math.ceil(N / every) : 0 },
+    fps: state.fps, width: state.W, height: state.VH, H, N, cands,
+    poses: { frame: order.map((i) => poses.frame[i]), kpts: order.map((i) => poses.kpts[i]), scores: order.map((i) => poses.scores[i]) },
+    feats: order.map((i) => feats[i]),
+    inferenceSeconds: (performance.now() - t0) / 1000,
+    timings: { tracknetMs: tnMs, poseMs },
   };
 }
 
+function analysePipeline(input) {
+  const p = preset();
+  return new Promise((resolve, reject) => {
+    const w = new Worker(new URL('./app/pipeline.worker.js', import.meta.url), { type: 'module' });
+    w.onmessage = ({ data }) => {
+      if (data.type === 'progress') setProgress(0.85 + 0.15 * data.frac, `Phân tích: ${data.label}…`);
+      else if (data.type === 'done') { w.terminate(); resolve(data.result); }
+      else if (data.type === 'error') { w.terminate(); reject(new Error(data.message)); }
+    };
+    w.postMessage({ input, opts: { poseEvery: p.poseEvery, starts: p.starts, maxNfev: p.maxNfev } });
+  });
+}
+
 // ---------- step 4: result ----------
-const SKELETON = [[5, 7], [7, 9], [6, 8], [8, 10], [5, 6], [5, 11], [6, 12], [11, 12], [11, 13], [13, 15], [12, 14], [14, 16], [0, 5], [0, 6]];
 const ov = $('#overlay');
-const mm = $('#minimap');
-const PLAYER_COLORS = ['#4fc3f7', '#ffb74d', '#ff6fb5', '#b388ff', '#81c784', '#fff176'];
+const panelCanvas = $('#panel');
+let renderer = null, poseCache = null;
+
+function makeRenderer(layout, panelPosition = 'below') {
+  const r = state.result, inp = r.input;
+  const cam = calibrateFromHomography(inp.H, inp.width, inp.height);
+  poseCache = poseCache || buildPoses(r.players, inp.poses.kpts, inp.poses.scores, r.k3d);
+  return createRenderer({
+    cam, fps: inp.fps, width: inp.width, height: inp.height,
+    shots: r.shots.filter((s) => s.good), report: r.report, landings: r.landings,
+    shuttleRows: r.shuttle, poses: poseCache, players: r.players, layout, panelPosition,
+  });
+}
 
 function showResult() {
   const r = state.result;
+  window.__result = r;   // for devtools
+  poseCache = null;
+  renderer = makeRenderer('horizontal');
   show($('#step-result'));
-  ov.width = r.W; ov.height = r.H;
+  ov.width = r.input.width; ov.height = r.input.height;
+  panelCanvas.width = renderer.panelWidth; panelCanvas.height = renderer.panelHeight;
+  const rep = r.report.summary;
+  setProgress(1, `Xong trong ${fmtTime(r.seconds)} (mức ${r.preset}, ${state.ready.backend === 'webgpu' ? 'GPU' : 'CPU'}) · ` +
+    `${rep.shots} cú có đường bay 3D, ${rep.rallies} pha, ${rep.players} người chơi` +
+    (state.courtFit ? ` · sân khớp vạch trắng ${state.courtFit.seedCost.toFixed(1)} → ${state.courtFit.cost.toFixed(1)} px` : ''));
+  $('#report').innerHTML = reportHtml(r.report, state.file?.name || '');
   player.currentTime = 0;
-  renderStats();
   drawFrame(0);
   if ('requestVideoFrameCallback' in HTMLVideoElement.prototype) {
-    const loop = (_, m) => { drawFrame(Math.floor(m.mediaTime * r.fps + 1e-3)); player.requestVideoFrameCallback(loop); };
+    const loop = (_, m) => { drawFrame(Math.floor(m.mediaTime * r.input.fps + 1e-3)); player.requestVideoFrameCallback(loop); };
     player.requestVideoFrameCallback(loop);
   } else {
-    player.addEventListener('timeupdate', () => drawFrame(Math.floor(player.currentTime * r.fps)));
+    player.addEventListener('timeupdate', () => drawFrame(Math.floor(player.currentTime * r.input.fps)));
   }
-  player.addEventListener('seeked', () => drawFrame(Math.floor(player.currentTime * r.fps + 1e-3)));
+  player.addEventListener('seeked', () => drawFrame(Math.floor(player.currentTime * r.input.fps + 1e-3)));
   $('#step-result').scrollIntoView({ behavior: 'smooth' });
-}
-$('#opt-heat').addEventListener('change', () => state.result && drawFrame(Math.floor(player.currentTime * state.result.fps)));
-
-function poseAt(r, f) {
-  if (!r.every) return null;
-  const k = Math.floor(f / r.every) * r.every;
-  return r.poses.get(k) || null;
-}
-
-function drawOverlay(ctx, r, f) {
-  const k = r.W / 1280;
-  ctx.lineCap = 'round';
-  if (state.Hc) {
-    ctx.strokeStyle = 'rgba(255,212,0,.75)'; ctx.lineWidth = 1.6 * Math.max(1, k);
-    for (const [p, q] of COURT_LINES) {
-      const pts = projectSegment(state.Hc, p, q);
-      if (pts.length < 2) continue;
-      ctx.beginPath(); pts.forEach((s, i) => ctx[i ? 'lineTo' : 'moveTo'](s[0], s[1])); ctx.stroke();
-    }
-  }
-  const people = f < r.N ? poseAt(r, f) : null;
-  for (const p of people || []) {
-    const col = p.player !== undefined ? PLAYER_COLORS[p.player % PLAYER_COLORS.length] : 'rgba(255,255,255,.6)';
-    ctx.strokeStyle = col; ctx.lineWidth = 3 * Math.max(1, k);
-    for (const [a, b] of SKELETON) {
-      if (p.kp[a * 3 + 2] < 0.3 || p.kp[b * 3 + 2] < 0.3) continue;
-      ctx.beginPath(); ctx.moveTo(p.kp[a * 3], p.kp[a * 3 + 1]); ctx.lineTo(p.kp[b * 3], p.kp[b * 3 + 1]); ctx.stroke();
-    }
-    if (p.player !== undefined && p.kp[2] > 0.3) {
-      ctx.fillStyle = col; ctx.font = `bold ${16 * Math.max(1, k)}px system-ui`; ctx.textAlign = 'center';
-      ctx.fillText(`P${p.player + 1}`, p.kp[0], p.kp[1] - 22 * Math.max(1, k));
-    }
-  }
-  // shuttle trail
-  const trail = [];
-  for (let i = f - 12; i <= f; i++) { const s = r.byFrame.get(i); if (s) trail.push(s); }
-  for (let i = 1; i < trail.length; i++) {
-    if (trail[i].frame - trail[i - 1].frame > 2) continue;
-    ctx.strokeStyle = `rgba(255,77,77,${0.25 + 0.75 * (i / trail.length)})`; ctx.lineWidth = 4 * Math.max(1, k);
-    ctx.beginPath(); ctx.moveTo(trail[i - 1].x, trail[i - 1].y); ctx.lineTo(trail[i].x, trail[i].y); ctx.stroke();
-  }
-  const cur = r.byFrame.get(f);
-  if (cur) {
-    ctx.fillStyle = cur.detected ? '#ff4d4d' : 'rgba(255,77,77,.5)';
-    ctx.beginPath(); ctx.arc(cur.x, cur.y, 6 * Math.max(1, k), 0, 7); ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
-  }
-  for (const h of r.hitFrames) {
-    if (f >= h && f < h + r.fps * 0.4) {
-      const s = r.byFrame.get(h);
-      if (!s) continue;
-      ctx.fillStyle = '#d9ff3f'; ctx.font = `800 ${18 * Math.max(1, k)}px system-ui`; ctx.textAlign = 'center';
-      ctx.fillText('HIT', s.x, s.y - 14 * Math.max(1, k));
-    }
-  }
-  for (const ra of r.rallies) {
-    const L = ra.landing;
-    if (!L || f < L.frame || f > L.frame + r.fps * 1.5 || !state.Hc) continue;
-    const [x, y] = apply(state.Hc, [L.X, L.Y]);
-    ctx.strokeStyle = L.inDoubles ? '#57d68d' : '#ff6b6b'; ctx.lineWidth = 3 * Math.max(1, k);
-    ctx.beginPath(); ctx.ellipse(x, y, 18 * Math.max(1, k), 7 * Math.max(1, k), 0, 0, 7); ctx.stroke();
-    ctx.fillStyle = ctx.strokeStyle; ctx.font = `800 ${16 * Math.max(1, k)}px system-ui`; ctx.textAlign = 'center';
-    ctx.fillText(L.inDoubles ? 'IN' : 'OUT', x, y + 26 * Math.max(1, k));
-  }
-  // corner badge
-  ctx.fillStyle = 'rgba(0,0,0,.55)'; ctx.fillRect(10 * k, 10 * k, 250 * Math.max(1, k), 30 * Math.max(1, k));
-  ctx.fillStyle = '#d9ff3f'; ctx.font = `700 ${14 * Math.max(1, k)}px system-ui`; ctx.textAlign = 'left';
-  ctx.fillText(`Pha ${r.rallies.filter((ra) => ra.start <= f).length}/${r.rallies.length} · t=${(f / r.fps).toFixed(1)}s`, 20 * k, 30 * Math.max(1, k));
-}
-
-function drawMinimap(ctx, r, f, heat) {
-  const L = miniLayout(ctx.canvas, 18);
-  drawMiniCourt(ctx, L);
-  if (heat) {
-    for (const p of r.players) for (const q of p.stats.smooth) {
-      const [x, y] = L.toPx([q.X, q.Y]);
-      const g = ctx.createRadialGradient(x, y, 0, x, y, 14);
-      g.addColorStop(0, 'rgba(255,90,40,.10)'); g.addColorStop(1, 'rgba(255,90,40,0)');
-      ctx.fillStyle = g; ctx.fillRect(x - 14, y - 14, 28, 28);
-    }
-  }
-  for (const p of r.players) {
-    const col = PLAYER_COLORS[p.id % PLAYER_COLORS.length];
-    const recent = p.stats.smooth.filter((q) => q.f <= f && q.f > f - r.fps * 2);
-    ctx.strokeStyle = col; ctx.globalAlpha = 0.6; ctx.lineWidth = 2;
-    ctx.beginPath(); recent.forEach((q, i) => ctx[i ? 'lineTo' : 'moveTo'](...L.toPx([q.X, q.Y]))); ctx.stroke();
-    ctx.globalAlpha = 1;
-    const now = recent.at(-1);
-    if (now && f - now.f < r.fps) {
-      const [x, y] = L.toPx([now.X, now.Y]);
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, 6, 0, 7); ctx.fill();
-      ctx.fillStyle = '#000'; ctx.font = 'bold 9px system-ui'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(String(p.id + 1), x, y + 0.5); ctx.textBaseline = 'alphabetic';
-    }
-  }
-  for (const ra of r.rallies) {
-    if (!ra.landing || ra.landing.frame > f) continue;
-    const [x, y] = L.toPx([ra.landing.X, ra.landing.Y]);
-    ctx.strokeStyle = ra.landing.inDoubles ? '#57d68d' : '#ff6b6b'; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(x - 5, y - 5); ctx.lineTo(x + 5, y + 5); ctx.moveTo(x + 5, y - 5); ctx.lineTo(x - 5, y + 5); ctx.stroke();
-  }
 }
 
 function drawFrame(f) {
-  const r = state.result;
-  if (!r) return;
-  const ctx = ov.getContext('2d');
-  ctx.clearRect(0, 0, ov.width, ov.height);
-  drawOverlay(ctx, r, f);
-  drawMinimap(mm.getContext('2d'), r, f, $('#opt-heat').checked);
+  if (!renderer) return;
+  const c = ov.getContext('2d');
+  c.clearRect(0, 0, ov.width, ov.height);
+  renderer.drawOverlay(c, f);
+  renderer.drawPanel(panelCanvas.getContext('2d'), f);
 }
 
-function renderStats() {
-  const r = state.result;
-  const shots = r.rallies.reduce((s, ra) => s + ra.shots, 0);
-  const longest = r.rallies.reduce((m, ra) => Math.max(m, (ra.end - ra.start) / r.fps), 0);
-  const lands = r.rallies.filter((ra) => ra.landing);
-  const detected = r.shuttle.filter((s) => s.detected).length;
-  const kpi = (v, l) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`;
-  let html = kpi(r.rallies.length, 'pha cầu') + kpi(shots, 'cú đánh (ước tính 2D)') + kpi(`${longest.toFixed(1)} s`, 'pha dài nhất') +
-    kpi(`${Math.round((100 * detected) / r.N)}%`, 'frame thấy cầu') +
-    kpi(`${lands.filter((l) => l.landing.inDoubles).length} / ${lands.filter((l) => !l.landing.inDoubles).length}`, 'điểm rơi IN / OUT (thô, ±1–2 m)') +
-    kpi(`${(r.N / r.total).toFixed(1)} fps`, `tốc độ máy bạn (${r.backend === 'webgpu' ? 'GPU' : 'CPU'})`);
-  for (const p of r.players.slice().sort((a, b) => b.pts.length - a.pts.length).slice(0, 4)) {
-    html += kpi(`${p.stats.distance.toFixed(0)} m`, `<span style="color:${PLAYER_COLORS[p.id % PLAYER_COLORS.length]}">P${p.id + 1}</span> chạy (${p.side < 0 ? 'phía camera' : 'phía xa'})`);
-  }
-  $('#stats').innerHTML = html;
-}
+// clicking a shot in the report jumps the video there
+$('#report').addEventListener('click', (e) => {
+  const tr = e.target.closest('tr[data-frame]');
+  if (tr && state.result) { player.currentTime = (+tr.dataset.frame + 0.5) / state.result.input.fps - 0.5; player.play(); }
+});
 
 $('#btn-json').onclick = () => {
   const r = state.result;
   const data = {
-    video: state.file?.name, fps: r.fps, size: [r.W, r.H], frames: r.N, backend: r.backend, seconds: r.total,
-    court_to_image: state.Hc, court_points: state.pairs,
-    shuttle: r.shuttle, rallies: r.rallies,
-    players: r.players.map((p) => ({ id: p.id + 1, side: p.side < 0 ? 'near' : 'far', distance_m: p.stats.distance, positions: p.pts })),
+    video: state.file?.name, preset: r.preset, fps: r.input.fps, size: [r.input.width, r.input.height],
+    court_to_image: r.input.H, camera: r.camera, report: r.report, flights: r.shots, hits: r.hits, landings: r.landings,
   };
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
@@ -610,47 +606,45 @@ $('#btn-export').onclick = async () => {
   const btn = $('#btn-export');
   btn.disabled = true;
   try {
-    const mmW = Math.round((r.H * 240) / 480 / 2) * 2;
-    const W = Math.round((r.W + mmW) / 2) * 2, H = Math.round(r.H / 2) * 2;
+    const choice = $('#opt-layout').value;
+    const R = choice === 'horizontal' ? makeRenderer('horizontal')
+      : makeRenderer('vertical', choice === 'vertical-above' ? 'above' : 'below');
+    const W = Math.round(R.compositeWidth / 2) * 2, H = Math.round(R.compositeHeight / 2) * 2;
     let codec = null;
-    for (const c of ['avc1.640033', 'avc1.640028', 'avc1.4d0028', 'avc1.42E01F']) {
-      const s = await VideoEncoder.isConfigSupported({ codec: c, width: W, height: H, bitrate: 8e6, framerate: r.fps });
+    for (const c of ['avc1.640034', 'avc1.640033', 'avc1.640028', 'avc1.4d0028']) {
+      const s = await VideoEncoder.isConfigSupported({ codec: c, width: W, height: H, bitrate: 10e6, framerate: r.input.fps });
       if (s.supported) { codec = c; break; }
     }
     if (!codec) throw new Error('không mã hoá được H.264 ở ' + W + '×' + H);
     const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: 'avc', width: W, height: H }, fastStart: 'in-memory' });
     let encErr = null;
     const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { encErr = e; } });
-    enc.configure({ codec, width: W, height: H, bitrate: 8e6, framerate: r.fps });
+    enc.configure({ codec, width: W, height: H, bitrate: 10e6, framerate: r.input.fps });
     const canvas = new OffscreenCanvas(W, H);
     const ctx = canvas.getContext('2d');
-    const mini = new OffscreenCanvas(240, 480);
     const t0 = performance.now();
-    for (let f = 0; f < r.N; f++) {
+    const N = r.input.N;
+    for (let f = 0; f < N; f++) {
       if (encErr) throw encErr;
-      await seek(proc, (f + 0.5) / r.fps);
-      ctx.fillStyle = '#0f1412'; ctx.fillRect(0, 0, W, H);
-      ctx.drawImage(proc, 0, 0, r.W, r.H);
-      drawOverlay(ctx, r, f);
-      drawMinimap(mini.getContext('2d'), r, f, false);
-      ctx.drawImage(mini, r.W, 0, mmW, r.H);
-      const vf = new VideoFrame(canvas, { timestamp: Math.round((f * 1e6) / r.fps), duration: Math.round(1e6 / r.fps) });
-      enc.encode(vf, { keyFrame: f % (r.fps * 2) === 0 });
+      await seek(proc, (f + 0.5) / r.input.fps);
+      ctx.fillStyle = '#0D1117'; ctx.fillRect(0, 0, W, H);
+      R.drawComposite(ctx, f, proc);
+      const vf = new VideoFrame(canvas, { timestamp: Math.round((f * 1e6) / r.input.fps), duration: Math.round(1e6 / r.input.fps) });
+      enc.encode(vf, { keyFrame: f % Math.round(r.input.fps * 2) === 0 });
       vf.close();
       while (enc.encodeQueueSize > 8) await new Promise((res) => setTimeout(res, 1));
-      if (f % 15 === 0) st.textContent = `Đang xuất ${Math.round((100 * f) / r.N)}% · ${(f / ((performance.now() - t0) / 1000)).toFixed(0)} fps`;
+      if (f % 15 === 0) st.textContent = `Đang xuất ${Math.round((100 * f) / N)}% · ${(f / ((performance.now() - t0) / 1000)).toFixed(0)} fps`;
     }
     await enc.flush();
     muxer.finalize();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([muxer.target.buffer], { type: 'video/mp4' }));
-    a.download = (state.file?.name || 'video').replace(/\.\w+$/, '') + '_analysis.mp4';
+    a.download = (state.file?.name || 'video').replace(/\.\w+$/, '') + (choice === 'horizontal' ? '_analysis.mp4' : '_analysis_9x16.mp4');
     a.click();
-    st.textContent = `Xong (${fmtTime((performance.now() - t0) / 1000)}). Video xuất không có tiếng.`;
+    st.textContent = `Xong (${fmtTime((performance.now() - t0) / 1000)}, ${W}×${H}). Video xuất không có tiếng.`;
   } catch (e) {
     st.textContent = 'Lỗi xuất video: ' + e.message;
   } finally { btn.disabled = false; }
 };
 
 renderDeviceTable($('#device-table'), null);
-export { DEVICE_TABLE };

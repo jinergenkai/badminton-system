@@ -46,6 +46,8 @@ def main():
     ap.add_argument('config')
     ap.add_argument('--force', nargs='*', default=[], choices=STEPS, help='recompute these steps')
     ap.add_argument('--only', nargs='*', choices=STEPS, help='run only these steps')
+    ap.add_argument('--layout', choices=['horizontal', 'vertical'], help='render: side by side, or 9:16 portrait')
+    ap.add_argument('--panel', choices=['below', 'above'], help='vertical layout: analysis below/above the video')
     args = ap.parse_args()
 
     cfg = json.load(open(args.config, encoding='utf8'))
@@ -58,6 +60,10 @@ def main():
              'detect': out / 'candidates.csv', 'track': out / 'shuttle.csv',
              'pose': out / 'pose.npz', 'players': out / 'players.csv', 'hits': out / 'hits.json', 'flight': out / 'flights.json',
              'landing': out / 'landings.json', 'analytics': out / 'report.json', 'render': out / f'{name}_3d.mp4'}
+    layout = args.layout or cfg.get('layout', 'horizontal')
+    panel_position = args.panel or cfg.get('panel', 'below')
+    if layout == 'vertical':
+        files['render'] = out / f'{name}_3d_9x16.mp4'
 
     def todo(step):
         if args.only is not None and step not in args.only:
@@ -216,7 +222,7 @@ def main():
         if files['analytics'].exists():
             extra['report'] = json.load(open(files['analytics'], encoding='utf8'))
         raw = out / 'render_raw.mp4'
-        n = render.render_video(video, str(raw), cam, df, events, **extra)
+        n = render.render_video(video, str(raw), cam, df, events, layout=layout, panel_position=panel_position, **extra)
         ff = ffmpeg()
         if ff:   # browser/phone friendly H.264 + original audio
             subprocess.run([ff, '-loglevel', 'error', '-y', '-i', str(raw), '-i', video, '-map', '0:v',

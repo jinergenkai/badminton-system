@@ -1,15 +1,37 @@
-# analysis/web — phân tích cầu lông ngay trong trình duyệt
+# analysis/web — phân tích cầu lông đầy đủ ngay trong trình duyệt
 
-Bản "lite" của pipeline `analysis/` chạy **hoàn toàn trên máy người xem** (WebGPU, không có thì CPU/WASM).
-Vercel chỉ phục vụ file tĩnh, video không rời khỏi thiết bị và server không tốn GPU.
+Toàn bộ pipeline của `analysis/` chạy **trên máy người xem** (WebGPU, không có thì CPU/WASM): Vercel chỉ
+phục vụ file tĩnh, model tải từ Hugging Face, video không rời khỏi thiết bị.
 
 ```
-video ─► chọn ≥4 điểm sân (homography) ─► ảnh nền trung vị (25 frame)
-      ─► mỗi 8 frame: TrackNetV3 chính thức (nền + 8 frame; worker, WebGPU FP16 / WASM FP32)
-                                        └► mỗi N frame: RTMO-s (người + 17 khớp, 1 lượt)
-      ─► track.py port sang JS (multi-target, chọn đường bay) ─► cú đánh = đổi hướng 2D gần cổ tay
-      ─► vị trí người trên sân (cổ chân → H⁻¹), quãng đường, điểm rơi thô ─► overlay + xuất MP4 (WebCodecs)
+video ─► chấm ≥ 4 điểm sân ─► (Cân bằng / Tối đa) khớp sân vào vạch trắng ─► camera K, R, t
+      ─► TrackNetV3 (nền trung vị + 8 frame) ─► ứng viên cầu ─► theo dõi đường bay
+      ─► RTMO khung xương (+ lượt phóng to nửa sân xa) ─► người trên sân, 3D, P1–P4 theo màu áo
+      ─► cú chạm (cổ tay gần tia nhìn, Viterbi theo luật luân phiên) ─► đường bay 3D vật lý (7 ẩn)
+      ─► khôi phục cú sót ─► điểm rơi ─► phân tích (loại cú, tốc độ ± σ, thế đứng…) ─► render + MP4
 ```
+
+`src/core/` là bản port JS của `analysis/badminton/` (camera, track, players, identity, hits, flight +
+optimize, analytics, report, courtfit), `src/app/pipeline.js` nối các bước (chạy trong worker),
+`src/ui/render.js` vẽ overlay, sân 3D và các thẻ (ngang hoặc dọc 9:16). Test so với bản Python:
+`node --test test/` (fixtures: `python analysis/tools/export_fixtures.py danh-cau-02`) — cùng đầu vào cho
+cùng 124/124 cú, 121 trùng cả loại cú.
+
+## Mức phân tích
+
+| Mức | Bắt cầu | Khung xương | Sân | 20 s video, RTX 5060 Ti |
+|---|---|---|---|---|
+| Nhanh | cửa sổ 8 frame | RTMO-s, mỗi 6 frame | theo điểm chấm | ~19 s |
+| Cân bằng | cửa sổ 8 frame | RTMO-m, mỗi 3 frame + lượt phóng to nửa sân xa | khớp vạch trắng | ~30 s |
+| Tối đa | cửa sổ chồng nhau (bước 4) | RTMO-l, mọi frame + phóng to nửa sân xa | khớp vạch trắng | ~80 s |
+
+Mức nào cũng đủ tính năng; mức cao hơn bắt người chơi và cú chạm chắc hơn. Lượt **phóng to nửa sân xa**
+(cắt vùng nửa sân xa + 2.5 m sau đường cuối, chạy lại RTMO, gộp theo IoU) là cần thiết: trên khung 640 cả
+ảnh, người đánh cầu cao từ sau cuối sân xa quá nhỏ và bị bỏ sót, khiến cú đó bị gán cho người phía gần và
+đường bay 3D sai (cú 97 của video 02: 64 km/h → 159 km/h sau khi sửa; bản desktop 177 km/h).
+
+Còn khác bản desktop ở đầu vào: khung xương RTMO thay cho YOLOX-x + RTMPose-x (desktop), frame lấy qua
+`<video>` + canvas, điểm rơi chỉ tính bằng vật lý. Bắt cầu khớp 99% (371/375 frame), cú chạm trùng frame.
 
 ## Chạy
 

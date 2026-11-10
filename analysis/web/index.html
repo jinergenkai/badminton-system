@@ -12,7 +12,7 @@
   <header class="top">
     <div class="wrap">
       <div class="brand"><span class="dot"></span> Phân tích cầu lông <small>beta</small></div>
-      <p class="lede">Đường cầu, khung xương, vị trí trên sân, quãng đường chạy và điểm rơi. Chạy hoàn toàn bằng
+      <p class="lede">Đường bay 3D, tốc độ cầu, loại cú, P1–P4, tư thế và quãng đường chạy. Chạy hoàn toàn bằng
         <b>GPU/CPU của máy bạn</b>, video không được tải lên đâu cả.</p>
     </div>
   </header>
@@ -52,46 +52,42 @@
         </div>
       </div>
       <div class="row end">
-        <button id="calib-skip" class="ghost">Bỏ qua (chỉ đường cầu + khung xương)</button>
         <button id="calib-ok" disabled>Dùng sân này →</button>
       </div>
     </section>
 
     <!-- 3 -->
     <section class="card" id="step-run" hidden>
-      <h2><span class="n">3</span> Cấu hình &amp; ước lượng thời gian</h2>
-      <div class="grid3">
-        <label>Thiết bị xử lý
-          <select id="opt-backend">
-            <option value="auto">Tự động (GPU nếu có)</option>
-            <option value="webgpu">GPU (WebGPU)</option>
-            <option value="wasm">CPU (WASM)</option>
-          </select>
-        </label>
-        <label>Độ phân giải bắt cầu
-          <select id="opt-res">
-            <option value="512x288">Chuẩn 512×288 (chính xác nhất)</option>
-            <option value="384x216">Nhanh 384×216 (~1.8× nhanh hơn, mất ~10% điểm cầu)</option>
-            <option value="256x144">Siêu nhanh 256×144 (~4× nhanh hơn, mất ~23% điểm cầu)</option>
-          </select>
-        </label>
-        <label>Khung xương người
-          <select id="opt-pose">
-            <option value="3">10 lần/giây</option>
-            <option value="6" selected>5 lần/giây</option>
-            <option value="15">2 lần/giây</option>
-            <option value="0">Tắt</option>
-          </select>
-        </label>
-        <label>Đoạn phân tích
-          <select id="opt-range">
-            <option value="15">15 giây đầu</option>
-            <option value="30" selected>30 giây đầu</option>
-            <option value="60">1 phút đầu</option>
-            <option value="0">Cả video</option>
-          </select>
-        </label>
+      <h2><span class="n">3</span> Chọn mức phân tích</h2>
+      <div class="presets" id="presets">
+        <label class="preset"><input type="radio" name="preset" value="fast" />
+          <b>Nhanh</b><span>Bắt cầu mỗi cửa sổ 8 frame · khung xương RTMO-s 5 lần/giây · sân theo điểm bạn chấm</span></label>
+        <label class="preset"><input type="radio" name="preset" value="balanced" checked />
+          <b>Cân bằng</b><span>Khung xương RTMO-m 10 lần/giây · tự khớp sân vào vạch trắng</span></label>
+        <label class="preset"><input type="radio" name="preset" value="max" />
+          <b>Tối đa</b><span>Bắt cầu cửa sổ chồng nhau · khung xương RTMO-l mọi frame · như bản đầy đủ trên máy GPU</span></label>
       </div>
+      <p class="muted small">Mức nào cũng có đủ: đường bay 3D theo vật lý, tốc độ cầu ± sai số, P1–P4 theo màu áo, loại cú, thuận/trái tay,
+        bật nhảy, tư thế chờ, quãng đường chạy. Mức cao hơn = khung xương chính xác hơn, bắt cầu kỹ hơn, lâu hơn.</p>
+      <details class="advanced"><summary>Tuỳ chọn</summary>
+        <div class="grid3">
+          <label>Thiết bị xử lý
+            <select id="opt-backend">
+              <option value="auto">Tự động (GPU nếu có)</option>
+              <option value="webgpu">GPU (WebGPU)</option>
+              <option value="wasm">CPU (WASM)</option>
+            </select>
+          </label>
+          <label>Đoạn phân tích
+            <select id="opt-range">
+              <option value="15">15 giây đầu</option>
+              <option value="30">30 giây đầu</option>
+              <option value="60">1 phút đầu</option>
+              <option value="0" selected>Cả video</option>
+            </select>
+          </label>
+        </div>
+      </details>
       <div class="row">
         <button id="btn-bench" class="ghost">⚡ Đo tốc độ máy &amp; ước lượng</button>
         <button id="btn-run">▶ Bắt đầu phân tích</button>
@@ -105,22 +101,26 @@
     <!-- 4 -->
     <section class="card" id="step-result" hidden>
       <h2><span class="n">4</span> Kết quả</h2>
-      <div class="result">
+      <div class="result" id="result-view">
         <div class="player">
           <video id="player" controls playsinline muted></video>
           <canvas id="overlay"></canvas>
         </div>
-        <div class="mini">
-          <canvas id="minimap" width="240" height="480"></canvas>
-          <label class="small"><input type="checkbox" id="opt-heat" /> Bản đồ nhiệt di chuyển</label>
-        </div>
+        <canvas id="panel" class="panel"></canvas>
       </div>
-      <div id="stats" class="stats"></div>
       <div class="row">
-        <button id="btn-export">⬇ Xuất video MP4 có overlay</button>
+        <label class="small">Bố cục video xuất
+          <select id="opt-layout">
+            <option value="horizontal">Ngang: video | phân tích</option>
+            <option value="vertical-below">Dọc 9:16 (TikTok): phân tích bên dưới</option>
+            <option value="vertical-above">Dọc 9:16 (TikTok): phân tích bên trên</option>
+          </select>
+        </label>
+        <button id="btn-export">⬇ Xuất video MP4</button>
         <button id="btn-json" class="ghost">⬇ Dữ liệu JSON</button>
         <span id="export-status" class="muted small"></span>
       </div>
+      <div id="report"></div>
     </section>
 
     <section class="card" id="devices">
@@ -133,14 +133,13 @@
     </section>
 
     <section class="card">
-      <h2>Bản web khác bản đầy đủ thế nào?</h2>
+      <h2>Trang này làm gì?</h2>
       <ul class="muted">
-        <li><b>Bản web (trang này):</b> TrackNetV3 (ảnh nền + 8 frame) bắt cầu, RTMO-s khung xương, sân từ 4+ điểm bạn chọn, theo dõi
-          đường cầu, ước lượng cú đánh từ chỗ đường cầu đổi hướng, vị trí/quãng đường người chơi, điểm rơi.</li>
-        <li><b>Bản đầy đủ (máy GPU):</b> thêm tự hiệu chỉnh camera từ vạch trắng, YOLOX-x + RTMPose-x, cú chạm vợt
-          kiểm tra bằng cổ tay 3D, <b>đường bay 3D theo vật lý</b> (trọng lực + lực cản), tốc độ cú đánh km/h, cảnh 3D.
-          Thêm danh tính P1–P4 theo màu áo, loại cú (đập, phông, bỏ nhỏ, lốp, tạt…), tư thế chờ, phản ứng, bật nhảy.
-          Trên RTX 5060 Ti: video 2.5 phút mất ~9 phút (khung xương bản lớn chiếm phần lớn thời gian).</li>
+        <li><b>Toàn bộ trên máy bạn:</b> bắt cầu (TrackNetV3), khung xương (RTMO), dựng camera từ sân, khớp sân vào vạch trắng,
+          đường bay 3D theo vật lý (trọng lực + lực cản, lúc chạm giữa hai frame), khôi phục cú bị sót, P1–P4 theo màu áo,
+          loại cú, tốc độ ± sai số, thuận/trái tay, bật nhảy, tư thế chờ, phản ứng, về vị trí, điểm rơi IN/OUT.</li>
+        <li><b>Giống bản đầy đủ trên máy GPU</b> (cùng thuật toán, kiểm bằng cùng dữ liệu: 124/124 cú, 121 trùng cả loại cú).
+          Khác: khung xương RTMO thay cho YOLOX-x + RTMPose-x, và điểm rơi chỉ tính bằng vật lý.</li>
       </ul>
     </section>
   </main>

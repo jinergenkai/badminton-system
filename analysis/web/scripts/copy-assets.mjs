@@ -12,6 +12,8 @@ const MODELS = {
   'tracknet3_fp16.onnx': join(models, 'out', 'tracknet3_fp16.onnx'),
   'tracknet3_fp32.onnx': join(models, 'out', 'tracknet3_fp32.onnx'),
   'rtmo_s.onnx': join(models, 'dl', 'x', 'rtmo-s', 'end2end.onnx'),
+  'rtmo_m.onnx': join(models, 'dl', 'x', 'rtmo-m', 'end2end.onnx'),
+  'rtmo_l.onnx': join(models, 'dl', 'x', 'rtmo-l', 'end2end.onnx'),
 };
 
 mkdirSync(join(web, 'public', 'models'), { recursive: true });
