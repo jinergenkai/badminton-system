@@ -92,7 +92,7 @@ async function estimateFps(v) {
   return Math.abs(common - fps) / fps < 0.08 ? common : Math.round(fps);
 }
 
-fetch('/samples/demo.json').then((r) => (r.ok ? r.json() : null)).then((demo) => {
+fetch(`/samples/${new URLSearchParams(location.search).get('sample') || 'demo'}.json`).then((r) => (r.ok ? r.json() : null)).then((demo) => {
   if (!demo) return;
   show($('#demo-row'));
   $('#btn-demo').onclick = async () => {
@@ -289,7 +289,7 @@ $('#calib-ok').onclick = () => { show($('#step-run')); $('#step-run').scrollInto
 // ---------- step 3: presets, bench, run ----------
 // Every level runs the full analysis; higher levels detect more carefully and use a better pose model.
 const PRESETS = {
-  fast:     { label: 'Nhanh',     stride: 8, pose: 's', poseEvery: 6, farZoom: false, courtFit: false, starts: 2, maxNfev: 200 },
+  fast:     { label: 'Nhanh',     stride: 8, pose: 's', poseEvery: 6, farZoom: true,  courtFit: false, starts: 2, maxNfev: 200 },
   balanced: { label: 'Cân bằng',  stride: 8, pose: 'm', poseEvery: 3, farZoom: true,  courtFit: true,  starts: 4, maxNfev: 300 },
   max:      { label: 'Tối đa',    stride: 4, pose: 'l', poseEvery: 1, farZoom: true,  courtFit: true,  starts: 4, maxNfev: 300 },
 };
@@ -610,16 +610,18 @@ $('#btn-export').onclick = async () => {
     const R = choice === 'horizontal' ? makeRenderer('horizontal')
       : makeRenderer('vertical', choice === 'vertical-above' ? 'above' : 'below');
     const W = Math.round(R.compositeWidth / 2) * 2, H = Math.round(R.compositeHeight / 2) * 2;
+    // ~0.1 bit per pixel per frame: ~5.6 Mbps for 1024x1820 @ 30 fps (TikTok re-encodes anyway)
+    const bitrate = Math.round(Math.min(12e6, Math.max(3e6, 0.1 * W * H * r.input.fps)));
     let codec = null;
     for (const c of ['avc1.640034', 'avc1.640033', 'avc1.640028', 'avc1.4d0028']) {
-      const s = await VideoEncoder.isConfigSupported({ codec: c, width: W, height: H, bitrate: 10e6, framerate: r.input.fps });
+      const s = await VideoEncoder.isConfigSupported({ codec: c, width: W, height: H, bitrate, framerate: r.input.fps });
       if (s.supported) { codec = c; break; }
     }
     if (!codec) throw new Error('không mã hoá được H.264 ở ' + W + '×' + H);
     const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: 'avc', width: W, height: H }, fastStart: 'in-memory' });
     let encErr = null;
     const enc = new VideoEncoder({ output: (chunk, meta) => muxer.addVideoChunk(chunk, meta), error: (e) => { encErr = e; } });
-    enc.configure({ codec, width: W, height: H, bitrate: 10e6, framerate: r.input.fps });
+    enc.configure({ codec, width: W, height: H, bitrate, framerate: r.input.fps });
     const canvas = new OffscreenCanvas(W, H);
     const ctx = canvas.getContext('2d');
     const t0 = performance.now();
