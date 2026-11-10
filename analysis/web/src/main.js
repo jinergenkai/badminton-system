@@ -289,9 +289,9 @@ $('#calib-ok').onclick = () => { show($('#step-run')); $('#step-run').scrollInto
 // ---------- step 3: presets, bench, run ----------
 // Every level runs the full analysis; higher levels detect more carefully and use a better pose model.
 const PRESETS = {
-  fast:     { label: 'Nhanh',     stride: 8, pose: 's', poseEvery: 3, farZoom: true,  courtFit: false, starts: 2, maxNfev: 200 },
-  balanced: { label: 'Cân bằng',  stride: 8, pose: 'm', poseEvery: 3, farZoom: true,  courtFit: true,  starts: 4, maxNfev: 300 },
-  max:      { label: 'Tối đa',    stride: 4, pose: 'l', poseEvery: 1, farZoom: true,  courtFit: true,  starts: 4, maxNfev: 300 },
+  fast:     { label: 'Nhanh',     stride: 8, pose: 'm', poseEvery: 3, farZoom: true, courtFit: false, starts: 2, maxNfev: 200 },
+  balanced: { label: 'Cân bằng',  stride: 8, pose: 'm', poseEvery: 2, farZoom: true, courtFit: true,  starts: 4, maxNfev: 300 },
+  max:      { label: 'Tối đa',    stride: 4, pose: 'l', poseEvery: 1, farZoom: true, courtFit: true,  starts: 4, maxNfev: 300 },
 };
 const preset = () => PRESETS[document.querySelector('input[name=preset]:checked')?.value || 'balanced'];
 const TW = 512, TH = 288;
@@ -504,9 +504,20 @@ async function infer() {
     const u = (a[2] - a[0]) * (a[3] - a[1]) + (b[2] - b[0]) * (b[3] - b[1]) - w * h;
     return u > 0 ? (w * h) / u : 0;
   };
+  // the zoomed pass often sees only part of a far player, so its box differs from the full-frame one:
+  // compare the joints themselves (OKS-like): same person when visible joints lie close together
+  const samePerson = (a, b) => {
+    if (iou(a.box, b.box) >= 0.45) return true;
+    const d = [];
+    for (let j = 0; j < 17; j++) if (a.sc[j] > 0.3 && b.sc[j] > 0.3) d.push(Math.hypot(a.k2[j][0] - b.k2[j][0], a.k2[j][1] - b.k2[j][1]));
+    if (d.length < 4) return false;
+    d.sort((x, y) => x - y);
+    const size = Math.max(a.box[3] - a.box[1], b.box[3] - b.box[1], 20);
+    return d[d.length >> 1] < 0.2 * size;
+  };
   for (const f of [...people.keys()].sort((a, b) => a - b)) {
     const kept = [];
-    for (const q of people.get(f).sort((a, b) => b.conf - a.conf)) if (kept.every((k) => iou(k.box, q.box) < 0.45)) kept.push(q);
+    for (const q of people.get(f).sort((a, b) => b.conf - a.conf)) if (kept.every((k) => !samePerson(k, q))) kept.push(q);
     for (const q of kept) { poses.frame.push(f); poses.kpts.push(q.k2); poses.scores.push(q.sc); feats.push(q.feat); }
   }
   const order = poses.frame.map((_, i) => i);

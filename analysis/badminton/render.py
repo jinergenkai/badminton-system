@@ -97,61 +97,6 @@ def _smooth(a, sigma):
     return np.where(v > 0, out, np.nan)
 
 
-LR = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16)]
-MIRROR = list(range(17))
-for _a, _b in LR:
-    MIRROR[_a], MIRROR[_b] = _b, _a
-
-
-def fix_samples(K2, K3, samples, max_gap=12):
-    """Clean one player's pose samples before gaps are interpolated (same rules as the web renderer):
-    1. left/right swaps (a model seen from behind labels the left arm as the right one): if the mirrored
-       sample fits the previous sample much better (< 60 % of the cost), mirror it;
-    2. big arm moves between two samples (a racket swing when pose runs every few frames): the frames in
-       between hold the nearest sample instead of sweeping the arm through the body."""
-    ok = lambda i, j: not np.isnan(K2[i, j, 0])
-    prev = -1
-    for i in sorted(set(int(v) for v in samples)):
-        if prev >= 0:
-            same = mirr = 0.0
-            cnt = 0
-            for j in range(5, 17):
-                if ok(i, j) and ok(prev, j) and ok(i, MIRROR[j]):
-                    same += float(np.linalg.norm(K2[i, j] - K2[prev, j]))
-                    mirr += float(np.linalg.norm(K2[i, MIRROR[j]] - K2[prev, j]))
-                    cnt += 1
-            if cnt >= 4 and mirr < 0.6 * same:
-                K2[i] = K2[i, MIRROR]
-                K3[i] = K3[i, MIRROR]
-            g = i - prev
-            if 1 < g <= max_gap and all(ok(prev, j) for j in (5, 6, 11, 12)):
-                T = float(np.linalg.norm((K2[prev, 5] + K2[prev, 6] - K2[prev, 11] - K2[prev, 12]) / 2))
-                d = [float(np.linalg.norm(K2[i, j] - K2[prev, j])) for j in (7, 8, 9, 10) if ok(i, j) and ok(prev, j)]
-                if d and np.mean(d) > max(0.6 * T, 20):
-                    for k in range(prev + 1, i):
-                        src = prev if k - prev <= i - k else i
-                        K2[k], K3[k] = K2[src], K3[src]
-        prev = i
-
-
-def torso_len(k):
-    if any(np.isnan(k[j, 0]) for j in (5, 6, 11, 12)):
-        return np.nan
-    return float(np.linalg.norm((k[5] + k[6] - k[11] - k[12]) / 2))
-
-
-BONE_MAX = {'arm': 1.05, 'leg': 1.4, 'width': 1.25}
-
-
-def plausible_bone(a, b, k, T):
-    """A limb can look shorter (foreshortened), never much longer than the body allows."""
-    if not T > 0:
-        return True
-    L = float(np.linalg.norm(k[a] - k[b]))
-    kind = 'width' if (a, b) in ((5, 6), (11, 12)) else ('leg' if a >= 11 or b >= 13 else 'arm')
-    return L <= BONE_MAX[kind] * T
-
-
 def build_poses(players, kpts, scores, k3d, max_gap=12, sigma=1.2, thr=0.3):
     """player -> (first_frame, K2 (n,17,2), K3 (n,17,3)) with gaps filled and jitter smoothed.
     k3d rows are aligned with the players table rows."""
@@ -169,7 +114,6 @@ def build_poses(players, kpts, scores, k3d, max_gap=12, sigma=1.2, thr=0.3):
             ok = scores[det] > thr
             K2[i, ok] = kpts[det][ok]
             K3[i, ok] = k3d[r][ok]
-        fix_samples(K2, K3, (g.frame.to_numpy() - f0).astype(int), max_gap)
         for arr in (K2, K3):
             flat = arr.reshape(n, -1)
             for c in range(flat.shape[1]):
@@ -187,49 +131,13 @@ def poses_at(poses, f, min_joints=8):
                 yield p, k2, k3
 
 
-def head_of(k):
-    """Head position also when the face is not visible (players seen from behind: nose/eyes score low):
-    nose; else mean of eyes/ears; else above the shoulders along hips -> shoulders. (p, neck, r) or None."""
-    ok = lambda j: not np.isnan(k[j, 0])
-    def mid(a, b):
-        pts = [k[j] for j in (a, b) if ok(j)]
-        return np.mean(pts, axis=0) if pts else None
-    neck, hips = mid(5, 6), mid(11, 12)
-    sw = float(np.linalg.norm(k[5] - k[6])) if ok(5) and ok(6) else 0.0
-    p = k[0] if ok(0) else None
-    if p is None:
-        face = [k[j] for j in (1, 2, 3, 4) if ok(j)]
-        if face:
-            p = np.mean(face, axis=0)
-    if p is None and neck is not None:
-        if hips is not None:
-            p = neck + 0.42 * (neck - hips)
-        elif k.shape[1] == 3:
-            p = neck + np.array([0, 0, 0.25])
-        else:
-            p = neck - np.array([0, max(sw, 10) * 0.8])
-    if p is None:
-        return None
-    torso = float(np.linalg.norm(neck - hips)) if neck is not None and hips is not None else sw * 1.5
-    return p, neck, max(4.0, min(0.2 * torso, 0.45 * sw if sw else 0.2 * torso))
-
-
 def _draw_skeleton(img, k2, col, th):
-    hd = head_of(k2)
-    T = torso_len(k2)
     for a, b in BONES:
-        if a == 0 or b == 0 or np.isnan(k2[a, 0]) or np.isnan(k2[b, 0]) or not plausible_bone(a, b, k2, T):
+        if np.isnan(k2[a, 0]) or np.isnan(k2[b, 0]):
             continue
         pa, pb = tuple(np.int32(k2[a])), tuple(np.int32(k2[b]))
         cv2.line(img, pa, pb, (20, 20, 20), th + 3, cv2.LINE_AA)
         cv2.line(img, pa, pb, col, th, cv2.LINE_AA)
-    if hd is not None:                                   # neck + head circle, also seen from the back
-        p, neck, r = hd
-        if neck is not None:
-            cv2.line(img, tuple(np.int32(neck)), tuple(np.int32(p)), (20, 20, 20), th + 3, cv2.LINE_AA)
-            cv2.line(img, tuple(np.int32(neck)), tuple(np.int32(p)), col, th, cv2.LINE_AA)
-        cv2.circle(img, tuple(np.int32(p)), int(r), (20, 20, 20), th + 3, cv2.LINE_AA)
-        cv2.circle(img, tuple(np.int32(p)), int(r), col, th, cv2.LINE_AA)
     for j in range(5, 17):
         if not np.isnan(k2[j, 0]):
             cv2.circle(img, tuple(np.int32(k2[j])), max(2, th - 1), (255, 255, 255), -1, cv2.LINE_AA)
@@ -333,13 +241,10 @@ class Court3D:
         for p, k3 in people:
             col = pcol(p)
             for a, b in BONES:
-                if a and b and not (np.isnan(k3[a, 0]) or np.isnan(k3[b, 0])):
+                if not (np.isnan(k3[a, 0]) or np.isnan(k3[b, 0])):
                     self.line(img, [k3[a], k3[b]], col, 2)
-            hd = head_of(k3)
-            if hd is not None:
-                if hd[1] is not None:
-                    self.line(img, [hd[1], hd[0]], col, 2)
-                cv2.circle(img, tuple(self.p([hd[0]])[0].astype(int)), 5 * self.ss, col, -1, cv2.LINE_AA)
+            if not np.isnan(k3[0, 0]):
+                cv2.circle(img, tuple(self.p([k3[0]])[0].astype(int)), 5 * self.ss, col, -1, cv2.LINE_AA)
         for C in contacts:
             q = self.p([C])[0].astype(int)
             self.line(img, [[C[0], C[1], 0], C], _bgr('#FFD54F'), 1)
@@ -518,9 +423,8 @@ def render_video(video, out_path, cam, shuttle_df, landings, hits=(), players=No
         d = ImageDraw.Draw(layer)
 
         for p, k2, _ in people:                         # only small name tags on the video
-            hd = head_of(k2)
-            if hd is not None:
-                hx, hy = hd[0][0], hd[0][1] - hd[2] + 8
+            if not np.isnan(k2[0, 0]):
+                hx, hy = k2[0]
                 txt = f'P{p + 1}'
                 bb = d.textbbox((0, 0), txt, font=fonts_v.tag)
                 _pill(d, (int(hx - (bb[2] - bb[0]) / 2 - 8), int(video_y + hy - 34 * sv)), txt, fonts_v.tag,

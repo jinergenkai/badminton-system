@@ -83,29 +83,11 @@ test('headOf finds the head from the nose, the eyes/ears, or above the shoulders
   assert.ok(back && back.p[1] < 100 && Math.abs(back.p[0] - 120) < 1);
   k[3] = [115, 70]; k[4] = [125, 70];
   assert.deepEqual(headOf(k, false).p, [120, 70]);
+  k[0] = [300, 20];                                                   // a wrong nose far away is ignored
+  assert.ok(Math.hypot(headOf(k, false).p[0] - 120, headOf(k, false).p[1] - 68) < 1);
   k[0] = [120, 72];
   assert.deepEqual(headOf(k, false).p, [120, 72]);
   const k3 = Array(17).fill(null);
   k3[5] = [1, 0, 1.4]; k3[6] = [1.4, 0, 1.4]; k3[11] = [1.05, 0, 0.9]; k3[12] = [1.35, 0, 0.9];
   assert.ok(headOf(k3, true).p[2] > 1.5);
-});
-
-test('fixSamples un-swaps a mirrored sample and holds across a big arm move', async () => {
-  const { fixSamples } = await import('../src/ui/render.js');
-  const n = 3, K2 = new Float32Array(n * 34).fill(NaN), K3 = new Float32Array(n * 51).fill(0);
-  const pose = (i, mirror, armDx = 0) => {
-    for (let j = 5; j < 17; j++) {
-      const side = j % 2 ? -1 : 1;                                     // odd = left (x smaller), even = right
-      const x = 100 + 20 * side * (mirror ? -1 : 1) + (j === 9 || j === 10 ? armDx : 0), y = 100 + 10 * j;
-      K2[(i * 17 + j) * 2] = x; K2[(i * 17 + j) * 2 + 1] = y;
-    }
-  };
-  pose(0, false); pose(2, true);                                      // sample 2 has left/right swapped
-  fixSamples(K2, K3, [0, 2]);
-  assert.ok(K2[(2 * 17 + 5) * 2] < K2[(2 * 17 + 6) * 2], 'left shoulder back on the left');
-  const K2b = new Float32Array(n * 34).fill(NaN);
-  K2.set(K2b);
-  pose(0, false); pose(2, false, 200);                                // wrists jump far: a swing
-  fixSamples(K2, K3, [0, 2]);
-  assert.equal(K2[(1 * 17 + 9) * 2], K2[(0 * 17 + 9) * 2], 'the middle frame holds a real pose');
 });

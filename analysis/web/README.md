@@ -21,9 +21,13 @@ cùng 124/124 cú, 121 trùng cả loại cú.
 
 | Mức | Bắt cầu | Khung xương | Sân | 20 s video, RTX 5060 Ti |
 |---|---|---|---|---|
-| Nhanh | cửa sổ 8 frame | RTMO-s, mỗi 3 frame + phóng to nửa sân xa | theo điểm chấm | ~22 s |
-| Cân bằng | cửa sổ 8 frame | RTMO-m, mỗi 3 frame + lượt phóng to nửa sân xa | khớp vạch trắng | ~30 s |
-| Tối đa | cửa sổ chồng nhau (bước 4) | RTMO-l, mọi frame + phóng to nửa sân xa | khớp vạch trắng | ~80 s |
+| Nhanh (để thử) | cửa sổ 8 frame | RTMO-m mỗi 3 frame + phóng to nửa sân xa | theo điểm chấm | ~28 s |
+| Cân bằng | cửa sổ 8 frame | RTMO-m mỗi 2 frame + phóng to nửa sân xa | khớp vạch trắng | ~35 s |
+| Tối đa | cửa sổ chồng nhau (bước 4) | RTMO-l mọi frame + phóng to nửa sân xa | khớp vạch trắng | ~80 s |
+
+RTMO-s (nhỏ nhất) không dùng: trên video thật nó đặt vai/hông sai với người quay lưng và người ở xa
+(đo trên 20 s: 131 xương vô lý, 16 lần thân co giãn, 6 frame trùng người; RTMO-m: 32 / 0 / 0) — khung
+xương méo, người dính nhau. `src/qa/skeleton.js` đo các lỗi này để so mức / mô hình.
 
 Mức nào cũng đủ tính năng; mức cao hơn bắt người chơi và cú chạm chắc hơn. Lượt **phóng to nửa sân xa**
 (cắt vùng nửa sân xa + 2.5 m sau đường cuối, chạy lại RTMO, gộp theo IoU) là cần thiết: trên khung 640 cả
