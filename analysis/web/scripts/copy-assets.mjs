@@ -18,9 +18,9 @@ mkdirSync(join(web, 'public', 'models'), { recursive: true });
 for (const [name, src] of Object.entries(MODELS)) {
   const dst = join(web, 'public', 'models', name);
   if (!existsSync(src)) {
-    if (existsSync(dst)) continue;
-    console.error(`missing model ${src} — see analysis/web/README.md`);
-    process.exit(1);
+    // fine on CI / Vercel: the app loads the weights from Hugging Face unless VITE_MODEL_BASE points here
+    if (!existsSync(dst)) console.log(`no local ${name} (using Hugging Face)`);
+    continue;
   }
   if (!existsSync(dst) || statSync(dst).size !== statSync(src).size) {
     cpSync(src, dst);

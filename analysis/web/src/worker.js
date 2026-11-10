@@ -7,6 +7,8 @@ ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardw
 ort.env.logLevel = 'error';
 
 const MODEL_CACHE = 'badminton-models-v4';
+// weights are hosted on Hugging Face (CORS ok under COEP); VITE_MODEL_BASE=/models/ uses local copies
+const MODEL_BASE = import.meta.env.VITE_MODEL_BASE || 'https://huggingface.co/jinergenkai/badminton-analysis-web/resolve/main/';
 let tracknet = null;
 let rtmo = null;
 let backend = 'wasm';
@@ -62,8 +64,8 @@ async function init({ want, pose, fp32 }) {
   const opts = { executionProviders: ep, graphOptimizationLevel: 'all' };
   tracknet?.release?.();
   rtmo?.release?.();
-  tracknet = await ort.InferenceSession.create(await fetchModel(`/models/${tnFile}`, 'TrackNetV3'), opts);
-  rtmo = pose ? await ort.InferenceSession.create(await fetchModel('/models/rtmo_s.onnx', 'RTMO-s'), opts) : null;
+  tracknet = await ort.InferenceSession.create(await fetchModel(MODEL_BASE + tnFile, 'TrackNetV3'), opts);
+  rtmo = pose ? await ort.InferenceSession.create(await fetchModel(MODEL_BASE + 'rtmo_s.onnx', 'RTMO-s'), opts) : null;
   post('ready', { backend, model: tnFile, gpu, threads: ort.env.wasm.numThreads, isolated: self.crossOriginIsolated });
 }
 

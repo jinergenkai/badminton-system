@@ -52,9 +52,13 @@ gần cổ tay), điểm rơi lệch ~1–2 m (coi điểm cuối trên ảnh nh
 
 ## Deploy Vercel
 
-Project riêng, root directory = `analysis/web`. `vercel.json` bật COOP/COEP (cần cho WASM đa luồng) và cache
-model 1 năm. Model ~130 MB nằm trong `public/models` nên phải deploy từ máy có model (`vercel deploy --prod`
-tại `analysis/web`), hoặc chuyển model sang host khác (Hugging Face, R2) rồi sửa đường dẫn trong `src/worker.js`.
+Project Vercel riêng **trong cùng repo**: *Add New → Project → chọn repo → Root Directory = `analysis/web`*
+(framework Vite, build/output đã có trong `vercel.json`). Không cần file model trong git: trang tải trọng số
+từ Hugging Face [`jinergenkai/badminton-analysis-web`](https://huggingface.co/jinergenkai/badminton-analysis-web)
+(CORS hợp lệ với COOP/COEP). Lần đầu mở trang tải ~60 MB, sau đó nằm trong Cache Storage của trình duyệt.
+
+Chạy local dùng bản model trên máy: `.env.development` đặt `VITE_MODEL_BASE=/models/`
+(`npm run dev` copy từ `../models/web` vào `public/models`).
 
 ## Giấy phép
 
