@@ -97,6 +97,61 @@ def _smooth(a, sigma):
     return np.where(v > 0, out, np.nan)
 
 
+LR = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16)]
+MIRROR = list(range(17))
+for _a, _b in LR:
+    MIRROR[_a], MIRROR[_b] = _b, _a
+
+
+def fix_samples(K2, K3, samples, max_gap=12):
+    """Clean one player's pose samples before gaps are interpolated (same rules as the web renderer):
+    1. left/right swaps (a model seen from behind labels the left arm as the right one): if the mirrored
+       sample fits the previous sample much better (< 60 % of the cost), mirror it;
+    2. big arm moves between two samples (a racket swing when pose runs every few frames): the frames in
+       between hold the nearest sample instead of sweeping the arm through the body."""
+    ok = lambda i, j: not np.isnan(K2[i, j, 0])
+    prev = -1
+    for i in sorted(set(int(v) for v in samples)):
+        if prev >= 0:
+            same = mirr = 0.0
+            cnt = 0
+            for j in range(5, 17):
+                if ok(i, j) and ok(prev, j) and ok(i, MIRROR[j]):
+                    same += float(np.linalg.norm(K2[i, j] - K2[prev, j]))
+                    mirr += float(np.linalg.norm(K2[i, MIRROR[j]] - K2[prev, j]))
+                    cnt += 1
+            if cnt >= 4 and mirr < 0.6 * same:
+                K2[i] = K2[i, MIRROR]
+                K3[i] = K3[i, MIRROR]
+            g = i - prev
+            if 1 < g <= max_gap and all(ok(prev, j) for j in (5, 6, 11, 12)):
+                T = float(np.linalg.norm((K2[prev, 5] + K2[prev, 6] - K2[prev, 11] - K2[prev, 12]) / 2))
+                d = [float(np.linalg.norm(K2[i, j] - K2[prev, j])) for j in (7, 8, 9, 10) if ok(i, j) and ok(prev, j)]
+                if d and np.mean(d) > max(0.6 * T, 20):
+                    for k in range(prev + 1, i):
+                        src = prev if k - prev <= i - k else i
+                        K2[k], K3[k] = K2[src], K3[src]
+        prev = i
+
+
+def torso_len(k):
+    if any(np.isnan(k[j, 0]) for j in (5, 6, 11, 12)):
+        return np.nan
+    return float(np.linalg.norm((k[5] + k[6] - k[11] - k[12]) / 2))
+
+
+BONE_MAX = {'arm': 1.05, 'leg': 1.4, 'width': 1.25}
+
+
+def plausible_bone(a, b, k, T):
+    """A limb can look shorter (foreshortened), never much longer than the body allows."""
+    if not T > 0:
+        return True
+    L = float(np.linalg.norm(k[a] - k[b]))
+    kind = 'width' if (a, b) in ((5, 6), (11, 12)) else ('leg' if a >= 11 or b >= 13 else 'arm')
+    return L <= BONE_MAX[kind] * T
+
+
 def build_poses(players, kpts, scores, k3d, max_gap=12, sigma=1.2, thr=0.3):
     """player -> (first_frame, K2 (n,17,2), K3 (n,17,3)) with gaps filled and jitter smoothed.
     k3d rows are aligned with the players table rows."""
@@ -114,6 +169,7 @@ def build_poses(players, kpts, scores, k3d, max_gap=12, sigma=1.2, thr=0.3):
             ok = scores[det] > thr
             K2[i, ok] = kpts[det][ok]
             K3[i, ok] = k3d[r][ok]
+        fix_samples(K2, K3, (g.frame.to_numpy() - f0).astype(int), max_gap)
         for arr in (K2, K3):
             flat = arr.reshape(n, -1)
             for c in range(flat.shape[1]):
@@ -160,8 +216,9 @@ def head_of(k):
 
 def _draw_skeleton(img, k2, col, th):
     hd = head_of(k2)
+    T = torso_len(k2)
     for a, b in BONES:
-        if a == 0 or b == 0 or np.isnan(k2[a, 0]) or np.isnan(k2[b, 0]):
+        if a == 0 or b == 0 or np.isnan(k2[a, 0]) or np.isnan(k2[b, 0]) or not plausible_bone(a, b, k2, T):
             continue
         pa, pb = tuple(np.int32(k2[a])), tuple(np.int32(k2[b]))
         cv2.line(img, pa, pb, (20, 20, 20), th + 3, cv2.LINE_AA)

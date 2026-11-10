@@ -125,6 +125,64 @@ export function rowsFromColumns(cols) {
  *   K3: Float32Array(n * 51), joint j of frame f0 + i at [(i * 17 + j) * 3 + 0..2]    (court metres, NaN = missing)
  *   nValid: Uint8Array(n), number of valid 2D joints per frame.
  */
+// left/right keypoint pairs (COCO): eyes, ears, shoulders, elbows, wrists, hips, knees, ankles
+const LR = [[1, 2], [3, 4], [5, 6], [7, 8], [9, 10], [11, 12], [13, 14], [15, 16]];
+const MIRROR = Array.from({ length: 17 }, (_, j) => j);
+for (const [a, b] of LR) { MIRROR[a] = b; MIRROR[b] = a; }
+
+/**
+ * Clean the pose samples of one player before gaps are interpolated:
+ *  1. left/right swaps: a small one-stage model seen from behind often labels the left arm as the right one.
+ *     If mirroring the sample fits the previous sample much better (< 60 % of the cost), mirror it.
+ *  2. big moves between two samples (a racket swing with pose every few frames): linear interpolation would
+ *     sweep the arm through the body, so the frames in between hold the nearest sample instead.
+ * K2 / K3: flat arrays (n x 17 x 2 / 3); sampleIdx: indices of the frames that have a pose.
+ */
+export function fixSamples(K2, K3, sampleIdx, maxGap = 12) {
+  const at = (i, j) => [K2[(i * 17 + j) * 2], K2[(i * 17 + j) * 2 + 1]];
+  const ok = (i, j) => !Number.isNaN(K2[(i * 17 + j) * 2]);
+  const samples = [...new Set(sampleIdx)].sort((a, b) => a - b);
+  const swap = (i) => {
+    for (const [a, b] of LR) {
+      for (let c = 0; c < 2; c++) { const x = (i * 17 + a) * 2 + c, y = (i * 17 + b) * 2 + c; [K2[x], K2[y]] = [K2[y], K2[x]]; }
+      for (let c = 0; c < 3; c++) { const x = (i * 17 + a) * 3 + c, y = (i * 17 + b) * 3 + c; [K3[x], K3[y]] = [K3[y], K3[x]]; }
+    }
+  };
+  const torso = (i) => {
+    if (!(ok(i, 5) && ok(i, 6) && ok(i, 11) && ok(i, 12))) return NaN;
+    const n = at(i, 5).map((v, c) => (v + at(i, 6)[c]) / 2), h = at(i, 11).map((v, c) => (v + at(i, 12)[c]) / 2);
+    return Math.hypot(n[0] - h[0], n[1] - h[1]);
+  };
+  let prev = -1;
+  for (const i of samples) {
+    if (prev >= 0) {
+      let same = 0, mirr = 0, cnt = 0;
+      for (let j = 5; j < 17; j++) {
+        if (!ok(i, j) || !ok(prev, j) || !ok(i, MIRROR[j])) continue;
+        const q = at(prev, j), a = at(i, j), b = at(i, MIRROR[j]);
+        same += Math.hypot(a[0] - q[0], a[1] - q[1]); mirr += Math.hypot(b[0] - q[0], b[1] - q[1]); cnt++;
+      }
+      if (cnt >= 4 && mirr < 0.6 * same) swap(i);
+      // hold instead of interpolating across a big arm move
+      const g = i - prev, T = torso(prev);
+      if (g > 1 && g <= maxGap && T > 0) {
+        let d = 0, m = 0;
+        for (const j of [7, 8, 9, 10]) if (ok(i, j) && ok(prev, j)) { const a = at(i, j), q = at(prev, j); d += Math.hypot(a[0] - q[0], a[1] - q[1]); m++; }
+        if (m && d / m > Math.max(0.6 * T, 20)) {
+          for (let k = prev + 1; k < i; k++) {
+            const src = k - prev <= i - k ? prev : i;
+            for (let j = 0; j < 17; j++) {
+              for (let c = 0; c < 2; c++) K2[(k * 17 + j) * 2 + c] = K2[(src * 17 + j) * 2 + c];
+              for (let c = 0; c < 3; c++) K3[(k * 17 + j) * 3 + c] = K3[(src * 17 + j) * 3 + c];
+            }
+          }
+        }
+      }
+    }
+    prev = i;
+  }
+}
+
 export function buildPoses(players, kpts, scores, k3d, opts = {}) {
   const { maxGap = 12, sigma = 1.2, thr = 0.3 } = opts;
   const groups = new Map();
@@ -150,6 +208,7 @@ export function buildPoses(players, kpts, scores, k3d, opts = {}) {
         if (k3) for (let c = 0; c < 3; c++) K3[(i * 17 + j) * 3 + c] = num(k3[j][c]);
       }
     }
+    fixSamples(K2, K3, idxs.map((r) => players[r].frame - f0), maxGap);
     const col = new Float64Array(n);
     for (const [arr, stride] of [[K2, 34], [K3, 51]]) {
       for (let c = 0; c < stride; c++) {
@@ -291,6 +350,21 @@ const ZOOM = 1.15;                   // 3D view: ~15% closer than render.py's fr
  * Nose; else the mean of eyes/ears; else above the shoulders along the hips -> shoulders direction.
  * k: 17 points ([x,y] or [X,Y,Z], null = missing). Returns {p, neck, r} or null.
  */
+/** shoulder-centre to hip-centre length (NaN when not visible) */
+export function torsoLen(k) {
+  if (!(k[5] && k[6] && k[11] && k[12])) return NaN;
+  return Math.hypot((k[5][0] + k[6][0] - k[11][0] - k[12][0]) / 2, (k[5][1] + k[6][1] - k[11][1] - k[12][1]) / 2);
+}
+
+/** A limb can look shorter (foreshortened), never much longer than the body allows: drop impossible bones. */
+const BONE_MAX = { arm: 1.05, leg: 1.4, width: 1.25 };
+export function plausibleBone(a, b, k, T) {
+  if (!(T > 0)) return true;
+  const L = Math.hypot(k[a][0] - k[b][0], k[a][1] - k[b][1]);
+  const kind = a >= 11 || b >= 13 ? (a === 11 && b === 12 ? 'width' : 'leg') : (a === 5 && b === 6 ? 'width' : (b <= 10 ? 'arm' : 'leg'));
+  return L <= BONE_MAX[kind] * T;
+}
+
 export function headOf(k, is3d) {
   const mid = (a, b) => (k[a] && k[b] ? k[a].map((v, i) => (v + k[b][i]) / 2) : k[a] || k[b] || null);
   const neck = mid(5, 6), hips = mid(11, 12);
@@ -520,7 +594,11 @@ export function createRenderer(o) {
   function drawSkeleton(ctx, k2, col) {
     const hd = headOf(k2, false);
     ctx.beginPath();
-    for (const [a, b] of BONES) if (a && b && k2[a] && k2[b]) { ctx.moveTo(k2[a][0], k2[a][1]); ctx.lineTo(k2[b][0], k2[b][1]); }
+    const T = torsoLen(k2);
+    for (const [a, b] of BONES) {
+      if (!a || !b || !k2[a] || !k2[b] || !plausibleBone(a, b, k2, T)) continue;
+      ctx.moveTo(k2[a][0], k2[a][1]); ctx.lineTo(k2[b][0], k2[b][1]);
+    }
     if (hd && hd.neck) { ctx.moveTo(hd.neck[0], hd.neck[1]); ctx.lineTo(hd.p[0], hd.p[1]); }
     ctx.strokeStyle = 'rgb(20,20,20)'; ctx.lineWidth = th + 3; ctx.stroke();
     ctx.strokeStyle = col; ctx.lineWidth = th; ctx.stroke();
@@ -597,11 +675,15 @@ export function createRenderer(o) {
       ctx.moveTo(q[0] + 14 * k3, q[1]); ctx.ellipse(q[0], q[1], 14 * k3, 5 * k3, 0, 0, 2 * Math.PI);
     }
     ctx.fill(); ctx.globalAlpha = 1;
-    for (const { player, k3: K } of people) {
+    for (const { player, k2, k3: K } of people) {
       const col = pcol(player);
       ctx.strokeStyle = col; ctx.lineWidth = 2 * k3; ctx.beginPath();
       const q = K.map((Q) => (Q ? view.p1(Q) : null));
-      for (const [a, b] of BONES) if (a && b && q[a] && q[b]) { ctx.moveTo(q[a][0], q[a][1]); ctx.lineTo(q[b][0], q[b][1]); }
+      const T = torsoLen(k2);
+      for (const [a, b] of BONES) {
+        if (!a || !b || !q[a] || !q[b] || (k2[a] && k2[b] && !plausibleBone(a, b, k2, T))) continue;
+        ctx.moveTo(q[a][0], q[a][1]); ctx.lineTo(q[b][0], q[b][1]);
+      }
       const hd = headOf(K, true);
       if (hd && hd.neck) { const n = view.p1(hd.neck), hp = view.p1(hd.p); ctx.moveTo(n[0], n[1]); ctx.lineTo(hp[0], hp[1]); }
       ctx.stroke();

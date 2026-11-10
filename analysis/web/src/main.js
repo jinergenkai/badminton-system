@@ -289,7 +289,7 @@ $('#calib-ok').onclick = () => { show($('#step-run')); $('#step-run').scrollInto
 // ---------- step 3: presets, bench, run ----------
 // Every level runs the full analysis; higher levels detect more carefully and use a better pose model.
 const PRESETS = {
-  fast:     { label: 'Nhanh',     stride: 8, pose: 's', poseEvery: 6, farZoom: true,  courtFit: false, starts: 2, maxNfev: 200 },
+  fast:     { label: 'Nhanh',     stride: 8, pose: 's', poseEvery: 3, farZoom: true,  courtFit: false, starts: 2, maxNfev: 200 },
   balanced: { label: 'Cân bằng',  stride: 8, pose: 'm', poseEvery: 3, farZoom: true,  courtFit: true,  starts: 4, maxNfev: 300 },
   max:      { label: 'Tối đa',    stride: 4, pose: 'l', poseEvery: 1, farZoom: true,  courtFit: true,  starts: 4, maxNfev: 300 },
 };
