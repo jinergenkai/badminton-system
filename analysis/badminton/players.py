@@ -67,8 +67,9 @@ def lift(cam, foot_xy, px):
     return np.array(out)
 
 
-def track_players(cam, frames, kpts, scores, margin=1.2, max_jump=1.2, max_age=30):
-    """Keep people standing on (or just around) our court; give them stable ids by floor position."""
+def track_players(cam, frames, kpts, scores, margin=1.2, back_margin=2.5, max_jump=1.2, max_age=30):
+    """Keep people standing on (or just around) our court; give them stable ids by floor position.
+    Behind the baselines the margin is larger: deep clears are hit from up to ~2 m behind the line."""
     rows, k3d = [], []
     live = {}                                         # pid -> (last_frame, X, Y)
     next_id = 0
@@ -77,7 +78,7 @@ def track_players(cam, frames, kpts, scores, margin=1.2, max_jump=1.2, max_age=3
         cand = []
         for i in idx:
             X, Y = cam.to_floor(foot_pixel(kpts[i], scores[i]))
-            if -margin <= X <= W + margin and -HALF - margin <= Y <= HALF + margin and scores[i].mean() > 0.4:
+            if -margin <= X <= W + margin and -HALF - back_margin <= Y <= HALF + back_margin and scores[i].mean() > 0.4:
                 cand.append((i, X, Y))
         live = {p: v for p, v in live.items() if f - v[0] <= max_age}
         pids = list(live)

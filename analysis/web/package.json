@@ -1,0 +1,20 @@
+{
+  "name": "badminton-analysis-web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Phân tích video cầu lông ngay trong trình duyệt (WebGPU/WASM) — TrackNetV3 + RTMO",
+  "scripts": {
+    "models": "node scripts/copy-assets.mjs",
+    "dev": "node scripts/copy-assets.mjs && vite",
+    "build": "node scripts/copy-assets.mjs && vite build && node -e \"require('fs').rmSync('dist/samples',{recursive:true,force:true})\"",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "mp4-muxer": "5.2.2",
+    "onnxruntime-web": "1.30.0"
+  },
+  "devDependencies": {
+    "vite": "5.4.11"
+  }
+}

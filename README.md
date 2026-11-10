@@ -22,14 +22,16 @@ From **one phone on a tripod**, no special hardware:
 | Step | How |
 |---|---|
 | Court & camera | Camera intrinsics + pose (K, R, t) by fitting the BWF court model to the white lines |
-| Shuttle | [TrackNetV3](https://github.com/alenzenx/TrackNetV3) finds every candidate, multi-target tracking picks the real flight |
-| Players | YOLOX-x + RTMPose-x (rtmlib) 2D pose; feet on the floor homography give each player's court position, every keypoint is lifted to 3D |
-| Hits | A sharp turn or speed-up of the shuttle whose view ray passes close to a player's wrist — gives contact height too; same side can't hit twice in a row |
-| 3D flight | Each shot is fitted with shuttlecock physics (gravity + quadratic drag, Vinf ≈ 6.7 m/s); gravity supplies the metric scale one camera lacks |
+| Shuttle | Official [TrackNetV3](https://github.com/qaz812345/TrackNetV3) (median background + 8 frames, MIT incl. weights) finds every candidate, multi-target tracking picks the real flight |
+| Players | YOLOX-x + RTMPose-x (rtmlib) 2D pose; feet on the floor homography give each player's court position, every keypoint is lifted to 3D; stable identities P1–P4 from shirt/shorts colours |
+| Hits | A sharp turn, speed-up or detection gap of the shuttle whose view ray passes close to a player's wrist — gives contact height too; the hitting side is chosen over the whole rally (sides alternate) and confirmed by the physics fit |
+| 3D flight | Each shot is fitted with shuttlecock physics (gravity + quadratic drag, Vinf ≈ 6.7 m/s, sub-frame contact time); gravity supplies the metric scale one camera lacks. On a ground-truth benchmark: 13 cm median 3D error, 4.3% launch-speed error, 8 cm landing error |
 | Landing | Flight ending while falling + a small white blob lying still at its end → landing point, IN/OUT |
+| Analytics | Per shot: type (smash, clear, drop, lift, net, drive…), launch speed ± uncertainty, apex, net clearance, forehand/backhand, jump. Per player: distance, speed, court zones, ready stance at the opponent's contact, reaction and recovery time → `report.md` |
 
-Runs headless on a GPU box — a 2–2.5 min 720p clip takes roughly 10 minutes on an RTX 5060 Ti,
-most of it pose estimation. Details, algorithms and accuracy notes:
+Runs headless on a GPU box — a 2–2.5 min 720p clip takes roughly 9 minutes on an RTX 5060 Ti,
+most of it pose estimation. A lighter version runs in the browser on the viewer's own GPU/CPU:
+[`analysis/web/`](analysis/web/). Details, algorithms and accuracy notes:
 [analysis/README.md](analysis/README.md) *(Vietnamese)*.
 
 ## What else is in here
