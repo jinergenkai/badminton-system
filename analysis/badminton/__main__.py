@@ -201,17 +201,18 @@ def main():
     if todo('render'):
         t0 = time.time()
         cam, df, events = load_cam(), pd.read_csv(files['track']), json.load(open(files['landing']))
+        fps = cv2.VideoCapture(video).get(cv2.CAP_PROP_FPS)
         extra = {}
-        if files['hits'].exists():
-            extra = dict(hits=json.load(open(files['hits'])), players=pd.read_csv(files['players']),
-                         k3d=np.load(out / 'players_k3d.npy'), kpts=np.load(files['pose'])['kpts'])
+        if files['players'].exists():
+            z = np.load(files['pose'])
+            pl = pd.read_csv(files['players'])
+            extra = dict(players=pl, k3d=np.load(out / 'players_k3d.npy'), kpts=z['kpts'], scores=z['scores'],
+                         tracks=analytics.player_tracks(pl, fps) if 'player' in pl else None)
         if files['flight'].exists():
             extra['shots'] = [s for s in json.load(open(files['flight'])) if s['good']]
-            for s in extra['shots']:            # recovered (previously missed) hits get a marker too
-                if s.get('inferred_hit') and 'hits' in extra:
-                    extra['hits'].append({'frame': s['hit_frame'], 'pid': s['pid'], 'player': s.get('player', -1),
-                                          'px': cam.project([s['p0']])[0].tolist(),
-                                          'contact': s['p0'], 'recovered': True})
+            # contacts shown = the fitted shots' starts (the same set the report describes)
+            extra['hits'] = [{'frame': s['hit_frame'], 'contact': s['p0'],
+                              'px': cam.project([s['p0']])[0].tolist()} for s in extra['shots']]
         if files['analytics'].exists():
             extra['report'] = json.load(open(files['analytics'], encoding='utf8'))
         raw = out / 'render_raw.mp4'

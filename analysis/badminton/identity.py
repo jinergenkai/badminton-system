@@ -15,6 +15,7 @@ person, so:
 """
 import cv2
 import numpy as np
+import pandas as pd
 from scipy.cluster.vq import kmeans2
 from scipy.optimize import linear_sum_assignment
 
@@ -160,4 +161,27 @@ def assign(players, feats, fps, max_speed=7.0, w_pos=0.35, max_cost=1.2, seed=0,
                                             players.X[players.player == p].median()))
     remap = {p: i for i, p in enumerate(order)}
     players['player'] = players.player.map(lambda p: remap.get(p, -1))
+    players = smooth_sides(players, fps)
     return players, cent[order], per_side
+
+
+def smooth_sides(players, fps, window_s=15.0, deep=2.5):
+    """A player's side is the majority over ~15 s, not the sign of Y in each frame.
+
+    Standing right at the net, the foot position wobbles across Y = 0 (a few cm of keypoint noise),
+    which flipped near players to 'far' in single frames. Teams only change ends between games, far
+    longer than the window. A detection well inside the other half (> 2.5 m) is not that player:
+    its identity is dropped. 'side_raw' keeps the per-frame value."""
+    players = players.copy()
+    players['side_raw'] = players.side
+    for p, g in players[players.player >= 0].groupby('player'):
+        g = g.sort_values('frame')
+        near = (g.side_raw == 'near').astype(float)
+        frac = pd.Series(near.to_numpy(), index=g.frame.to_numpy()).rolling(
+            int(window_s * fps), center=True, min_periods=1).mean()
+        side = np.where(frac.to_numpy() >= 0.5, 'near', 'far')
+        players.loc[g.index, 'side'] = side
+        wrong = ((side == 'near') & (g.Y.to_numpy() > deep)) | ((side == 'far') & (g.Y.to_numpy() < -deep))
+        players.loc[g.index[wrong], 'player'] = -1
+        players.loc[g.index[wrong], 'side'] = players.loc[g.index[wrong], 'side_raw']
+    return players

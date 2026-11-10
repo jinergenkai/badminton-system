@@ -384,14 +384,24 @@ cú cuối nếu rơi IN, bên kia nếu OUT.
 
 ### 3.11 Render (`render`)
 
-- **Video:** sân + lưới 3D chiếu vào ảnh, khung xương (xanh = phía camera, hồng = phía xa), vệt cầu,
-  đường bay 3D chiếu ngược (đối chiếu trực quan với vệt đỏ), cú chạm, điểm rơi.
-- **Cảnh 3D:** camera ảo quay chậm quanh sân (phía camera thật), sân, lưới trong suốt, frustum camera
-  thật, người que 3D, đường bay (nét liền đã bay / chấm ngoại suy), quả cầu kèm độ cao và bóng chiếu
-  xuống sàn, tia nhìn khi chưa có đường bay khớp.
-- Xuất H.264 + âm thanh gốc qua ffmpeg.
+Kiểu phát sóng: video gốc có overlay + bảng bên phải.
 
----
+- **Video:** vạch sân mảnh, mỗi người chơi **một màu cố định** (P1 xanh, P2 cam, P3 hồng, P4 xanh lá) với
+  thẻ tên, vệt cầu phát sáng, đường bay 3D chiếu ngược (liền = đã thấy, chấm = dự đoán), thẻ chú thích ở
+  mỗi cú chạm (người · loại cú · tốc độ, độ cao điểm chạm, bật nhảy), vòng điểm rơi IN / OUT, nhãn
+  pha / số cú / thời gian. Chữ vẽ bằng font Segoe UI qua Pillow (có dấu tiếng Việt).
+- **Bảng phải:** cảnh 3D **đứng yên** góc 3/4 từ phía camera thật (vẽ 2× rồi thu nhỏ cho mượt): sân,
+  lưới, camera thật, người que có bóng, đường bay kèm độ cao quả cầu, điểm rơi. Dưới là thẻ "cú vừa
+  đánh" (tốc độ ± σ, `~` khi không đo được, điểm chạm, đỉnh, qua lưới, thẳng / chéo) và thẻ từng người
+  (quãng đường, số cú tính tới thời điểm đang xem).
+- **Chỉ vẽ người đã định danh** P1..Pn: người đi ngang, người ngồi ngoài sân, người sân bên không giống
+  ai trong số người chơi nên không được vẽ (và không được tính là người đánh cầu).
+- **Khung xương không nhấp nháy:** mỗi khớp được nội suy qua chỗ mất ≤ 12 frame và làm mượt Gauss
+  (σ 1.2 frame); khớp có điểm tin cậy < 0.3 lấy từ frame lân cận. Video 02: số lần một người chơi
+  bật / tắt trên hình 62–122 → 4–14, độ rung khớp giảm ~2.5×.
+- Màu và bên sân theo **danh tính**, không theo dấu Y từng frame: đứng sát lưới, vị trí chân dao động
+  qua vạch giữa làm người phía camera bị tô màu phía xa (P1: 144 frame). Bên sân của mỗi người là đa số
+  trong cửa sổ 15 s (vẫn đúng khi đổi sân giữa ván).
 
 ## 4. Kết quả và độ tin cậy
 
@@ -459,7 +469,10 @@ từng người rải đều theo thời gian; thuận tay / tay cầm vợt và
 ## 5. Giới hạn và hướng tiếp theo
 
 - **Một camera không phân biệt được cầu sân mình với cầu sân bên** nằm trên cùng tia nhìn
-  (`danh-cau`: hai điểm OUT lệch 1.5–2.5 m sang sân phải nhiều khả năng là cầu sân bên).
+  (`danh-cau`: khi cầu sân mình khuất, bộ theo dõi có lúc bám cầu sân bên; các điểm OUT xa ngoài sân
+  là cầu sân bên).
+- **Cầu cao từ cuối sân xa** đôi khi ra điểm chạm ở trần 3.2 m (cao hơn tầm với): hiệu chỉnh camera chỉ
+  dùng vạch sàn, sai số tăng ở vùng cao / xa. Hướng sửa: thêm mép lưới (1.55 m) làm điểm hiệu chỉnh 3D.
 - **Tốc độ cú bay dọc hướng nhìn** (cuối sân xa → camera) không đo được chính xác (mục 4); báo `~`.
   Máy quay đặt **ngang lưới** hoặc cao hơn nhiều sẽ biến chiều sâu đó thành chuyển động ngang trên ảnh.
 - **Còn ~25–33 lần "cùng bên đánh 2 cú liền"** mỗi video: cú chạm bị sót mà không khôi phục được.

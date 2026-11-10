@@ -61,7 +61,15 @@ def best_contact(cam, f, px, rows, by_frame, k3d, window=3, max_dist=1.0, min_z=
 
 def index_players(players):
     rows = players.reset_index(drop=True)
-    return rows, {f: g.index.to_numpy() for f, g in rows.groupby('frame')}
+    keep = rows.index.to_numpy()
+    if 'player' in rows:
+        # bystanders (people walking past, sitting by the court) never match any player's look: drop
+        # floor tracks that are almost never identified, so their wrists cannot "hit" the shuttle
+        share = rows.groupby('pid').player.apply(lambda s: float((s >= 0).mean()))
+        ok_pid = set(share.index[share >= 0.2])
+        keep = rows.index[rows.pid.isin(ok_pid) | (rows.player >= 0)].to_numpy()
+    sub = rows.loc[keep]
+    return rows, {f: g.index.to_numpy() for f, g in sub.groupby('frame')}
 
 
 def _choose_sides(moments, fps, switch_cost, rally_gap_s):
