@@ -14,15 +14,12 @@ import pandas as pd
 from scipy.optimize import linear_sum_assignment
 
 from .court import W, HALF
+from .keypoints import L_ANK, L_WR, NOSE, R_ANK, R_WR
+from .video import iter_frames
 
 ROOT = Path(__file__).resolve().parent.parent
 DET = ROOT / 'models' / 'pose' / 'yolox_x_humanart.onnx'
 POSE = ROOT / 'models' / 'pose' / 'rtmpose_x_body7_384x288.onnx'
-
-# COCO-17 keypoints
-NOSE, L_SH, R_SH, L_EL, R_EL, L_WR, R_WR, L_HIP, R_HIP, L_ANK, R_ANK = 0, 5, 6, 7, 8, 9, 10, 11, 12, 15, 16
-BONES = [(5, 7), (7, 9), (6, 8), (8, 10), (5, 6), (5, 11), (6, 12), (11, 12), (11, 13), (13, 15), (12, 14),
-         (14, 16), (0, 5), (0, 6)]
 
 
 def estimate(video, device='cuda'):
@@ -31,22 +28,18 @@ def estimate(video, device='cuda'):
     from rtmlib import Body
     body = Body(det=str(DET), det_input_size=(640, 640), pose=str(POSE), pose_input_size=(288, 384),
                 backend='onnxruntime', device=device)
-    cap = cv2.VideoCapture(video)
-    frames, kpts, scores, f = [], [], [], 0
-    while True:
-        ok, img = cap.read()
-        if not ok:
-            break
+    frames, kpts, scores = [], [], []
+    for f, img in enumerate(iter_frames(cv2.VideoCapture(video))):
         k, s = body(img)
         for i in range(len(k)):
             frames.append(f)
             kpts.append(k[i])
             scores.append(s[i])
-        f += 1
     return np.array(frames), np.float32(kpts).reshape(-1, 17, 2), np.float32(scores).reshape(-1, 17)
 
 
 def foot_pixel(k, s, thr=0.3):
+    """Image point of the feet: mean of the confident ankles (a few px lower), else the lowest keypoint."""
     ok = [j for j in (L_ANK, R_ANK) if s[j] > thr]
     if ok:
         return k[ok].mean(0) + [0, 4]               # ankle joint sits a few px above the sole

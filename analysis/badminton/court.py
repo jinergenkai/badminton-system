@@ -32,4 +32,5 @@ def net_top(n=40):
 
 
 def is_in(x, y):
+    """Inside the doubles court (lines are in)."""
     return 0 <= x <= W and -HALF <= y <= HALF

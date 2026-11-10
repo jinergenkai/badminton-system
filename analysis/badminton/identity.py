@@ -20,13 +20,14 @@ from scipy.cluster.vq import kmeans2
 from scipy.optimize import linear_sum_assignment
 
 from .court import HALF, W
-from .players import L_HIP, L_SH, R_HIP, R_SH
+from .keypoints import L_HIP, L_KNEE, L_SH, R_HIP, R_KNEE, R_SH
+from .video import iter_frames
 
-L_KNEE, R_KNEE = 13, 14
 H_BINS, S_BINS, V_BINS = 16, 4, 6
 
 
 def _hist(hsv, box):
+    """Colour + texture feature of an image box, or None when the box is too small."""
     x0, y0, x1, y1 = box
     roi = hsv[max(0, y0):max(0, y1), max(0, x0):max(0, x1)]
     if roi.size < 30:
@@ -43,6 +44,7 @@ def _hist(hsv, box):
 
 
 def _boxes(k, s, thr=0.3):
+    """Shirt box (shoulders-hips) and shorts box (hips-knees) from the keypoints, None when not visible."""
     out = []
     for top, bottom in (((L_SH, R_SH), (L_HIP, R_HIP)), ((L_HIP, R_HIP), (L_KNEE, R_KNEE))):
         idx = [j for j in top + bottom if s[j] > thr]
@@ -63,12 +65,7 @@ def appearance(video, players, kpts, scores):
     D = 2 * (H_BINS * S_BINS + V_BINS + 2)
     feats = np.full((len(players), D), np.nan, np.float32)
     det = players.det.to_numpy()
-    cap = cv2.VideoCapture(video)
-    f = 0
-    while True:
-        ok, img = cap.read()
-        if not ok:
-            break
+    for f, img in enumerate(iter_frames(cv2.VideoCapture(video))):
         if f in rows_by_frame:
             hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
             for r in rows_by_frame[f]:
@@ -77,11 +74,11 @@ def appearance(video, players, kpts, scores):
                 hb = _hist(hsv, shorts) if shorts else None
                 if hs is not None and hb is not None:
                     feats[r] = np.r_[hs, 0.6 * hb]
-        f += 1
     return feats
 
 
 def _vote(players, lab, feats, cent, scale, min_share=0.6):
+    """Tracklet majority vote (optional, assign(vote=True)): relabel each floor track by its main player."""
     lab = lab.copy()
     for pid, g in players.groupby('pid'):
         idx = g.index.to_numpy()

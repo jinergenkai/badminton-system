@@ -17,7 +17,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .court import HALF, NET_BOTTOM, NET_POST, W, court_lines, net_top
 from .flight import positions
-from .players import BONES
+from .keypoints import BONES, L_ANK, L_SH, N_KPTS, NOSE, R_ANK
+from .video import iter_frames
 
 HIT_SHOW = 28            # frames a hit callout stays up
 TRAIL = 14               # shuttle trail length (frames)
@@ -25,6 +26,7 @@ LANDING_S = 2.0          # a landing is shown this long, then fades away (no per
 
 
 def _rgb(hexs):
+    """'#RRGGBB' -> (r, g, b)."""
     return tuple(int(hexs[i:i + 2], 16) for i in (1, 3, 5))
 
 
@@ -41,6 +43,7 @@ TYPES_VI = {'serve': 'Giao cầu', 'smash': 'Đập', 'clear': 'Phông cao', 'dr
 
 
 def pcol(p, bgr=True):
+    """Colour of player p (0-based), BGR for OpenCV or RGB for Pillow."""
     h = PLAYER_HEX[p % len(PLAYER_HEX)]
     return _bgr(h) if bgr else _rgb(h)
 
@@ -48,6 +51,8 @@ def pcol(p, bgr=True):
 # ---------------------------------------------------------------- fonts
 
 class Fonts:
+    """Segoe UI at the sizes the overlay uses, scaled; Pillow's default font if Segoe is missing."""
+
     def __init__(self, scale):
         win = Path('C:/Windows/Fonts')
         regular, bold = win / 'segoeui.ttf', win / 'segoeuib.ttf'
@@ -123,6 +128,7 @@ def build_poses(players, kpts, scores, k3d, max_gap=12, sigma=1.2, thr=0.3):
 
 
 def poses_at(poses, f, min_joints=8):
+    """(player, K2 row, K3 row) of the players with at least min_joints joints at frame f."""
     for p, (f0, K2, K3) in poses.items():
         i = f - f0
         if 0 <= i < len(K2):
@@ -132,13 +138,14 @@ def poses_at(poses, f, min_joints=8):
 
 
 def _draw_skeleton(img, k2, col, th):
+    """Bones in the player's colour over a dark outline, white dots on the body joints (not the face)."""
     for a, b in BONES:
         if np.isnan(k2[a, 0]) or np.isnan(k2[b, 0]):
             continue
         pa, pb = tuple(np.int32(k2[a])), tuple(np.int32(k2[b]))
         cv2.line(img, pa, pb, (20, 20, 20), th + 3, cv2.LINE_AA)
         cv2.line(img, pa, pb, col, th, cv2.LINE_AA)
-    for j in range(5, 17):
+    for j in range(L_SH, N_KPTS):
         if not np.isnan(k2[j, 0]):
             cv2.circle(img, tuple(np.int32(k2[j])), max(2, th - 1), (255, 255, 255), -1, cv2.LINE_AA)
 
@@ -168,6 +175,7 @@ def draw_court(img, cam, alpha=0.55):
 
 
 def _glow_polyline(img, pts, col, core=2, glow=8, glow_alpha=0.35):
+    """A polyline with a soft wide halo under a thin core."""
     if len(pts) < 2:
         return img
     ov = img.copy()
@@ -230,10 +238,12 @@ class Court3D:
         return img
 
     def render(self, f, people, path, contacts, landings):
+        """The 3D view at frame f -> (image, (ball pixel, height) or None, [(landing pixel, in, alpha)])."""
         img = self.base.copy()
         sh = img.copy()
         for p, k3 in people:                                  # floor shadows
-            foot = np.nanmean(k3[[15, 16], :2], axis=0) if not np.isnan(k3[[15, 16], 0]).all() else None
+            feet = [L_ANK, R_ANK]
+            foot = np.nanmean(k3[feet, :2], axis=0) if not np.isnan(k3[feet, 0]).all() else None
             if foot is not None:
                 q = self.p([[foot[0], foot[1], 0]])[0].astype(int)
                 cv2.ellipse(sh, tuple(q), (14 * self.ss, 5 * self.ss), 0, 0, 360, (10, 20, 14), -1, cv2.LINE_AA)
@@ -243,8 +253,8 @@ class Court3D:
             for a, b in BONES:
                 if not (np.isnan(k3[a, 0]) or np.isnan(k3[b, 0])):
                     self.line(img, [k3[a], k3[b]], col, 2)
-            if not np.isnan(k3[0, 0]):
-                cv2.circle(img, tuple(self.p([k3[0]])[0].astype(int)), 5 * self.ss, col, -1, cv2.LINE_AA)
+            if not np.isnan(k3[NOSE, 0]):
+                cv2.circle(img, tuple(self.p([k3[NOSE]])[0].astype(int)), 5 * self.ss, col, -1, cv2.LINE_AA)
         for C in contacts:
             q = self.p([C])[0].astype(int)
             self.line(img, [[C[0], C[1], 0], C], _bgr('#FFD54F'), 1)
@@ -286,7 +296,7 @@ class Court3D:
         return img, ball, marks
 
 
-# ---------------------------------------------------------------- UI cards (Pillow)
+# ---------------------------------------------------------------- Pillow helpers
 
 def _pill(d, xy, text, font, fill, fg=(255, 255, 255), pad=(9, 4), r=None):
     x, y = xy
@@ -305,7 +315,199 @@ def _fade(age, total, rise=4, fall=8):
     return 1.0
 
 
+# ---------------------------------------------------------------- left: per-frame video overlays
+
+def _draw_fitted_path(left, cam, Pp, n_fit):
+    """The fitted 3D flight projected back: solid up to the last observation, dotted beyond."""
+    q = cam.project(Pp).astype(np.int32)
+    ov = left.copy()
+    cv2.polylines(ov, [q[:n_fit]], False, _bgr(PATH_HEX), 2, cv2.LINE_AA)
+    left = cv2.addWeighted(ov, 0.5, left, 0.5, 0)
+    for a in range(max(n_fit - 1, 0), len(q) - 1, 3):
+        cv2.circle(left, tuple(q[a]), 2, _bgr(PATH_HEX), -1, cv2.LINE_AA)
+    return left
+
+
+def _draw_shuttle(left, pos, f, sv):
+    """Glowing trail of the last TRAIL frames and a ring at the current shuttle position."""
+    trail = [pos[k] for k in range(f - TRAIL, f + 1) if k in pos]
+    if len(trail) > 1:
+        left = _glow_polyline(left, trail, _bgr(SHUTTLE_HEX), core=max(2, int(2 * sv)), glow=int(9 * sv))
+    if f in pos:
+        c = tuple(map(int, pos[f]))
+        cv2.circle(left, c, int(9 * sv), _bgr(SHUTTLE_HEX), 2, cv2.LINE_AA)
+        cv2.circle(left, c, int(4 * sv), (255, 255, 255), -1, cv2.LINE_AA)
+    return left
+
+
+def _draw_hit_pulses(left, live_hits, f, sv):
+    for fr_, C, px in live_hits:                    # a short pulse at the contact, no text
+        age = f - fr_
+        rr = int((12 + 14 * min(age, 8) / 8) * sv)
+        a = _fade(age, HIT_SHOW)
+        ov = left.copy()
+        cv2.circle(ov, tuple(map(int, px)), rr, _bgr('#FFD54F'), 2, cv2.LINE_AA)
+        left = cv2.addWeighted(ov, a, left, 1 - a, 0)
+    return left
+
+
+def _draw_landing_rings(left, cam, landings, f, fps):
+    for e in landings:                              # landing ring only for LANDING_S, fading
+        age = (f - e['frame']) / fps
+        if not 0 <= age < LANDING_S:
+            continue
+        X, Y = e['court']
+        ring = cam.project([[X + 0.25 * np.cos(t), Y + 0.25 * np.sin(t), 0] for t in np.linspace(0, 2 * np.pi, 24)])
+        a = 1.0 - max(0.0, age - LANDING_S * 0.6) / (LANDING_S * 0.4)
+        ov = left.copy()
+        cv2.polylines(ov, [ring.astype(np.int32)], True, _bgr(IN_HEX if e['in'] else OUT_HEX), 2, cv2.LINE_AA)
+        left = cv2.addWeighted(ov, a, left, 1 - a, 0)
+    return left
+
+
+def _draw_name_tags(d, people, fonts_v, video_y, sv):
+    """Small 'Pn' tag above each identified player's nose (the only text on the video)."""
+    for p, k2, _ in people:
+        if not np.isnan(k2[NOSE, 0]):
+            hx, hy = k2[NOSE]
+            txt = f'P{p + 1}'
+            bb = d.textbbox((0, 0), txt, font=fonts_v.tag)
+            _pill(d, (int(hx - (bb[2] - bb[0]) / 2 - 8), int(video_y + hy - 34 * sv)), txt, fonts_v.tag,
+                  pcol(p, False) + (230,), fg=(15, 17, 21))
+
+
+# ---------------------------------------------------------------- frame layout
+
+class _Layout:
+    """Output frame geometry. horizontal: video | panel. vertical: 9:16 with the panel above/below."""
+
+    def __init__(self, w, h, layout, panel_position):
+        self.sv = h / 576.0                                 # scale of what is drawn on the video
+        if layout == 'vertical':
+            self.OW = w // 2 * 2
+            self.OH = int(round(self.OW * 16 / 9)) // 2 * 2
+            self.PW, self.PH = self.OW, self.OH - h
+            self.video_y = 0 if panel_position == 'below' else self.PH
+            self.panel_x, self.panel_y = 0, (h if panel_position == 'below' else 0)
+            self.h3d = int(self.PH * 0.6) // 2 * 2
+            self.sp = self.PW / 560.0                       # scale of the panel
+        else:
+            self.PW, self.PH = int(round(0.5 * w / 2)) * 2, h
+            self.OW, self.OH = w + self.PW, h
+            self.video_y, self.panel_x, self.panel_y = 0, w, 0
+            self.h3d = int(h * 0.56) // 2 * 2
+            self.sp = self.sv
+        self.zoom = 1.35 if layout == 'vertical' else 1.0   # 3D view
+
+
+# ---------------------------------------------------------------- right: panel text and cards (Pillow)
+
+class _Panel:
+    """Draws the panel's text layer: header, ball height / landing labels, last-shot card, player cards."""
+
+    def __init__(self, L, fonts, fps, rshots, rally_start, dist, n_players):
+        self.L, self.fonts, self.fps = L, fonts, fps
+        self.X0, self.Y0 = L.panel_x, L.panel_y
+        self.rshots, self.rally_start, self.dist, self.n_players = rshots, rally_start, dist, n_players
+        self.shot_frames = np.array([c['frame'] for c in rshots]) if rshots else np.array([], int)
+
+    def u(self, v):
+        return int(v * self.L.sp)
+
+    def header(self, d, f):
+        """'SÂN 3D', rally / shot count and the clock (moved off the video)."""
+        L, fonts, u, X0, Y0 = self.L, self.fonts, self.u, self.X0, self.Y0
+        ri = int(np.searchsorted(self.rally_start, f, side='right')) if len(self.rally_start) else 0
+        n_shot = sum(1 for c in self.rshots if c['rally'] == ri and c['frame'] <= f) if ri else 0
+        d.text((X0 + u(14), Y0 + u(12)), 'SÂN 3D', font=fonts.tag, fill=MUTED + (255,))
+        status = f"PHA {ri}  ·  CÚ {n_shot}" if ri else 'KHỞI ĐỘNG'
+        tt = f'{int(f / self.fps // 60):02d}:{f / self.fps % 60:04.1f}'
+        bb = d.textbbox((0, 0), status, font=fonts.label)
+        _pill(d, (X0 + L.PW - u(14) - (bb[2] - bb[0]) - u(18), Y0 + u(10)), status, fonts.label, (13, 17, 23, 210),
+              fg=TEXT, r=u(8))
+        bb2 = d.textbbox((0, 0), tt, font=fonts.small)
+        _pill(d, (X0 + L.PW - u(14) - (bb2[2] - bb2[0]) - u(18), Y0 + u(42)), tt, fonts.small, (13, 17, 23, 170),
+              fg=MUTED, r=u(6))
+
+    def scene_labels(self, d, ball, marks):
+        """Height of the ball and IN / OUT next to landings, on the 3D view."""
+        fonts, u, X0, Y0 = self.fonts, self.u, self.X0, self.Y0
+        if ball is not None:
+            (bx_, by_), bz = ball
+            _pill(d, (int(X0 + bx_ + u(12)), int(Y0 + by_ - u(12))), f'{bz:.1f} m', fonts.small,
+                  (255, 255, 255, 225), fg=(15, 17, 21))
+        for (mx, my), inn, a_ in marks:
+            d.text((X0 + mx + u(8), Y0 + my - u(8)), 'IN' if inn else 'OUT', font=fonts.tag,
+                   fill=_rgb(IN_HEX if inn else OUT_HEX) + (int(255 * a_),))
+
+    def shot_card(self, d, f):
+        """Card of the last shot: player, type, launch speed, contact / apex / net facts.
+        Returns the card box (x0, y0, width, height)."""
+        L, fonts, u, X0, Y0 = self.L, self.fonts, self.u, self.X0, self.Y0
+        k = int(np.searchsorted(self.shot_frames, f, side='right')) - 1
+        cx0, cy0, cw = X0 + u(12), Y0 + L.h3d + u(8), L.PW - u(24)
+        ch = u(118)
+        d.rounded_rectangle([cx0, cy0, cx0 + cw, cy0 + ch], radius=u(12), fill=CARD)
+        d.text((cx0 + u(14), cy0 + u(10)), 'CÚ VỪA ĐÁNH', font=fonts.tag, fill=MUTED + (255,))
+        if k < 0:
+            d.text((cx0 + u(14), cy0 + u(40)), 'Chưa có cú đánh', font=fonts.body, fill=MUTED + (255,))
+            return cx0, cy0, cw, ch
+        c = self.rshots[k]
+        p = (c['player'] or 1) - 1
+        fresh = f - c['frame'] < HIT_SHOW
+        _pill(d, (cx0 + u(14), cy0 + u(34)), f"P{p + 1}", fonts.tag, pcol(p, False) + (255,), fg=(15, 17, 21))
+        d.text((cx0 + u(54), cy0 + u(32)), TYPES_VI.get(c['type'], c['type']) +
+               (' · bật nhảy' if c.get('jump') else ''), font=fonts.title, fill=TEXT + (255,))
+        unsure = not c.get('speed_reliable', True)
+        big = ('~' if unsure else '') + f"{c['speed_kmh']:.0f}"
+        d.text((cx0 + u(14), cy0 + u(58)), big, font=fonts.big,
+               fill=(MUTED if unsure else (_rgb('#FFD54F') if fresh else TEXT)) + (255,))
+        bb = d.textbbox((0, 0), big, font=fonts.big)
+        sd = c.get('speed_sd_kmh')
+        d.text((cx0 + u(20) + bb[2], cy0 + u(76)), 'km/h' + (f'  ± {sd:.0f}' if sd is not None else ''),
+               font=fonts.small, fill=MUTED + (255,))
+        facts = [f"chạm {c['contact_height_m']:.2f} m", f"đỉnh {c['apex_m']:.1f} m",
+                 'chéo sân' if c['direction'] == 'cross' else 'thẳng']
+        if c.get('net_clearance_m') is not None:
+            facts.insert(2, f"qua lưới {c['net_clearance_m']:+.2f} m")
+        fx = cx0 + int(max(u(150), cw * 0.45))
+        for i, t in enumerate(facts[:4]):
+            d.text((fx, cy0 + u(34 + 19 * i)), t, font=fonts.small, fill=TEXT + (255,))
+        return cx0, cy0, cw, ch
+
+    def player_cards(self, d, f, card):
+        """One card per player under the shot card: running distance and shot count so far."""
+        L, fonts, u, Y0 = self.L, self.fonts, self.u, self.Y0
+        cx0, cy0, cw, ch = card
+        gy = cy0 + ch + u(10)
+        cols = max(1, self.n_players)
+        gw = (cw - u(8) * (cols - 1)) // cols
+        gh = min(Y0 + L.PH - gy - u(12), u(120))
+        for p in range(cols):
+            x = cx0 + p * (gw + u(8))
+            d.rounded_rectangle([x, gy, x + gw, gy + gh], radius=u(10), fill=CARD)
+            d.rounded_rectangle([x, gy, x + gw, gy + u(4)], radius=u(2), fill=pcol(p, False) + (255,))
+            d.text((x + u(10), gy + u(10)), f'P{p + 1}', font=fonts.title, fill=pcol(p, False) + (255,))
+            dm = 0.0
+            if p in self.dist:
+                fr_, cum = self.dist[p]
+                j = int(np.searchsorted(fr_, f, side='right')) - 1
+                dm = float(cum[j]) if j >= 0 else 0.0
+            nshots = sum(1 for c in self.rshots if c['frame'] <= f and (c['player'] or 0) - 1 == p)
+            d.text((x + u(10), gy + u(36)), f'{dm:.0f} m', font=fonts.label, fill=TEXT + (255,))
+            d.text((x + u(10), gy + u(56)), f'{nshots} cú', font=fonts.small, fill=MUTED + (255,))
+
+
 # ---------------------------------------------------------------- main
+
+def _running_distance(tracks, fps):
+    """player -> (frames, cumulative metres), ignoring foot-keypoint glitches (> 8 m/s)."""
+    dist = {}
+    for p, t in (tracks or {}).items():
+        step = np.where(t.speed < 8.0, t.speed * np.r_[0, np.diff(t.index)] / fps, 0)
+        dist[p] = (t.index.to_numpy(), np.cumsum(step))
+    return dist
+
 
 def render_video(video, out_path, cam, shuttle_df, landings, hits=(), players=None, k3d=None, kpts=None,
                  scores=None, shots=(), report=None, tracks=None, layout='horizontal', panel_position='below'):
@@ -315,192 +517,67 @@ def render_video(video, out_path, cam, shuttle_df, landings, hits=(), players=No
     layout='horizontal': video | panel side by side. layout='vertical': a 9:16 portrait frame for
     TikTok / Reels / Shorts: the video full width, the analysis (3D court + cards) above or below it.
     The video itself only gets skeletons, name tags, the shuttle and the flight line: all numbers are in
-    the panel."""
+    the panel. Returns the number of frames written."""
     cap = cv2.VideoCapture(video)
     fps = cap.get(cv2.CAP_PROP_FPS)
     w, h = int(cap.get(3)), int(cap.get(4))
-    sv = h / 576.0                                      # scale of what is drawn on the video
-    if layout == 'vertical':
-        OW = w // 2 * 2
-        OH = int(round(OW * 16 / 9)) // 2 * 2
-        PW, PH = OW, OH - h
-        video_y = 0 if panel_position == 'below' else PH
-        panel_x, panel_y = 0, (h if panel_position == 'below' else 0)
-        h3d = int(PH * 0.6) // 2 * 2
-        sp = PW / 560.0
-    else:
-        PW, PH = int(round(0.5 * w / 2)) * 2, h
-        OW, OH = w + PW, h
-        video_y, panel_x, panel_y = 0, w, 0
-        h3d = int(h * 0.56) // 2 * 2
-        sp = sv
-    fonts_v, fonts = Fonts(sv), Fonts(sp)
-    view = Court3D(cam, (PW, h3d), fps=fps, zoom=1.35 if layout == 'vertical' else 1.0)
+    L = _Layout(w, h, layout, panel_position)
+    sv = L.sv
+    fonts_v = Fonts(sv)
+    view = Court3D(cam, (L.PW, L.h3d), fps=fps, zoom=L.zoom)
 
     poses = build_poses(players, kpts, scores, k3d) if players is not None and scores is not None else {}
     paths = [positions(sh, fps) for sh in shots]
     fit_last = [sh['fit_last_frame'] for sh in shots]
-    cover = {}
+    cover = {}                                          # frame -> index of the shot whose path covers it
     for i, (fr, _) in enumerate(paths):
         for f_ in fr:
             cover[int(f_)] = i
     pos = {int(r.frame): (r.x, r.y) for r in shuttle_df.itertuples()}
     rshots = sorted((report or {}).get('shots', []), key=lambda c: c['frame'])
-    shot_frames = np.array([c['frame'] for c in rshots]) if rshots else np.array([], int)
     rally_start = np.array([int(round(r['start_s'] * fps)) for r in (report or {}).get('rallies', [])])
     contacts = [(hh['frame'], np.array(hh['contact']), tuple(hh['px'])) for hh in hits]
     landings = sorted(landings, key=lambda e: e['frame'])
-    dist = {}
-    for p, t in (tracks or {}).items():
-        step = np.where(t.speed < 8.0, t.speed * np.r_[0, np.diff(t.index)] / fps, 0)
-        dist[p] = (t.index.to_numpy(), np.cumsum(step))
-    n_players = len(poses) or len(dist)
-    gy_bg = np.linspace(0, 1, PH)[:, None, None]
-    panel_bg = (BG_TOP * (1 - gy_bg) + BG_BOTTOM * gy_bg).repeat(PW, 1).astype(np.uint8)
+    dist = _running_distance(tracks, fps)
+    panel_text = _Panel(L, Fonts(L.sp), fps, rshots, rally_start, dist, len(poses) or len(dist))
+    gy_bg = np.linspace(0, 1, L.PH)[:, None, None]
+    panel_bg = (BG_TOP * (1 - gy_bg) + BG_BOTTOM * gy_bg).repeat(L.PW, 1).astype(np.uint8)
 
-    out = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (OW, OH))
+    out = cv2.VideoWriter(out_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (L.OW, L.OH))
     f = 0
-    while True:
-        ok, img = cap.read()
-        if not ok:
-            break
+    for img in iter_frames(cap):
         left = draw_court(img, cam)
         people = list(poses_at(poses, f))
 
-        path = None                                     # fitted flight projected back
+        path = None
         if f in cover:
             fr, Pp = paths[cover[f]]
             n_fit = int(np.searchsorted(fr, fit_last[cover[f]], side='right'))
-            q = cam.project(Pp).astype(np.int32)
-            ov = left.copy()
-            cv2.polylines(ov, [q[:n_fit]], False, _bgr(PATH_HEX), 2, cv2.LINE_AA)
-            left = cv2.addWeighted(ov, 0.5, left, 0.5, 0)
-            for a in range(max(n_fit - 1, 0), len(q) - 1, 3):
-                cv2.circle(left, tuple(q[a]), 2, _bgr(PATH_HEX), -1, cv2.LINE_AA)
+            left = _draw_fitted_path(left, cam, Pp, n_fit)
             path = (fr, Pp, n_fit)
-
         for p, k2, _ in people:
             _draw_skeleton(left, k2, pcol(p), max(2, int(2.5 * sv)))
-
-        trail = [pos[k] for k in range(f - TRAIL, f + 1) if k in pos]
-        if len(trail) > 1:
-            left = _glow_polyline(left, trail, _bgr(SHUTTLE_HEX), core=max(2, int(2 * sv)), glow=int(9 * sv))
-        if f in pos:
-            c = tuple(map(int, pos[f]))
-            cv2.circle(left, c, int(9 * sv), _bgr(SHUTTLE_HEX), 2, cv2.LINE_AA)
-            cv2.circle(left, c, int(4 * sv), (255, 255, 255), -1, cv2.LINE_AA)
-
+        left = _draw_shuttle(left, pos, f, sv)
         live_hits = [(fr_, C, px) for fr_, C, px in contacts if 0 <= f - fr_ < HIT_SHOW]
-        for fr_, C, px in live_hits:                    # a short pulse at the contact, no text
-            age = f - fr_
-            rr = int((12 + 14 * min(age, 8) / 8) * sv)
-            a = _fade(age, HIT_SHOW)
-            ov = left.copy()
-            cv2.circle(ov, tuple(map(int, px)), rr, _bgr('#FFD54F'), 2, cv2.LINE_AA)
-            left = cv2.addWeighted(ov, a, left, 1 - a, 0)
-
-        for e in landings:                              # landing ring only for LANDING_S, fading
-            age = (f - e['frame']) / fps
-            if not 0 <= age < LANDING_S:
-                continue
-            X, Y = e['court']
-            ring = cam.project([[X + 0.25 * np.cos(t), Y + 0.25 * np.sin(t), 0] for t in np.linspace(0, 2 * np.pi, 24)])
-            a = 1.0 - max(0.0, age - LANDING_S * 0.6) / (LANDING_S * 0.4)
-            ov = left.copy()
-            cv2.polylines(ov, [ring.astype(np.int32)], True, _bgr(IN_HEX if e['in'] else OUT_HEX), 2, cv2.LINE_AA)
-            left = cv2.addWeighted(ov, a, left, 1 - a, 0)
+        left = _draw_hit_pulses(left, live_hits, f, sv)
+        left = _draw_landing_rings(left, cam, landings, f, fps)
 
         panel3d, ball, marks = view.render(f, [(p, k3) for p, _, k3 in people], path,
                                            [C for _, C, _ in live_hits], landings)
         panel = panel_bg.copy()
-        panel[:h3d] = panel3d
-        frame = np.zeros((OH, OW, 3), np.uint8)
-        frame[video_y:video_y + h, :w] = left
-        frame[panel_y:panel_y + PH, panel_x:panel_x + PW] = panel
+        panel[:L.h3d] = panel3d
+        frame = np.zeros((L.OH, L.OW, 3), np.uint8)
+        frame[L.video_y:L.video_y + h, :w] = left
+        frame[L.panel_y:L.panel_y + L.PH, L.panel_x:L.panel_x + L.PW] = panel
 
         pil = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)).convert('RGBA')
         layer = Image.new('RGBA', pil.size, (0, 0, 0, 0))
         d = ImageDraw.Draw(layer)
-
-        for p, k2, _ in people:                         # only small name tags on the video
-            if not np.isnan(k2[0, 0]):
-                hx, hy = k2[0]
-                txt = f'P{p + 1}'
-                bb = d.textbbox((0, 0), txt, font=fonts_v.tag)
-                _pill(d, (int(hx - (bb[2] - bb[0]) / 2 - 8), int(video_y + hy - 34 * sv)), txt, fonts_v.tag,
-                      pcol(p, False) + (230,), fg=(15, 17, 21))
-
-        X0, Y0 = panel_x, panel_y
-        u = lambda v: int(v * sp)
-        # panel header: rally / shot count and time (moved off the video)
-        ri = int(np.searchsorted(rally_start, f, side='right')) if len(rally_start) else 0
-        n_shot = sum(1 for c in rshots if c['rally'] == ri and c['frame'] <= f) if ri else 0
-        d.text((X0 + u(14), Y0 + u(12)), 'SÂN 3D', font=fonts.tag, fill=MUTED + (255,))
-        status = f"PHA {ri}  ·  CÚ {n_shot}" if ri else 'KHỞI ĐỘNG'
-        tt = f'{int(f / fps // 60):02d}:{f / fps % 60:04.1f}'
-        bb = d.textbbox((0, 0), status, font=fonts.label)
-        _pill(d, (X0 + PW - u(14) - (bb[2] - bb[0]) - u(18), Y0 + u(10)), status, fonts.label, (13, 17, 23, 210),
-              fg=TEXT, r=u(8))
-        bb2 = d.textbbox((0, 0), tt, font=fonts.small)
-        _pill(d, (X0 + PW - u(14) - (bb2[2] - bb2[0]) - u(18), Y0 + u(42)), tt, fonts.small, (13, 17, 23, 170),
-              fg=MUTED, r=u(6))
-        if ball is not None:
-            (bx_, by_), bz = ball
-            _pill(d, (int(X0 + bx_ + u(12)), int(Y0 + by_ - u(12))), f'{bz:.1f} m', fonts.small,
-                  (255, 255, 255, 225), fg=(15, 17, 21))
-        for (mx, my), inn, a_ in marks:
-            d.text((X0 + mx + u(8), Y0 + my - u(8)), 'IN' if inn else 'OUT', font=fonts.tag,
-                   fill=_rgb(IN_HEX if inn else OUT_HEX) + (int(255 * a_),))
-
-        # last shot card
-        k = int(np.searchsorted(shot_frames, f, side='right')) - 1
-        cx0, cy0, cw = X0 + u(12), Y0 + h3d + u(8), PW - u(24)
-        ch = u(118)
-        d.rounded_rectangle([cx0, cy0, cx0 + cw, cy0 + ch], radius=u(12), fill=CARD)
-        d.text((cx0 + u(14), cy0 + u(10)), 'CÚ VỪA ĐÁNH', font=fonts.tag, fill=MUTED + (255,))
-        if k >= 0:
-            c = rshots[k]
-            p = (c['player'] or 1) - 1
-            fresh = f - c['frame'] < HIT_SHOW
-            _pill(d, (cx0 + u(14), cy0 + u(34)), f"P{p + 1}", fonts.tag, pcol(p, False) + (255,), fg=(15, 17, 21))
-            d.text((cx0 + u(54), cy0 + u(32)), TYPES_VI.get(c['type'], c['type']) +
-                   (' · bật nhảy' if c.get('jump') else ''), font=fonts.title, fill=TEXT + (255,))
-            unsure = not c.get('speed_reliable', True)
-            big = ('~' if unsure else '') + f"{c['speed_kmh']:.0f}"
-            d.text((cx0 + u(14), cy0 + u(58)), big, font=fonts.big,
-                   fill=(MUTED if unsure else (_rgb('#FFD54F') if fresh else TEXT)) + (255,))
-            bb = d.textbbox((0, 0), big, font=fonts.big)
-            sd = c.get('speed_sd_kmh')
-            d.text((cx0 + u(20) + bb[2], cy0 + u(76)), 'km/h' + (f'  ± {sd:.0f}' if sd is not None else ''),
-                   font=fonts.small, fill=MUTED + (255,))
-            facts = [f"chạm {c['contact_height_m']:.2f} m", f"đỉnh {c['apex_m']:.1f} m",
-                     'chéo sân' if c['direction'] == 'cross' else 'thẳng']
-            if c.get('net_clearance_m') is not None:
-                facts.insert(2, f"qua lưới {c['net_clearance_m']:+.2f} m")
-            fx = cx0 + int(max(u(150), cw * 0.45))
-            for i, t in enumerate(facts[:4]):
-                d.text((fx, cy0 + u(34 + 19 * i)), t, font=fonts.small, fill=TEXT + (255,))
-        else:
-            d.text((cx0 + u(14), cy0 + u(40)), 'Chưa có cú đánh', font=fonts.body, fill=MUTED + (255,))
-
-        # player cards
-        gy = cy0 + ch + u(10)
-        cols = max(1, n_players)
-        gw = (cw - u(8) * (cols - 1)) // cols
-        gh = min(Y0 + PH - gy - u(12), u(120))
-        for p in range(cols):
-            x = cx0 + p * (gw + u(8))
-            d.rounded_rectangle([x, gy, x + gw, gy + gh], radius=u(10), fill=CARD)
-            d.rounded_rectangle([x, gy, x + gw, gy + u(4)], radius=u(2), fill=pcol(p, False) + (255,))
-            d.text((x + u(10), gy + u(10)), f'P{p + 1}', font=fonts.title, fill=pcol(p, False) + (255,))
-            dm = 0.0
-            if p in dist:
-                fr_, cum = dist[p]
-                j = int(np.searchsorted(fr_, f, side='right')) - 1
-                dm = float(cum[j]) if j >= 0 else 0.0
-            nshots = sum(1 for c in rshots if c['frame'] <= f and (c['player'] or 0) - 1 == p)
-            d.text((x + u(10), gy + u(36)), f'{dm:.0f} m', font=fonts.label, fill=TEXT + (255,))
-            d.text((x + u(10), gy + u(56)), f'{nshots} cú', font=fonts.small, fill=MUTED + (255,))
+        _draw_name_tags(d, people, fonts_v, L.video_y, sv)
+        panel_text.header(d, f)
+        panel_text.scene_labels(d, ball, marks)
+        card = panel_text.shot_card(d, f)
+        panel_text.player_cards(d, f, card)
 
         out_img = Image.alpha_composite(pil, layer).convert('RGB')
         out.write(cv2.cvtColor(np.asarray(out_img), cv2.COLOR_RGB2BGR))

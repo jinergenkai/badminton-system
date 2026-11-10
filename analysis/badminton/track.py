@@ -14,6 +14,7 @@ import pandas as pd
 
 
 def build_tracks(cands, volume_mask, max_gap=5, gate=30, gate_per_frame=18):
+    """Steps 1-2: gate candidates by the court volume, link them into tracks -> [(frames, pixels)]."""
     h, w = volume_mask.shape
     c = cands.copy()
     xi, yi = c.x.clip(0, w - 1).astype(int), c.y.clip(0, h - 1).astype(int)

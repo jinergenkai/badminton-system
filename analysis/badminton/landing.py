@@ -10,9 +10,11 @@ import numpy as np
 
 from .background import white_mask
 from .court import W, HALF, is_in
+from .video import iter_frames
 
 
 def floor_roi(cam, bg, floor_top, ignore, margin=1.0):
+    """Image mask of the floor around our court where a landed shuttle is looked for."""
     roi = cam.region_mask(np.linspace(-margin, W + margin, 30), np.linspace(-HALF - margin, HALF + margin, 60), [0])
     roi[:floor_top] = 0
     for x0, y0, x1, y1 in ignore:
@@ -31,12 +33,8 @@ def nothing_above(stat, changed, max_busy=0.25):
 
 def still_blobs(video, bg, roi, step=2, min_still_s=0.5, fps=30):
     """(first_frame, last_frame, x, y, area) of small new white blobs that stay put."""
-    cap = cv2.VideoCapture(video)
-    alive, done, f = [], [], 0
-    while True:
-        ok, img = cap.read()
-        if not ok:
-            break
+    alive, done = [], []
+    for f, img in enumerate(iter_frames(cv2.VideoCapture(video))):
         if f % step == 0:
             changed = (cv2.absdiff(img, bg).max(axis=2) > 35).astype(np.uint8) * 255
             m = cv2.morphologyEx(white_mask(img, 70) & roi & changed, cv2.MORPH_OPEN, np.ones((2, 2), np.uint8))
@@ -55,12 +53,12 @@ def still_blobs(video, bg, roi, step=2, min_still_s=0.5, fps=30):
                     nxt.append(np.array([f, f, *p, area]))
             done += [b for k, b in enumerate(alive) if k not in used]
             alive = nxt
-        f += 1
     done += alive
     return [b for b in done if (b[1] - b[0]) / fps >= min_still_s]
 
 
 def find_landings(ends, blobs, cam, max_dist=45, window=(-5, 20)):
+    """Landing events: a falling flight end (track.falling_ends) with a still blob next to it."""
     events = []
     for e in ends:
         near = [b for b in blobs if window[0] <= b[0] - e[0] <= window[1] and np.hypot(*(b[2:4] - e[1:])) < max_dist]
@@ -70,4 +68,17 @@ def find_landings(ends, blobs, cam, max_dist=45, window=(-5, 20)):
         X, Y = cam.to_floor(b[2:4])
         events.append({'frame': int(b[0]), 'px': [round(float(b[2]), 1), round(float(b[3]), 1)],
                        'court': [round(float(X), 2), round(float(Y), 2)], 'in': bool(is_in(X, Y))})
+    return events
+
+
+def add_physics_landings(events, shots, cam, fps, min_sep=45):
+    """Append the predicted landings of well-fitted final shots that no seen landing (within min_sep
+    frames) already explains. Modifies events in place."""
+    for s in shots:
+        if s['good'] and s.get('landing') and not any(abs(e['frame'] - s['landing']['frame']) < min_sep
+                                                      for e in events):
+            L = s['landing']
+            events.append({'frame': L['frame'], 'px': cam.project([[*L['court'], 0]])[0].round(1).tolist(),
+                           'court': L['court'], 'in': L['in'], 'source': 'physics fit',
+                           'extrapolated_s': round((L['frame'] - s['fit_last_frame']) / fps, 2)})
     return events

@@ -14,6 +14,7 @@ from .court import court_lines, W, HALF
 
 
 def line_distance_map(bg, floor_top, ignore):
+    """Distance (px) to the nearest thin white line on the floor, for the chamfer cost."""
     white = white_mask(bg)
     white[:floor_top] = 0
     for x0, y0, x1, y1 in ignore:
@@ -24,6 +25,7 @@ def line_distance_map(bg, floor_top, ignore):
 
 
 def fit(bg, seeds, floor_top=0, ignore=()):
+    """Calibration dict (H, K, rvec, tvec, camera_m, costs, size) from the background and the seeds."""
     h, w = bg.shape[:2]
     dist = line_distance_map(bg, floor_top, ignore)
     court_pts = np.float32([s[0] for s in seeds])
@@ -93,6 +95,7 @@ class Camera:
         return cv2.perspectiveTransform(np.float64([[px]]), self.Hi)[0, 0]
 
     def ray(self, px):
+        """Unit direction (court frame) of the view ray through pixel px."""
         d = self.R.T @ np.linalg.inv(self.K) @ np.array([px[0], px[1], 1.0])
         return d / np.linalg.norm(d)
 

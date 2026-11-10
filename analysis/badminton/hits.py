@@ -8,11 +8,12 @@ Rule of the game: the same side cannot hit twice in a row, so near-duplicates ar
 """
 import numpy as np
 
-from .players import L_ANK, L_WR, R_ANK, R_WR
+from .keypoints import L_ANK, L_WR, NOSE, R_ANK, R_WR
 from .track import turn_points
 
 
 def _candidates(shuttle):
+    """(frame, pixel, kind) moments where a hit may be: track starts, track ends, sharp turns."""
     out = []
     for _, t in shuttle[shuttle.detected].groupby('track'):
         out.append((int(t.frame.iloc[0]), t[['x', 'y']].to_numpy()[0], 'start'))
@@ -33,7 +34,7 @@ def best_contact(cam, f, px, rows, by_frame, k3d, window=3, max_dist=1.0, min_z=
             if side is not None and rows.side[r] != side:
                 continue
             # body height in pixels, to judge "near the racket" on the image at any depth
-            head, la, ra = cam.project(k3d[r, [0, L_ANK, R_ANK]])
+            head, la, ra = cam.project(k3d[r, [NOSE, L_ANK, R_ANK]])
             body_px = max(np.linalg.norm(head - (la + ra) / 2), 20.0)
             for name, j in (('L', L_WR), ('R', R_WR)):
                 Wp = k3d[r, j] - cam.pos
@@ -60,6 +61,7 @@ def best_contact(cam, f, px, rows, by_frame, k3d, window=3, max_dist=1.0, min_z=
 
 
 def index_players(players):
+    """(players with a 0..n-1 index, frame -> row indices of the detections allowed to hit)."""
     rows = players.reset_index(drop=True)
     keep = rows.index.to_numpy()
     if 'player' in rows:
@@ -113,6 +115,8 @@ def _choose_sides(moments, fps, switch_cost, rally_gap_s):
 
 def find_hits(cam, shuttle, players, k3d, window=3, max_dist=1.0, merge=8, min_gap_same_side=20, min_z=0.25,
               fps=30.0, switch_cost=0.8, rally_gap_s=3.0):
+    """Hits in frame order: dicts with frame, pid, side, hand, player, px, wrist_dist, wrist_z, contact,
+    kind, and 'alts' (the best candidate of the other side, for the flight fit to arbitrate)."""
     rows, by_frame = index_players(players)
     found = []
     for f, px, kind in _candidates(shuttle):

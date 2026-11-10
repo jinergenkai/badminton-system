@@ -20,16 +20,16 @@ import numpy as np
 import pandas as pd
 
 from .court import HALF, NET_CENTRE, SHORT, W
-from .flight import shot_time, simulate
-from .players import L_ANK, L_HIP, R_ANK, R_HIP
+from .flight import net_crossing, shot_time, simulate
+from .keypoints import L_ANK, L_HIP, L_KNEE, L_SH, L_WR, NOSE, R_ANK, R_HIP, R_KNEE, R_SH, R_WR
 
-L_KNEE, R_KNEE = 13, 14
 RALLY_GAP_S = 3.0
 TYPES_VI = {'serve': 'giao cầu', 'smash': 'đập', 'clear': 'phông cao', 'drop': 'bỏ nhỏ (trên cao)',
             'lift': 'lốp', 'net': 'cầu lưới', 'drive': 'tạt', 'push': 'đẩy / chặn'}
 
 
 def zone(y_abs):
+    """front / mid / back of a half, from |Y| (metres from the net)."""
     return 'front' if y_abs < SHORT + 0.3 else ('mid' if y_abs < HALF - 2.0 else 'back')
 
 
@@ -55,6 +55,7 @@ def player_tracks(players, fps):
 
 
 def movement_stats(t, fps):
+    """Distance, mean / top speed, time per zone and base position of one player track."""
     ok = t.speed < 8.0                                   # faster than any human: a foot-keypoint glitch
     gap = np.r_[0, np.diff(t.index)]                    # frames since the previous sample (speed is 0 past 0.25 s)
     dist = float((t.speed * gap / fps)[ok].sum())
@@ -70,6 +71,7 @@ def movement_stats(t, fps):
 
 
 def heatmap(t, cell=0.5):
+    """Share of the time per floor cell (court + 1 m sides / 2 m ends), as nested lists [x][y]."""
     nx, ny = int(np.ceil((W + 2) / cell)), int(np.ceil((2 * HALF + 4) / cell))
     H, _, _ = np.histogram2d(t.X, t.Y, bins=[nx, ny], range=[[-1, W + 1], [-HALF - 2, HALF + 2]])
     return (H / max(H.sum(), 1)).round(4).tolist()
@@ -78,6 +80,7 @@ def heatmap(t, cell=0.5):
 # ---------------------------------------------------------------- players: posture
 
 def _angle(a, b, c):
+    """Angle abc in degrees."""
     u, v = a - b, c - b
     return float(np.degrees(np.arccos(np.clip(u @ v / (np.linalg.norm(u) * np.linalg.norm(v) + 1e-9), -1, 1))))
 
@@ -105,9 +108,10 @@ def jumped(t, f, players, kpts2d, scores, fps):
             return None
         det = int(players.det[int(t.row[fr])])
         k, sc = kpts2d[det], scores[det]
-        if min(sc[L_ANK], sc[R_ANK], sc[L_HIP], sc[R_HIP], sc[0]) < 0.3:
+        if min(sc[L_ANK], sc[R_ANK], sc[L_HIP], sc[R_HIP], sc[NOSE]) < 0.3:
             return None
-        return (k[L_ANK, 1] + k[R_ANK, 1]) / 2, (k[L_HIP, 1] + k[R_HIP, 1]) / 2, abs((k[L_ANK, 1] + k[R_ANK, 1]) / 2 - k[0, 1])
+        ankle_y = (k[L_ANK, 1] + k[R_ANK, 1]) / 2
+        return ankle_y, (k[L_HIP, 1] + k[R_HIP, 1]) / 2, abs(ankle_y - k[NOSE, 1])
     now = pts(f)
     before = [pts(fr) for fr in range(f - int(0.6 * fps), f - int(0.25 * fps))]
     before = [b for b in before if b is not None]
@@ -118,6 +122,8 @@ def jumped(t, f, players, kpts2d, scores, fps):
 
 
 def classify(s, first_of_rally, fps):
+    """Shot type and its 3D facts (speeds, launch angle, contact / apex height, net clearance, direction,
+    zone it went to) from a fitted shot."""
     p0, v0 = np.array(s['p0']), np.array(s['v0'])
     speed = float(np.linalg.norm(v0) * 3.6)
     elev = float(np.degrees(np.arcsin(v0[2] / max(np.linalg.norm(v0), 1e-6))))
@@ -129,14 +135,9 @@ def classify(s, first_of_rally, fps):
     else:
         end = P[-1]
     apex = float(P[:, 2].max())
-    net = None
-    cross = np.nonzero(np.sign(P[1:, 1]) != np.sign(P[:-1, 1]))[0]
-    if len(cross):
-        j = cross[0]
-        a = P[j, 1] / (P[j, 1] - P[j + 1, 1])
-        net = float(P[j, 2] + a * (P[j + 1, 2] - P[j, 2]) - NET_CENTRE)
+    cross = net_crossing(P)
+    net = None if cross is None else float(cross[1] - NET_CENTRE)
     hz = float(np.hypot(v0[0], v0[1]))
-    toward = np.sign(-p0[1]) if abs(p0[1]) > 0.05 else 1.0
     angle = float(np.degrees(np.arctan2(abs(v0[0]), max(abs(v0[1]), 1e-6)))) if hz > 0.5 else 0.0
     mean_speed = float(np.mean(np.linalg.norm(np.diff(P, axis=0), axis=1)) / (t[1] - t[0]) * 3.6)
     z0, y0, yend = p0[2], abs(p0[1]), abs(end[1])
@@ -173,12 +174,12 @@ def stroke_side(k2, s2, hand):
     side of its own shoulder (or beyond) = forehand, crossed over the body = backhand. Done in the
     image, where the skeleton is reliable; in 3D the contact's depth error (tens of cm along the view
     ray, i.e. across the court for a corner camera) would decide the answer."""
-    if hand not in ('L', 'R') or min(s2[5], s2[6]) < 0.3:
+    if hand not in ('L', 'R') or min(s2[L_SH], s2[R_SH]) < 0.3:
         return None
-    wr = 9 if hand == 'L' else 10
+    wr = L_WR if hand == 'L' else R_WR
     if s2[wr] < 0.3:
         return None
-    a, b = k2[5], k2[6]                                  # left, right shoulder
+    a, b = k2[L_SH], k2[R_SH]
     ab = b - a
     if ab @ ab < 4:                                      # shoulders overlap: side-on to the camera
         return None
@@ -189,36 +190,45 @@ def stroke_side(k2, s2, hand):
 
 # ---------------------------------------------------------------- main
 
-def analyse(shots, hits, players, k3d, kpts2d, scores, landings, fps):
-    # < 10 km/h is not a stroke (a shuttle tossed to the server, a degenerate fit)
-    good = sorted([s for s in shots if s['good'] and s['speed_kmh'] >= 10], key=lambda s: s['hit_frame'])
-    floor_frames = sorted(e['frame'] for e in landings)
-    tracks = player_tracks(players, fps)
-    n_players = len(tracks)
-    height = {p: float(players.nose_z[players.player == p].quantile(0.9) + 0.12) for p in tracks}
+def _det_at(t, f, players):
+    """Pose detection index of tracked player t at frame f (f must be in t.index)."""
+    return int(players.det[int(t.row[f])])
 
-    def who(frame, side, near_point=None):
-        """Player of `side` at `frame`; the one closest to near_point when two."""
-        best, bd = None, 1e9
-        for p, t in tracks.items():
-            if frame not in t.index or t.side[frame] != side:
-                continue
-            d = 0 if near_point is None else np.hypot(t.X[frame] - near_point[0], t.Y[frame] - near_point[1])
-            if d < bd:
-                best, bd = p, d
-        return best
 
-    def same_track(s):
-        """Identity of the hitter's own floor track around the hit, when the hit frame itself is not
-        identified (e.g. during a jump the feet leave the floor and the position is off)."""
-        if s.get('pid', -1) is None or s.get('pid', -1) < 0:
-            return None
-        near = players[(players.pid == s['pid']) & (players.player >= 0)
-                       & ((players.frame - s['hit_frame']).abs() <= 15)]
-        return int(near.player.mode()[0]) if len(near) else None
+def _who(tracks, frame, side, near_point=None):
+    """Player of `side` at `frame`; the one closest to near_point when two."""
+    best, bd = None, 1e9
+    for p, t in tracks.items():
+        if frame not in t.index or t.side[frame] != side:
+            continue
+        d = 0 if near_point is None else np.hypot(t.X[frame] - near_point[0], t.Y[frame] - near_point[1])
+        if d < bd:
+            best, bd = p, d
+    return best
 
-    # racket hand: at overhead contacts the racket arm is the raised one (higher wrist on the image).
-    # Per-hit "closest wrist to the view ray" is not usable: both wrists are often near the ray.
+
+def _same_track(s, players):
+    """Identity of the hitter's own floor track around the hit, when the hit frame itself is not
+    identified (e.g. during a jump the feet leave the floor and the position is off)."""
+    if s.get('pid', -1) is None or s.get('pid', -1) < 0:
+        return None
+    near = players[(players.pid == s['pid']) & (players.player >= 0)
+                   & ((players.frame - s['hit_frame']).abs() <= 15)]
+    return int(near.player.mode()[0]) if len(near) else None
+
+
+def _hitter(s, tracks, players):
+    p = s.get('player', -1)
+    if p is None or p < 0:
+        p = _same_track(s, players)               # `is None`, not `or`: player 0 (P1) is a valid answer
+        if p is None:
+            p = _who(tracks, s['hit_frame'], s['side'], s['p0'])
+    return p
+
+
+def _dominant_hands(shots, tracks, players, kpts2d, scores):
+    """Racket hand per player: at overhead contacts the racket arm is the raised one (higher wrist on the
+    image). Per-hit "closest wrist to the view ray" is not usable: both wrists are often near the ray."""
     hand = {}
     for s in shots:
         p = s.get('player', -1)
@@ -226,14 +236,15 @@ def analyse(shots, hits, players, k3d, kpts2d, scores, landings, fps):
             continue
         if s['hit_frame'] not in tracks[p].index:
             continue
-        det = int(players.det[int(tracks[p].row[s['hit_frame']])])
+        det = _det_at(tracks[p], s['hit_frame'], players)
         k2, s2 = kpts2d[det], scores[det]
-        if min(s2[9], s2[10]) > 0.3 and abs(k2[9, 1] - k2[10, 1]) > 15:
-            hand.setdefault(p, []).append('L' if k2[9, 1] < k2[10, 1] else 'R')
-    dominant = {p: max(set(v), key=v.count) for p, v in hand.items()}
+        if min(s2[L_WR], s2[R_WR]) > 0.3 and abs(k2[L_WR, 1] - k2[R_WR, 1]) > 15:
+            hand.setdefault(p, []).append('L' if k2[L_WR, 1] < k2[R_WR, 1] else 'R')
+    return {p: max(set(v), key=v.count) for p, v in hand.items()}
 
-    # rallies from the good shots
-    # a rally ends when the shuttle lands (landing step) or play pauses for RALLY_GAP_S
+
+def _split_rallies(good, floor_frames, fps):
+    """A rally ends when the shuttle lands (landing step) or play pauses for RALLY_GAP_S."""
     rallies, cur = [], []
     for s in good:
         landed = cur and any(cur[-1]['hit_frame'] < f <= s['hit_frame'] for f in floor_frames)
@@ -243,107 +254,132 @@ def analyse(shots, hits, players, k3d, kpts2d, scores, landings, fps):
         cur.append(s)
     if cur:
         rallies.append(cur)
+    return rallies
 
-    shot_rows = []
-    for ri, r in enumerate(rallies):
-        for i, s in enumerate(r):
-            p = s.get('player', -1)
-            if p is None or p < 0:
-                p = same_track(s)                   # `is None`, not `or`: player 0 (P1) is a valid answer
-                if p is None:
-                    p = who(s['hit_frame'], s['side'], s['p0'])
-            c = classify(s, i == 0, fps)
-            side_2d = None
-            if p is not None and s['hit_frame'] in tracks[p].index:
-                det = int(players.det[int(tracks[p].row[s['hit_frame']])])
-                side_2d = stroke_side(kpts2d[det], scores[det], dominant.get(p, s.get('hand')))
-            hgt = height.get(p, 1.7)
-            z0 = s['p0'][2]
-            sd = s.get('speed_sd_kmh')
-            c.update({'speed_sd_kmh': sd,
-                      # launch speed is well determined (< 10 %) except for shots along the line of sight
-                      'speed_reliable': bool(sd is not None and sd < 0.10 * max(c['speed_kmh'], 1)),
-                      'rally': ri + 1, 'shot_in_rally': i + 1, 'frame': s['hit_frame'],
-                      'time_s': round(s['hit_frame'] / fps, 2), 'player': None if p is None else int(p) + 1,
-                      'side': s['side'], 'confidence': s.get('confidence', 'high'),
-                      'stroke_height': 'overhead' if z0 > 0.85 * hgt else ('side' if z0 > 0.5 * hgt else 'underarm'),
-                      'stroke_side': side_2d,
-                      'jump': bool(p is not None and s['p0'][2] > 1.7 and jumped(tracks[p], s['hit_frame'], players,
-                                                                                  kpts2d, scores, fps)),
-                      'landing_in': s['landing']['in'] if s.get('landing') else None})
-            shot_rows.append(c)
 
-    rally_rows = []
-    for ri, r in enumerate(rallies):
-        last = r[-1]
-        winner = None
-        if last.get('landing'):
-            hitter_side = last['side']
-            winner = hitter_side if last['landing']['in'] else ('far' if hitter_side == 'near' else 'near')
-        rally_rows.append({'rally': ri + 1, 'start_s': round(r[0]['hit_frame'] / fps, 1),
-                           'duration_s': round((last['end_frame'] - r[0]['hit_frame']) / fps, 1),
-                           'shots': len(r), 'winner_side': winner})
+def _shot_row(s, ri, i, tracks, players, kpts2d, scores, height, dominant, fps):
+    """Report row of shot i of rally ri: classify() plus who hit it, how, and how reliable the speed is."""
+    p = _hitter(s, tracks, players)
+    c = classify(s, i == 0, fps)
+    side_2d = None
+    if p is not None and s['hit_frame'] in tracks[p].index:
+        det = _det_at(tracks[p], s['hit_frame'], players)
+        side_2d = stroke_side(kpts2d[det], scores[det], dominant.get(p, s.get('hand')))
+    hgt = height.get(p, 1.7)
+    z0 = s['p0'][2]
+    sd = s.get('speed_sd_kmh')
+    c.update({'speed_sd_kmh': sd,
+              # launch speed is well determined (< 10 %) except for shots along the line of sight
+              'speed_reliable': bool(sd is not None and sd < 0.10 * max(c['speed_kmh'], 1)),
+              'rally': ri + 1, 'shot_in_rally': i + 1, 'frame': s['hit_frame'],
+              'time_s': round(s['hit_frame'] / fps, 2), 'player': None if p is None else int(p) + 1,
+              'side': s['side'], 'confidence': s.get('confidence', 'high'),
+              'stroke_height': 'overhead' if z0 > 0.85 * hgt else ('side' if z0 > 0.5 * hgt else 'underarm'),
+              'stroke_side': side_2d,
+              'jump': bool(p is not None and s['p0'][2] > 1.7 and jumped(tracks[p], s['hit_frame'], players,
+                                                                          kpts2d, scores, fps)),
+              'landing_in': s['landing']['in'] if s.get('landing') else None})
+    return c
 
-    # per player
-    hit_frames = [(s['hit_frame'], s['side']) for s in good]
-    per_player = {}
-    for p, t in tracks.items():
-        side = t.side.mode()[0]
-        st = movement_stats(t, fps)
-        st.update({'player': int(p) + 1, 'side': side, 'height_m': round(height[p], 2),
-                   'dominant_hand': dominant.get(p)})
-        # readiness, reaction at the opponent's contacts
-        widths, knees, ready, reacts = [], [], 0, []
-        for f, s_side in hit_frames:
-            if s_side == side or f not in t.index:
-                continue
-            w, kn, _ = posture(int(t.row[f]), players, k3d, kpts2d, scores)
-            if np.isnan(kn):
-                continue
-            widths.append(w)
-            knees.append(kn)
-            ready += (w >= 0.22 * height[p]) and (kn <= 165)
-            # reaction: only when (nearly) standing at the contact, else the push-off already happened
-            if t.speed.get(f, 9) < 0.8:
-                after = t.loc[f:f + int(fps)]
-                go = after.index[after.speed > 1.5]
-                if len(go):
-                    reacts.append((go[0] - f) / fps)
-        n = len(widths)
-        st['at_opponent_contact'] = {
-            'samples': n,
+
+def _rally_row(ri, r, fps):
+    last = r[-1]
+    winner = None
+    if last.get('landing'):
+        hitter_side = last['side']
+        winner = hitter_side if last['landing']['in'] else ('far' if hitter_side == 'near' else 'near')
+    return {'rally': ri + 1, 'start_s': round(r[0]['hit_frame'] / fps, 1),
+            'duration_s': round((last['end_frame'] - r[0]['hit_frame']) / fps, 1),
+            'shots': len(r), 'winner_side': winner}
+
+
+def _at_opponent_contact(t, side, hgt, hit_frames, players, k3d, kpts2d, scores, fps):
+    """Readiness (stance, knees) and reaction time at the opponent's contacts."""
+    widths, knees, ready, reacts = [], [], 0, []
+    for f, s_side in hit_frames:
+        if s_side == side or f not in t.index:
+            continue
+        w, kn, _ = posture(int(t.row[f]), players, k3d, kpts2d, scores)
+        if np.isnan(kn):
+            continue
+        widths.append(w)
+        knees.append(kn)
+        ready += (w >= 0.22 * hgt) and (kn <= 165)
+        # reaction: only when (nearly) standing at the contact, else the push-off already happened
+        if t.speed.get(f, 9) < 0.8:
+            after = t.loc[f:f + int(fps)]
+            go = after.index[after.speed > 1.5]
+            if len(go):
+                reacts.append((go[0] - f) / fps)
+    n = len(widths)
+    return {'samples': n,
             'stance_width_m': round(float(np.median(widths)), 2) if n else None,
             'knee_angle_deg': round(float(np.median(knees)), 1) if n else None,
             'ready_stance_pct': round(100 * ready / n, 1) if n else None,
             'reaction_s': round(float(np.median(reacts)), 2) if reacts else None}
-        # recovery after own shot: time to come back within 1 m of the base position
-        base = np.array(st['base_position'])
-        recs = []
-        for s in good:
-            if s.get('player', -1) != p or s['hit_frame'] not in t.index:
-                continue
-            seg = t.loc[s['hit_frame']:s['hit_frame'] + int(2 * fps)]
-            back = seg.index[np.hypot(seg.X - base[0], seg.Y - base[1]) < 1.0]
-            far = np.hypot(t.X[s['hit_frame']] - base[0], t.Y[s['hit_frame']] - base[1]) >= 1.0
-            if far and len(back):
-                recs.append((back[0] - s['hit_frame']) / fps)
-        st['recovery_s'] = round(float(np.median(recs)), 2) if recs else None
-        mine = [c for c in shot_rows if c['player'] == int(p) + 1]
-        st['shots'] = len(mine)
-        st['shot_types'] = pd.Series([c['type'] for c in mine]).value_counts().to_dict() if mine else {}
-        allsm = [c for c in mine if c['type'] == 'smash']
-        smash = [c['speed_kmh'] for c in allsm if c['speed_reliable']]
-        st['smash_kmh'] = {'count': len(allsm), 'measured': len(smash),
-                           'mean': round(float(np.mean(smash)), 1) if smash else None,
-                           'max': round(float(np.max(smash)), 1) if smash else None}
-        st['jump_shots'] = sum(c['jump'] for c in mine)
-        st['contact_height_m'] = round(float(np.median([c['contact_height_m'] for c in mine])), 2) if mine else None
-        st['strokes'] = pd.Series([c['stroke_side'] for c in mine if c['stroke_side']]).value_counts().to_dict() if mine else {}
-        st['heatmap_0.5m'] = heatmap(t)
-        per_player[f'P{int(p) + 1}'] = st
 
+
+def _recovery_s(p, t, good, base, fps):
+    """Median time to come back within 1 m of the base position after the player's own shots."""
+    recs = []
+    for s in good:
+        if s.get('player', -1) != p or s['hit_frame'] not in t.index:
+            continue
+        seg = t.loc[s['hit_frame']:s['hit_frame'] + int(2 * fps)]
+        back = seg.index[np.hypot(seg.X - base[0], seg.Y - base[1]) < 1.0]
+        far = np.hypot(t.X[s['hit_frame']] - base[0], t.Y[s['hit_frame']] - base[1]) >= 1.0
+        if far and len(back):
+            recs.append((back[0] - s['hit_frame']) / fps)
+    return round(float(np.median(recs)), 2) if recs else None
+
+
+def _shot_summary(mine):
+    """Per-player shot statistics from that player's report rows."""
+    allsm = [c for c in mine if c['type'] == 'smash']
+    smash = [c['speed_kmh'] for c in allsm if c['speed_reliable']]
+    return {'shots': len(mine),
+            'shot_types': pd.Series([c['type'] for c in mine]).value_counts().to_dict() if mine else {},
+            'smash_kmh': {'count': len(allsm), 'measured': len(smash),
+                          'mean': round(float(np.mean(smash)), 1) if smash else None,
+                          'max': round(float(np.max(smash)), 1) if smash else None},
+            'jump_shots': sum(c['jump'] for c in mine),
+            'contact_height_m': round(float(np.median([c['contact_height_m'] for c in mine])), 2) if mine else None,
+            'strokes': pd.Series([c['stroke_side'] for c in mine if c['stroke_side']]).value_counts().to_dict()
+            if mine else {}}
+
+
+def _player_stats(p, t, good, shot_rows, players, k3d, kpts2d, scores, height, dominant, fps):
+    side = t.side.mode()[0]
+    st = movement_stats(t, fps)
+    st.update({'player': int(p) + 1, 'side': side, 'height_m': round(height[p], 2),
+               'dominant_hand': dominant.get(p)})
+    hit_frames = [(s['hit_frame'], s['side']) for s in good]
+    st['at_opponent_contact'] = _at_opponent_contact(t, side, height[p], hit_frames, players, k3d, kpts2d,
+                                                     scores, fps)
+    st['recovery_s'] = _recovery_s(p, t, good, np.array(st['base_position']), fps)
+    st.update(_shot_summary([c for c in shot_rows if c['player'] == int(p) + 1]))
+    st['heatmap_0.5m'] = heatmap(t)
+    return st
+
+
+def analyse(shots, hits, players, k3d, kpts2d, scores, landings, fps):
+    """The report: per-shot rows, rallies, per-player statistics and a summary (see the module docstring).
+    hits is unused (the good shots already carry their hitter); kept for the call signature."""
+    # < 10 km/h is not a stroke (a shuttle tossed to the server, a degenerate fit)
+    good = sorted([s for s in shots if s['good'] and s['speed_kmh'] >= 10], key=lambda s: s['hit_frame'])
+    floor_frames = sorted(e['frame'] for e in landings)
+    tracks = player_tracks(players, fps)
+    height = {p: float(players.nose_z[players.player == p].quantile(0.9) + 0.12) for p in tracks}
+    dominant = _dominant_hands(shots, tracks, players, kpts2d, scores)
+    rallies = _split_rallies(good, floor_frames, fps)
+    shot_rows = [_shot_row(s, ri, i, tracks, players, kpts2d, scores, height, dominant, fps)
+                 for ri, r in enumerate(rallies) for i, s in enumerate(r)]
+    rally_rows = [_rally_row(ri, r, fps) for ri, r in enumerate(rallies)]
+    per_player = {f'P{int(p) + 1}': _player_stats(p, t, good, shot_rows, players, k3d, kpts2d, scores, height,
+                                                  dominant, fps)
+                  for p, t in tracks.items()}
     return {'players': per_player, 'shots': shot_rows, 'rallies': rally_rows,
-            'summary': {'players': n_players, 'rallies': len(rallies), 'shots': len(shot_rows),
+            'summary': {'players': len(tracks), 'rallies': len(rallies), 'shots': len(shot_rows),
                         'shot_types': pd.Series([c['type'] for c in shot_rows]).value_counts().to_dict(),
                         'landings': len(landings)}}
 
@@ -360,6 +396,7 @@ def _fmt(v, f='{:.0f}', unit=''):
 
 
 def to_markdown(rep, name):
+    """The report as Vietnamese Markdown (report.md)."""
     L = [f'# Báo cáo trận — {name}', '']
     s = rep['summary']
     L += [f"{s['players']} người chơi · {s['rallies']} pha cầu · {s['shots']} cú đánh có đường bay 3D · "

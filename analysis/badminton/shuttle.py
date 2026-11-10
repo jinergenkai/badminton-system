@@ -1,4 +1,9 @@
-"""Shuttle detection with TrackNetV3, keeping *every* candidate per frame.
+"""OBSOLETE fallback detector: our own TrackNetV3 port (third_party/TrackNetV3, RGB frames only).
+
+The pipeline uses shuttle_v3.py (the official TrackNetV3 with the background frame). This one runs only
+when the config sets "detector" to something other than "official", or the official checkpoint is missing.
+
+Shuttle detection with TrackNetV3, keeping *every* candidate per frame.
 
 The upstream predict.py keeps only the largest blob of each heatmap, so when the shuttle of a
 neighbouring court is also visible it can win. Here all blobs are kept and the tracker decides.
@@ -12,13 +17,12 @@ import pandas as pd
 import torch
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / 'third_party' / 'TrackNetV3'))
-from model import TrackNetV2 as TrackNet   # noqa: E402  (the V3 architecture, upstream naming)
-
 IN_H, IN_W = 288, 512
 
 
 def load_model(weights, device='cuda'):
+    sys.path.insert(0, str(ROOT / 'third_party' / 'TrackNetV3'))
+    from model import TrackNetV2 as TrackNet   # the V3 architecture, upstream naming
     ckpt = torch.load(weights, map_location=device)          # weights_only=True by default
     p = ckpt['param_dict']
     model = TrackNet(in_dim=p['num_frame'] * 3, out_dim=p['num_frame']).to(device)
@@ -34,6 +38,7 @@ def _to_input(frames, num_frame):
 
 
 def _blobs(heat, sx, sy, thr=0.5):
+    """(x, y, area, peak) of every heatmap blob above thr, in video pixels."""
     m = (heat > thr).astype(np.uint8)
     n, lab, st, cen = cv2.connectedComponentsWithStats(m)
     out = []

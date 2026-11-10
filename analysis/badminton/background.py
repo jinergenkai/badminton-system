@@ -9,6 +9,7 @@ import numpy as np
 
 
 def median_background(video, samples=60):
+    """Per-pixel median of `samples` frames spread over the whole video (BGR uint8)."""
     cap = cv2.VideoCapture(video)
     n = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     frames = []
@@ -22,5 +23,6 @@ def median_background(video, samples=60):
 
 
 def white_mask(img, sat_max=60, val_min=170):
+    """255 where a pixel is white-ish (low saturation, bright): court lines, the shuttle."""
     hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
     return ((hsv[..., 1] < sat_max) & (hsv[..., 2] > val_min)).astype(np.uint8) * 255
