@@ -286,6 +286,29 @@ const ZOOM = 1.15;                   // 3D view: ~15% closer than render.py's fr
  * drawOverlay draws on a transparent video-sized canvas and does not clear it; drawPanel paints the whole
  * analysis area (panelWidth x panelHeight); drawComposite paints the whole composite canvas.
  */
+/**
+ * Where the head is, also when the face is not visible (players seen from behind: nose/eyes score low).
+ * Nose; else the mean of eyes/ears; else above the shoulders along the hips -> shoulders direction.
+ * k: 17 points ([x,y] or [X,Y,Z], null = missing). Returns {p, neck, r} or null.
+ */
+export function headOf(k, is3d) {
+  const mid = (a, b) => (k[a] && k[b] ? k[a].map((v, i) => (v + k[b][i]) / 2) : k[a] || k[b] || null);
+  const neck = mid(5, 6), hips = mid(11, 12);
+  const sw = k[5] && k[6] ? Math.hypot(...k[5].map((v, i) => v - k[6][i])) : 0;
+  let p = k[0];
+  if (!p) {
+    const face = [1, 2, 3, 4].filter((j) => k[j]);
+    if (face.length) p = k[face[0]].map((_, i) => face.reduce((a, j) => a + k[j][i], 0) / face.length);
+  }
+  if (!p && neck) {
+    if (hips) p = neck.map((v, i) => v + 0.42 * (v - hips[i]));
+    else p = is3d ? [neck[0], neck[1], neck[2] + 0.25] : [neck[0], neck[1] - Math.max(sw, 10) * 0.8];
+  }
+  if (!p) return null;
+  const torso = neck && hips ? Math.hypot(...neck.map((v, i) => v - hips[i])) : sw * 1.5;
+  return { p, neck, r: Math.max(4, Math.min(0.2 * torso, 0.45 * sw || 0.2 * torso)) };
+}
+
 export function createRenderer(o) {
   const { cam, fps, width: w, height: h } = o;
   const layout = o.layout === 'vertical' ? 'vertical' : 'horizontal';
@@ -495,10 +518,17 @@ export function createRenderer(o) {
   const th = Math.max(2, I(2.5 * s));
 
   function drawSkeleton(ctx, k2, col) {
+    const hd = headOf(k2, false);
     ctx.beginPath();
-    for (const [a, b] of BONES) if (k2[a] && k2[b]) { ctx.moveTo(k2[a][0], k2[a][1]); ctx.lineTo(k2[b][0], k2[b][1]); }
+    for (const [a, b] of BONES) if (a && b && k2[a] && k2[b]) { ctx.moveTo(k2[a][0], k2[a][1]); ctx.lineTo(k2[b][0], k2[b][1]); }
+    if (hd && hd.neck) { ctx.moveTo(hd.neck[0], hd.neck[1]); ctx.lineTo(hd.p[0], hd.p[1]); }
     ctx.strokeStyle = 'rgb(20,20,20)'; ctx.lineWidth = th + 3; ctx.stroke();
     ctx.strokeStyle = col; ctx.lineWidth = th; ctx.stroke();
+    if (hd) {                                            // the head is always drawn, seen from the back too
+      ctx.beginPath(); ctx.arc(hd.p[0], hd.p[1], hd.r, 0, 2 * Math.PI);
+      ctx.strokeStyle = 'rgb(20,20,20)'; ctx.lineWidth = th + 3; ctx.stroke();
+      ctx.strokeStyle = col; ctx.lineWidth = th; ctx.stroke();
+    }
     ctx.fillStyle = '#FFFFFF'; ctx.beginPath();
     const r = Math.max(2, th - 1);
     for (let j = 5; j < 17; j++) if (k2[j]) { ctx.moveTo(k2[j][0] + r, k2[j][1]); ctx.arc(k2[j][0], k2[j][1], r, 0, 2 * Math.PI); }
@@ -543,10 +573,11 @@ export function createRenderer(o) {
     }
     ctx.globalAlpha = 1;
 
-    for (const { player, k2 } of people) {                       // small name tags
-      if (!k2[0]) continue;
+    for (const { player, k2 } of people) {                       // small name tags, above the head
+      const hd = headOf(k2, false);
+      if (!hd) continue;
       const t = `P${player + 1}`, m = measure(ctx, F.tag, t);
-      pill(ctx, I(k2[0][0] - m.w / 2 - 8), I(k2[0][1] - 34 * s), t, F.tag, rgba(pcol(player), 0.9), INK);
+      pill(ctx, I(hd.p[0] - m.w / 2 - 8), I(hd.p[1] - hd.r - 26 * s), t, F.tag, rgba(pcol(player), 0.9), INK);
     }
     ctx.restore();
   }
@@ -570,9 +601,11 @@ export function createRenderer(o) {
       const col = pcol(player);
       ctx.strokeStyle = col; ctx.lineWidth = 2 * k3; ctx.beginPath();
       const q = K.map((Q) => (Q ? view.p1(Q) : null));
-      for (const [a, b] of BONES) if (q[a] && q[b]) { ctx.moveTo(q[a][0], q[a][1]); ctx.lineTo(q[b][0], q[b][1]); }
+      for (const [a, b] of BONES) if (a && b && q[a] && q[b]) { ctx.moveTo(q[a][0], q[a][1]); ctx.lineTo(q[b][0], q[b][1]); }
+      const hd = headOf(K, true);
+      if (hd && hd.neck) { const n = view.p1(hd.neck), hp = view.p1(hd.p); ctx.moveTo(n[0], n[1]); ctx.lineTo(hp[0], hp[1]); }
       ctx.stroke();
-      if (q[0]) { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(q[0][0], q[0][1], 5 * k3, 0, 2 * Math.PI); ctx.fill(); }
+      if (hd) { const hp = view.p1(hd.p); ctx.fillStyle = col; ctx.beginPath(); ctx.arc(hp[0], hp[1], 5 * k3, 0, 2 * Math.PI); ctx.fill(); }
     }
     for (let i = lastLE(contactFrames, f); i >= 0 && f - contacts[i].frame < HIT_SHOW; i--) {    // live contacts
       const C = contacts[i].C;

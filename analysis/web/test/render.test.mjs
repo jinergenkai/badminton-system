@@ -74,3 +74,18 @@ test('posesAt returns only frames with >= 8 joints', () => {
   assert.equal(posesAt(poses, 25).length, 0);
   assert.equal(posesAt(poses, 25, 7).length, 1);
 });
+
+test('headOf finds the head from the nose, the eyes/ears, or above the shoulders (back view)', async () => {
+  const { headOf } = await import('../src/ui/render.js');
+  const k = Array(17).fill(null);
+  k[5] = [100, 100]; k[6] = [140, 100]; k[11] = [105, 180]; k[12] = [135, 180];
+  const back = headOf(k, false);
+  assert.ok(back && back.p[1] < 100 && Math.abs(back.p[0] - 120) < 1);
+  k[3] = [115, 70]; k[4] = [125, 70];
+  assert.deepEqual(headOf(k, false).p, [120, 70]);
+  k[0] = [120, 72];
+  assert.deepEqual(headOf(k, false).p, [120, 72]);
+  const k3 = Array(17).fill(null);
+  k3[5] = [1, 0, 1.4]; k3[6] = [1.4, 0, 1.4]; k3[11] = [1.05, 0, 0.9]; k3[12] = [1.35, 0, 0.9];
+  assert.ok(headOf(k3, true).p[2] > 1.5);
+});

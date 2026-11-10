@@ -131,13 +131,48 @@ def poses_at(poses, f, min_joints=8):
                 yield p, k2, k3
 
 
+def head_of(k):
+    """Head position also when the face is not visible (players seen from behind: nose/eyes score low):
+    nose; else mean of eyes/ears; else above the shoulders along hips -> shoulders. (p, neck, r) or None."""
+    ok = lambda j: not np.isnan(k[j, 0])
+    def mid(a, b):
+        pts = [k[j] for j in (a, b) if ok(j)]
+        return np.mean(pts, axis=0) if pts else None
+    neck, hips = mid(5, 6), mid(11, 12)
+    sw = float(np.linalg.norm(k[5] - k[6])) if ok(5) and ok(6) else 0.0
+    p = k[0] if ok(0) else None
+    if p is None:
+        face = [k[j] for j in (1, 2, 3, 4) if ok(j)]
+        if face:
+            p = np.mean(face, axis=0)
+    if p is None and neck is not None:
+        if hips is not None:
+            p = neck + 0.42 * (neck - hips)
+        elif k.shape[1] == 3:
+            p = neck + np.array([0, 0, 0.25])
+        else:
+            p = neck - np.array([0, max(sw, 10) * 0.8])
+    if p is None:
+        return None
+    torso = float(np.linalg.norm(neck - hips)) if neck is not None and hips is not None else sw * 1.5
+    return p, neck, max(4.0, min(0.2 * torso, 0.45 * sw if sw else 0.2 * torso))
+
+
 def _draw_skeleton(img, k2, col, th):
+    hd = head_of(k2)
     for a, b in BONES:
-        if np.isnan(k2[a, 0]) or np.isnan(k2[b, 0]):
+        if a == 0 or b == 0 or np.isnan(k2[a, 0]) or np.isnan(k2[b, 0]):
             continue
         pa, pb = tuple(np.int32(k2[a])), tuple(np.int32(k2[b]))
         cv2.line(img, pa, pb, (20, 20, 20), th + 3, cv2.LINE_AA)
         cv2.line(img, pa, pb, col, th, cv2.LINE_AA)
+    if hd is not None:                                   # neck + head circle, also seen from the back
+        p, neck, r = hd
+        if neck is not None:
+            cv2.line(img, tuple(np.int32(neck)), tuple(np.int32(p)), (20, 20, 20), th + 3, cv2.LINE_AA)
+            cv2.line(img, tuple(np.int32(neck)), tuple(np.int32(p)), col, th, cv2.LINE_AA)
+        cv2.circle(img, tuple(np.int32(p)), int(r), (20, 20, 20), th + 3, cv2.LINE_AA)
+        cv2.circle(img, tuple(np.int32(p)), int(r), col, th, cv2.LINE_AA)
     for j in range(5, 17):
         if not np.isnan(k2[j, 0]):
             cv2.circle(img, tuple(np.int32(k2[j])), max(2, th - 1), (255, 255, 255), -1, cv2.LINE_AA)
@@ -241,10 +276,13 @@ class Court3D:
         for p, k3 in people:
             col = pcol(p)
             for a, b in BONES:
-                if not (np.isnan(k3[a, 0]) or np.isnan(k3[b, 0])):
+                if a and b and not (np.isnan(k3[a, 0]) or np.isnan(k3[b, 0])):
                     self.line(img, [k3[a], k3[b]], col, 2)
-            if not np.isnan(k3[0, 0]):
-                cv2.circle(img, tuple(self.p([k3[0]])[0].astype(int)), 5 * self.ss, col, -1, cv2.LINE_AA)
+            hd = head_of(k3)
+            if hd is not None:
+                if hd[1] is not None:
+                    self.line(img, [hd[1], hd[0]], col, 2)
+                cv2.circle(img, tuple(self.p([hd[0]])[0].astype(int)), 5 * self.ss, col, -1, cv2.LINE_AA)
         for C in contacts:
             q = self.p([C])[0].astype(int)
             self.line(img, [[C[0], C[1], 0], C], _bgr('#FFD54F'), 1)
@@ -423,8 +461,9 @@ def render_video(video, out_path, cam, shuttle_df, landings, hits=(), players=No
         d = ImageDraw.Draw(layer)
 
         for p, k2, _ in people:                         # only small name tags on the video
-            if not np.isnan(k2[0, 0]):
-                hx, hy = k2[0]
+            hd = head_of(k2)
+            if hd is not None:
+                hx, hy = hd[0][0], hd[0][1] - hd[2] + 8
                 txt = f'P{p + 1}'
                 bb = d.textbbox((0, 0), txt, font=fonts_v.tag)
                 _pill(d, (int(hx - (bb[2] - bb[0]) / 2 - 8), int(video_y + hy - 34 * sv)), txt, fonts_v.tag,

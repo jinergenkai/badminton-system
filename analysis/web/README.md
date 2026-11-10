@@ -21,7 +21,7 @@ cùng 124/124 cú, 121 trùng cả loại cú.
 
 | Mức | Bắt cầu | Khung xương | Sân | 20 s video, RTX 5060 Ti |
 |---|---|---|---|---|
-| Nhanh | cửa sổ 8 frame | RTMO-s, mỗi 6 frame | theo điểm chấm | ~19 s |
+| Nhanh | cửa sổ 8 frame | RTMO-s, mỗi 6 frame + phóng to nửa sân xa | theo điểm chấm | ~20 s |
 | Cân bằng | cửa sổ 8 frame | RTMO-m, mỗi 3 frame + lượt phóng to nửa sân xa | khớp vạch trắng | ~30 s |
 | Tối đa | cửa sổ chồng nhau (bước 4) | RTMO-l, mọi frame + phóng to nửa sân xa | khớp vạch trắng | ~80 s |
 
