@@ -106,10 +106,13 @@ def _vote(players, lab, feats, cent, scale, min_share=0.6):
     return lab
 
 
-def players_per_side(players):
-    on = players[players.X.between(-0.5, W + 0.5) & (players.Y.abs() < HALF + 0.8)]
+def players_per_side(players, share=0.35):
+    """1 (singles) or 2 (doubles) per side: doubles when at least `share` of the frames show two people on
+    that half (deep players up to 2.5 m behind the baseline count). The plain mode under-counted when the
+    pose model misses a far, small player in half the frames."""
+    on = players[players.X.between(-0.5, W + 0.5) & (players.Y.abs() < HALF + 2.5)]
     c = on.groupby(['frame', 'side']).size().unstack(fill_value=0)
-    return {side: int(max(1, min(2, c[side].mode()[0]))) if side in c else 1 for side in ('near', 'far')}
+    return {side: 2 if side in c and (c[side] >= 2).mean() >= share else 1 for side in ('near', 'far')}
 
 
 def assign(players, feats, fps, max_speed=7.0, w_pos=0.35, max_cost=1.2, seed=0, vote=False):

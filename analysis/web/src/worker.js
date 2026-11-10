@@ -1,6 +1,7 @@
 // Inference worker: official TrackNetV3 (shuttle; Chen & Wang 2023, MIT) + RTMO-s (players' pose) via onnxruntime-web.
 // Everything runs on the visitor's own GPU (WebGPU) or CPU (WASM) — the video never leaves the device.
 import * as ort from 'onnxruntime-web/webgpu';
+import { appearanceFeature } from './core/identity.js';
 
 ort.env.wasm.wasmPaths = new URL('/ort/', self.location.origin).href;
 ort.env.wasm.numThreads = self.crossOriginIsolated ? Math.min(8, navigator.hardwareConcurrency || 4) : 1;
@@ -55,6 +56,13 @@ async function gpuInfo() {
   } catch { return null; }
 }
 
+// pose model per quality level: one-stage RTMO, S (40 MB) / M / L (most accurate); FP16 on GPUs that support it
+const POSE_FILES = {
+  s: { gpu: 'rtmo_s.onnx', cpu: 'rtmo_s.onnx', label: 'RTMO-s' },
+  m: { gpu: 'rtmo_m.onnx', cpu: 'rtmo_m.onnx', label: 'RTMO-m' },
+  l: { gpu: 'rtmo_l.onnx', cpu: 'rtmo_m.onnx', label: 'RTMO-l' },   // L is too slow for a CPU: M there
+};
+
 async function init({ want, pose, fp32 }) {
   const gpu = await gpuInfo();
   backend = want === 'wasm' || !gpu ? 'wasm' : 'webgpu';
@@ -65,8 +73,11 @@ async function init({ want, pose, fp32 }) {
   tracknet?.release?.();
   rtmo?.release?.();
   tracknet = await ort.InferenceSession.create(await fetchModel(MODEL_BASE + tnFile, 'TrackNetV3'), opts);
-  rtmo = pose ? await ort.InferenceSession.create(await fetchModel(MODEL_BASE + 'rtmo_s.onnx', 'RTMO-s'), opts) : null;
-  post('ready', { backend, model: tnFile, gpu, threads: ort.env.wasm.numThreads, isolated: self.crossOriginIsolated });
+  const pf = pose ? POSE_FILES[pose === true ? 's' : pose] : null;
+  const poseFile = pf ? (backend === 'webgpu' && gpu.f16 && !fp32 ? pf.gpu : pf.cpu) : null;
+  rtmo = pf ? await ort.InferenceSession.create(await fetchModel(MODEL_BASE + poseFile, pf.label), opts) : null;
+  acc.clear();
+  post('ready', { backend, model: tnFile, poseModel: poseFile, gpu, threads: ort.env.wasm.numThreads, isolated: self.crossOriginIsolated });
 }
 
 // ---------- TrackNet ----------
@@ -115,12 +126,30 @@ function blobs(heat, w, h, thr = 0.5) {
   return out;
 }
 
-async function runTracknet({ frames, w, h }) {
+// overlapping windows (stride < 8) are averaged per frame ("temporal ensemble", as the desktop detector):
+// a frame is final once no later window can cover it (frame < next window start)
+const acc = new Map();   // frame -> {sum: Float32Array, n}
+async function runTracknet({ frames, w, h, start = 0, stride = SEQ, last = false }) {
   const t0 = performance.now();
   const out = await tracknet.run({ [tracknet.inputNames[0]]: tracknetInput(frames, w, h) });
   const heat = out[tracknet.outputNames[0]].data;
   const n = w * h;
-  const res = frames.map((_, k) => blobs(heat.subarray(k * n, (k + 1) * n), w, h));
+  frames.forEach((_, k) => {
+    const f = start + k;
+    const e = acc.get(f) || { sum: new Float32Array(n), n: 0 };
+    const src = heat.subarray(k * n, (k + 1) * n);
+    for (let i = 0; i < n; i++) e.sum[i] += src[i];
+    e.n++;
+    acc.set(f, e);
+  });
+  const res = {};
+  for (const [f, e] of acc) {
+    if (last || f < start + stride) {
+      if (e.n > 1) for (let i = 0; i < n; i++) e.sum[i] /= e.n;
+      res[f] = blobs(e.sum, w, h);
+      acc.delete(f);
+    }
+  }
   return { cands: res, ms: performance.now() - t0 };
 }
 
@@ -149,10 +178,13 @@ async function runPose({ image }) {
   cand.sort((a, b) => b.score - a.score);
   const keep = [];
   for (const c of cand) if (keep.every((k) => iou(k.box, c.box) < 0.45)) keep.push(c);
-  const people = keep.map((c) => ({
-    box: c.box, score: c.score,
-    kp: Array.from(kps.data.subarray(c.i * 51, c.i * 51 + 51)),   // 17 × (x, y, score) in 640 space
-  }));
+  const people = keep.map((c) => {
+    const kp = Array.from(kps.data.subarray(c.i * 51, c.i * 51 + 51));   // 17 × (x, y, score) in 640 space
+    const k2 = [], sc = [];
+    for (let j = 0; j < 17; j++) { k2.push([kp[j * 3], kp[j * 3 + 1]]); sc.push(kp[j * 3 + 2]); }
+    // shirt / shorts colours for the P1..Pn identities, on the image we already hold
+    return { box: c.box, score: c.score, kp, feat: appearanceFeature(image, S, S, k2, sc) };
+  });
   return { people, ms: performance.now() - t0 };
 }
 

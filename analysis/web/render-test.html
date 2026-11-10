@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Render test</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; padding: 16px; background: #0d1117; color: #e6edf3; font: 14px 'Segoe UI', system-ui, sans-serif; }
+    .bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    input[type=range] { flex: 1; min-width: 240px; }
+    canvas { max-width: 100%; height: auto; display: block; border: 1px solid #30363d; }
+    #stat { color: #8b949e; }
+    button { background: #21262d; color: #e6edf3; border: 1px solid #30363d; border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <b>Render test</b>
+    <input id="frame" type="range" min="0" max="4500" value="300" />
+    <input id="num" type="number" min="0" max="4500" value="300" style="width:6em" />
+    <select id="layout"><option value="horizontal">ngang</option><option value="vertical-below">dọc 9:16, bảng dưới</option><option value="vertical-above">dọc 9:16, bảng trên</option></select>
+    <button id="play">▶</button>
+    <button id="bench">Đo thời gian</button>
+    <span id="stat">Đang tải fixtures…</span>
+  </div>
+  <canvas id="out"></canvas>
+  <p id="note" style="color:#8b949e">Nền luôn là frame 300 (frame300.rgba); overlay/panel theo frame chọn.</p>
+  <script type="module" src="/src/ui/render-test.js"></script>
+</body>
+</html>

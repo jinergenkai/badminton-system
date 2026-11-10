@@ -88,3 +88,37 @@ td.num { font-variant-numeric: tabular-nums; }
 tr.measured td { color: var(--accent); }
 footer { padding: 10px 16px 40px; }
 ul { padding-left: 20px; }
+
+/* presets */
+.presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.preset { display: flex; flex-direction: column; gap: 4px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+.preset input { position: absolute; opacity: 0; pointer-events: none; }
+.preset b { font-size: 16px; }
+.preset span { color: var(--muted); font-size: 13px; }
+.preset:has(input:checked) { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.advanced { margin-top: 10px; }
+.advanced summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+
+/* result: video + analysis panel */
+#result-view { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+#result-view .panel { width: 100%; height: auto; border-radius: 10px; background: #0d1117; display: block; }
+@media (max-width: 860px) { #result-view { grid-template-columns: 1fr; } }
+
+/* report (from core/report.js) */
+#report { margin-top: 18px; }
+.report table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 8px 0 16px; }
+.report th, .report td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.report .table-scroll, .report section { overflow-x: auto; }
+.report .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 8px 0; }
+.report .kpi { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; }
+.report .kpi .value { display: block; font-size: 22px; font-weight: 800; }
+.report .kpi .label { color: var(--muted); font-size: 12.5px; }
+.report .chip { display: inline-block; padding: 1px 8px; border-radius: 99px; font-weight: 700; font-size: 12px; color: #0f1115; }
+.report .chip.p1 { background: #4FC3F7; } .report .chip.p2 { background: #FFB74D; }
+.report .chip.p3 { background: #F06292; } .report .chip.p4 { background: #AED581; }
+.report .chip.unknown { background: var(--line); color: var(--text); }
+.report tr.unreliable td:nth-child(5) { color: var(--muted); }
+.report tr[data-frame] { cursor: pointer; }
+.report tr[data-frame]:hover td { background: var(--panel-2); }
+.report h3 { margin: 16px 0 6px; font-size: 16px; }
+.report p.note, .report .player-notes { color: var(--muted); font-size: 13px; }

@@ -47,7 +47,8 @@ def player_tracks(players, fps):
         sm = med.rolling(7, center=True, min_periods=1).mean().to_numpy()
         dt = np.diff(f) / fps
         step = np.hypot(*np.diff(sm, axis=0).T)
-        v = np.r_[0, np.where((dt > 0) & (dt < 0.2), step / np.maximum(dt, 1e-6), 0)]
+        # steps up to 0.25 s apart count: the pose may run every few frames only
+        v = np.r_[0, np.where((dt > 0) & (dt <= 0.25), step / np.maximum(dt, 1e-6), 0)]
         out[p] = pd.DataFrame({'frame': f, 'X': sm[:, 0], 'Y': sm[:, 1], 'speed': v,
                                'side': g.side.to_numpy(), 'row': g.index.to_numpy()}).set_index('frame')
     return out
@@ -55,8 +56,8 @@ def player_tracks(players, fps):
 
 def movement_stats(t, fps):
     ok = t.speed < 8.0                                   # faster than any human: a foot-keypoint glitch
-    dt_ok = np.r_[0, np.diff(t.index) == 1]
-    dist = float((t.speed[ok & (dt_ok > 0)] / fps).sum())
+    gap = np.r_[0, np.diff(t.index)]                    # frames since the previous sample (speed is 0 past 0.25 s)
+    dist = float((t.speed * gap / fps)[ok].sum())
     moving = t.speed[ok]
     yabs = t.Y.abs()
     z = yabs.map(zone)
@@ -248,7 +249,9 @@ def analyse(shots, hits, players, k3d, kpts2d, scores, landings, fps):
         for i, s in enumerate(r):
             p = s.get('player', -1)
             if p is None or p < 0:
-                p = same_track(s) or who(s['hit_frame'], s['side'], s['p0'])
+                p = same_track(s)                   # `is None`, not `or`: player 0 (P1) is a valid answer
+                if p is None:
+                    p = who(s['hit_frame'], s['side'], s['p0'])
             c = classify(s, i == 0, fps)
             side_2d = None
             if p is not None and s['hit_frame'] in tracks[p].index:

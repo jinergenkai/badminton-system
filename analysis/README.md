@@ -62,6 +62,12 @@ Chạy toàn bộ:
 .venv/Scripts/python -m badminton configs/danh-cau-02.json
 ```
 
+Video xuất dọc 9:16 cho TikTok / Reels (video ở trên, phân tích + sân 3D ở dưới; `--panel above` để đảo):
+
+```bash
+.venv/Scripts/python -m badminton configs/danh-cau-02.json --only render --force render --layout vertical
+```
+
 Mỗi bước ghi kết quả vào `outputs/<tên config>/` và được **cache**: lần sau bỏ qua.
 `--force <bước...>` để tính lại, `--only <bước...>` để chỉ chạy vài bước. Cần `ffmpeg` trong PATH
 để xuất H.264 có âm thanh. Pipeline chạy headless nên đặt được trên máy GPU từ xa

@@ -331,7 +331,7 @@ def recover_missed(cam, shots, shuttle, hits, players, k3d, fps, min_obs=8, pass
                 fh = s['end_frame'] + 1
                 p = simulate(s['p0'], s['v0'], shot_time(s, np.array([fh]), fps))[0]
                 p[2] = max(p[2], 0.3)
-                hit = {'frame': fh, 'pid': -1, 'side': 'near' if p[1] > 0 else 'far',  # receiver: other side
+                hit = {'frame': fh, 'pid': -1, 'side': 'far' if p[1] > 0 else 'near',  # receiver: whoever is where it is
                        'contact': p.round(2).tolist(), 'how': 'end of the previous predicted path'}
                 near = best_contact(cam, fh, cam.project([p])[0], rows, by_frame, k3d, max_dist=1.6)
                 if near:
