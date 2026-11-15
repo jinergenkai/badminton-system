@@ -115,7 +115,7 @@ export async function exportBillImage(book, updatedAt, list) {
   const ms = list.filter(Boolean);
   if (!ms.length) return { error: "Chưa chọn ai." };
   const group = ms.length > 1;
-  const per = ms.map((m) => ({ m, ses: M.memberDueSessions(book, m.id), due: M.memberDue(book, m.id), paid: M.memberPaidSum(book, m.id) })).filter((r) => !group || r.due > M.EPS);
+  const per = ms.map((m) => ({ m, ses: M.memberDueSessions(book, m.id), due: M.memberDue(book, m.id) })).filter((r) => !group || r.due > M.EPS);
   if (!per.length) return { error: "Những người đã chọn không còn nợ buổi nào." };
   const due = per.reduce((a, r) => a + r.due, 0);
   const nRows = per.reduce((a, r) => a + r.ses.length, 0);
@@ -130,7 +130,7 @@ export async function exportBillImage(book, updatedAt, list) {
   const W = BILL_W - MARGIN * 2, P = 56;
   const { c: layer, x } = canvas(W, 1200 + nRows * 190 + per.length * 160 + (hasQR ? 520 : 0), true);
   const notches = [];
-  let y = header(x, W, group ? "HOÁ ĐƠN GỘP" : "HOÁ ĐƠN", "Biên nhận tiền sân + cầu", updatedAt);
+  let y = header(x, W, group ? "HOÁ ĐƠN GỘP" : "HOÁ ĐƠN", per.some((r) => r.ses.some(M.isMeal)) ? "Biên nhận tiền sân + cầu + ăn uống" : "Biên nhận tiền sân + cầu", updatedAt);
 
   // ---- người nhận (avatar đè lên dải xanh) ----
   if (!group) {
@@ -138,7 +138,7 @@ export async function exportBillImage(book, updatedAt, list) {
     drawAvatar(x, avImg.get(m.id), m, P, ay, AV, { w: 7, c: C.paper });
     const tx = P + AV + 32;
     text(x, M.fullName(book, m), tx, y + 46, DISP(800, 50), C.ink, "left", W - tx - P);
-    const nAll = M.memberSessions(book, m.id).length;
+    const nAll = M.playCount(book, m.id);
     let px = tx; px += pill(x, `${nAll} buổi đã chơi`, px, y + 66, SANS(600, 19), C.soft, C.neutral) + 10;
     if (per[0].ses.length) pill(x, `${per[0].ses.length} buổi chưa trả`, px, y + 66, SANS(600, 19), C.due, C.dueTint);
     else pill(x, "Đã trả đủ", px, y + 66, SANS(600, 19), C.ok, C.okTint);
@@ -189,6 +189,19 @@ export async function exportBillImage(book, updatedAt, list) {
     r.ses.forEach((s2, si) => {
       if (si || group) dashed(x, P, W - P, y, C.line, [6, 8], 2);
       const top = y + 20;
+      if (M.isMeal(s2)) {
+        // kèo ăn: một dòng thấp, để người nhận biết sau buổi có ăn uống
+        const MH = 64;
+        fillR(x, P, top, MH, MH, 16, C.dueTint);
+        text(x, "🍜", P + MH / 2, top + 44, SANS(400, 32), C.due, "center");
+        const others = s2.parts.filter((p) => p.mid !== r.m.id).map((p) => M.memById(book, p.mid)).filter(Boolean).map((mm) => mm.name);
+        const tw = W - P * 2 - MH - 22 - AMT_W;
+        text(x, "Ăn uống sau cầu" + (s2.date ? " · " + s2.date : ""), P + MH + 22, top + 26, DISP(700, 26), C.ink, "left", tw);
+        text(x, `bill ${M.fmt(M.sTotal(s2))} chia ${s2.parts.length} người` + (others.length ? " · cùng " + others.join(", ") : ""), P + MH + 22, top + 56, SANS(500, 18), C.soft, "left", tw);
+        text(x, M.fmt(M.shareIn(s2, r.m.id)), W - P, top + MH / 2 + 12, MONO(700, 32), C.due, "right");
+        y += MH + 40;
+        return;
+      }
       let tx = P;
       const ph = phImg.get(s2.id);
       if (ph) { drawCover(x, ph, P, top, PH, PH, 18); tx = P + PH + 22; }
@@ -220,13 +233,6 @@ export async function exportBillImage(book, updatedAt, list) {
       y += ROW + (w !== 1 ? 14 : 0);
     });
     if (!group && !r.ses.length) { text(x, "Không còn buổi nào đang nợ 🎉", W / 2, y + 30, SANS(600, 28), C.ok, "center"); y += 64; }
-    if (r.paid > M.EPS) {
-      const nPaid = M.memberSessions(book, r.m.id).filter((s2) => M.isPaid(s2, r.m.id)).length;
-      fillR(x, P, y + 6, W - P * 2, 52, 14, C.okTint);
-      text(x, `✓  Đã trả trước đó · ${nPaid} buổi`, P + 20, y + 40, SANS(600, 20), C.ok);
-      text(x, M.fmt(r.paid), W - P - 20, y + 41, MONO(600, 22), C.ok, "right");
-      y += 70;
-    }
     y += group ? 24 : 8;
   });
 

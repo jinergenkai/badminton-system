@@ -72,6 +72,15 @@ Ngồi ở sân, mở link trên điện thoại:
 3. Ai chuyển khoản thì bấm vào tên người đó trong buổi — hoặc tab **Thu tiền** để tick nhiều người một lượt
 4. Không phải bấm Lưu. Thanh dưới màn hình báo *"Đã lưu · phiên bản N"* là xong.
 
+**Kèo ăn sau cầu**: nút **🍜 Kèo ăn** cạnh *Thêm buổi chơi* → nhập tổng bill, tick ai đi ăn, chia đều.
+Kèo ăn cộng chung vào số nợ (cùng QR), hiện thành dòng nhỏ trên phiếu và ảnh hoá đơn, không tính vào "số buổi đã chơi".
+Trong sổ nó là một buổi có `kind: "meal"`, tổng bill nằm ở `court`, `shuttles = 0` — bản web cũ vẫn tính đúng tiền.
+
+**Ẩn người không chơi nữa**: tab Thành viên → icon con mắt. Người ẩn biến khỏi form thêm buổi và lưới chọn tên;
+còn nợ thì vẫn hiện ở Thu tiền tới khi trả xong. Không xoá gì, bấm lại là hiện.
+Sau khi deploy bản có tính năng này, **mở lại (refresh) app trên mọi máy admin trước khi sửa** — bản cũ còn trong
+máy không biết field `off` và sẽ làm mất cờ ẩn khi lưu (tiền thì không ảnh hưởng).
+
 Gửi cho nhóm: link trần, hoặc `?me=<id>` để tag riêng từng người (nút **Chép link riêng**),
 hoặc tải ảnh ở nút 📸 rồi đăng.
 

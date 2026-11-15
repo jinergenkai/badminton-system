@@ -133,8 +133,8 @@ function SesLine({ s, mid, paid, onToggle }) {
           : <Iconify icon="solar:calendar-bold-duotone" width={22} />}
       </Box>
       <Box sx={{ flexGrow: 1, minWidth: 0 }}>
-        <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.3 }}>{mt ? `${mt[1]}/${mt[2]}` : raw}{w !== 1 && <Money sx={{ ml: 0.75, fontSize: 11, color: "warning.dark" }}>×{M.wStr(w)}</Money>}</Typography>
-        <Typography variant="caption" color="text.secondary" noWrap component="div">{mt ? rest || `${s.parts.length} người chơi` : `${s.parts.length} người chơi`}</Typography>
+        <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.3 }}>{M.isMeal(s) && "🍜 "}{mt ? `${mt[1]}/${mt[2]}` : raw}{w !== 1 && <Money sx={{ ml: 0.75, fontSize: 11, color: "warning.dark" }}>×{M.wStr(w)}</Money>}</Typography>
+        <Typography variant="caption" color="text.secondary" noWrap component="div">{M.isMeal(s) ? `Ăn uống · bill ${money(M.sTotal(s))} / ${s.parts.length} người` : mt ? rest || `${s.parts.length} người chơi` : `${s.parts.length} người chơi`}</Typography>
       </Box>
       <Money sx={{ fontWeight: 700, fontSize: 14, color: paid ? "text.disabled" : DUE, textDecoration: paid ? "line-through" : "none" }}>{money(M.shareIn(s, mid))}</Money>
       {onToggle && (
@@ -166,11 +166,12 @@ function ViewAll({ book, goMe, runExport }) {
   const [filter, setFilter] = useState("due");
   const [gallery, setGallery] = useState(false);
   const due = M.totalDue(book), got = M.totalCollected(book), all = due + got;
-  let rows = book.members.map((m) => ({ m, due: M.memberDue(book, m.id), n: M.memberDueSessions(book, m.id).length, tot: M.memberSessions(book, m.id).length })).filter((r) => r.tot > 0);
+  let rows = book.members.map((m) => ({ m, due: M.memberDue(book, m.id), n: M.memberDueSessions(book, m.id).length, tot: M.memberSessions(book, m.id).length, pc: M.playCount(book, m.id) }))
+    .filter((r) => r.tot > 0 && (!M.isOff(r.m) || r.due > M.EPS));
   const nDue = rows.filter((r) => r.due > M.EPS).length;
   rows = rows.filter((r) => filter === "all" || (filter === "due" ? r.due > M.EPS : r.due <= M.EPS))
     .filter((r) => !q || M.norm(r.m.name).includes(M.norm(q)))
-    .sort((a, b) => b.due - a.due || a.m.name.localeCompare(b.m.name, "vi"));
+    .sort(M.byDebtThenPlays(book));
   const pct = all > M.EPS ? Math.round((got / all) * 100) : 0;
   return (
     <Stack spacing={2}>
@@ -206,7 +207,7 @@ function ViewAll({ book, goMe, runExport }) {
           {rows.map((r, i) => (
             <ListItemButton key={r.m.id} divider={i < rows.length - 1} onClick={() => goMe(r.m.id)} sx={{ py: 1.25 }}>
               <ListItemAvatar><MemAvatar m={r.m} size={38} /></ListItemAvatar>
-              <ListItemText primary={M.fullName(book, r.m)} secondary={r.due > M.EPS ? `${r.n} buổi chưa trả` : `${r.tot} buổi · đã trả đủ`} />
+              <ListItemText primary={M.fullName(book, r.m)} secondary={r.due > M.EPS ? `${r.n} buổi chưa trả` : `${r.pc} buổi · đã trả đủ`} />
               <DueTag due={r.due} />
             </ListItemButton>
           ))}
@@ -230,8 +231,9 @@ function ViewMe({ book, setToast, runExport }) {
   const pick = (id) => { setMeId(id); try { localStorage.setItem(ME_KEY, id); } catch { /* */ } };
   if (!m) {
     const rows = book.members.map((x) => ({ m: x, due: M.memberDue(book, x.id) }))
+      .filter((r) => !M.isOff(r.m) || r.due > M.EPS)
       .filter((r) => !q || M.norm(r.m.name).includes(M.norm(q)))
-      .sort((a, b) => b.due - a.due || a.m.name.localeCompare(b.m.name, "vi"));
+      .sort(M.byDebtThenPlays(book));
     return (
       <Stack spacing={2}>
         <Alert severity="info" icon={<Iconify icon="solar:user-rounded-bold-duotone" />}>Bấm vào tên bạn để xem mình nợ bao nhiêu, gồm những buổi nào.</Alert>
@@ -265,7 +267,7 @@ function ViewMe({ book, setToast, runExport }) {
             <Box sx={{ minWidth: 0, flexGrow: 1 }}>
               <Typography variant="overline" sx={{ opacity: 0.72, lineHeight: 1.6 }}>Phiếu tiền cầu</Typography>
               <Typography variant="h5" noWrap>{M.fullName(book, m)}</Typography>
-              <Typography variant="caption" sx={{ opacity: 0.8 }}>{M.memberSessions(book, m.id).length} buổi đã chơi · đã trả {money(paidSum)}</Typography>
+              <Typography variant="caption" sx={{ opacity: 0.8 }}>{M.playCount(book, m.id)} buổi đã chơi · đã trả {money(paidSum)}</Typography>
             </Box>
           </Stack>
         </Box>
@@ -336,6 +338,7 @@ function TearLine() {
 }
 // Thẻ 1 buổi cho trang cá nhân: ngày + số tiền + công thức + những người chơi cùng
 function MeSession({ book, s, mid, paid }) {
+  if (M.isMeal(s)) return <MealLine book={book} s={s} mid={mid} paid={paid} />;
   const raw = String(s.date || "—").trim();
   const mt = raw.match(/^(\d{1,2})[/.-](\d{1,2})[.,]?\s*(.*)$/);
   const rest = mt ? mt[3].replace(/^[-–·\s]+/, "") : "";
@@ -386,12 +389,55 @@ function MeSession({ book, s, mid, paid }) {
   );
 }
 
+// Kèo ăn trên phiếu cá nhân: một dòng gọn, không công thức cầu
+function MealLine({ book, s, mid, paid }) {
+  const others = s.parts.filter((p) => p.mid !== mid).map((p) => M.memById(book, p.mid)).filter(Boolean);
+  const when = paid ? M.whenLabel(s.paid?.[mid]) : "";
+  return (
+    <Card sx={{ px: 1.75, py: 1.25, opacity: paid ? 0.85 : 1, borderLeft: (t) => `4px solid ${paid ? t.palette.success.main : t.palette.warning.light}` }}>
+      <Stack direction="row" alignItems="center" spacing={1.25}>
+        <Box sx={{ fontSize: 22, lineHeight: 1, flexShrink: 0 }}>🍜</Box>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" noWrap>Ăn uống sau cầu{s.date ? ` · ${s.date}` : ""}</Typography>
+          <Typography variant="caption" color="text.secondary" noWrap component="div">
+            bill {money(M.sTotal(s))} chia {s.parts.length} người{others.length ? ` · cùng ${others.map((m) => m.name).join(", ")}` : ""}
+          </Typography>
+        </Box>
+        <Box sx={{ textAlign: "right", flexShrink: 0 }}>
+          <Money sx={{ display: "block", fontWeight: 700, fontSize: 15, color: paid ? "text.disabled" : DUE, textDecoration: paid ? "line-through" : "none" }}>{money(M.shareIn(s, mid))}</Money>
+          {paid && <Label color="success">{when ? "trả " + when : "đã trả"}</Label>}
+        </Box>
+      </Stack>
+    </Card>
+  );
+}
+
+// Kèo ăn trong danh sách buổi: thẻ thấp, chip nhỏ — để không lẫn với buổi cầu
+function MealCard({ book, s, onChip, actions }) {
+  return (
+    <Card variant="outlined" sx={{ px: 1.75, py: 1.25, ml: { xs: 1.5, sm: 3 }, borderStyle: "dashed", bgcolor: (t) => alpha(t.palette.warning.main, 0.04) }}>
+      <Stack direction="row" alignItems="center" spacing={1.25}>
+        <Box sx={{ fontSize: 20, lineHeight: 1 }}>🍜</Box>
+        <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Typography variant="subtitle2" noWrap>Kèo ăn{s.date ? ` · ${s.date}` : ""}</Typography>
+          <Typography variant="caption" color="text.secondary"><Money>{money(M.sTotal(s))}</Money> / {s.parts.length} người = <Money sx={{ fontWeight: 700 }}>{money(M.sPerUnit(s))}</Money>/người</Typography>
+        </Box>
+        {M.sSettled(s) ? <Label color="success">Đã thu đủ</Label> : <Label color="warning">Còn {M.sUnpaid(s).length}</Label>}
+      </Stack>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5, mt: 1 }}>
+        {s.parts.map((p) => <PartChip key={p.mid} book={book} s={s} p={p} small onClick={onChip ? () => onChip(p.mid) : undefined} />)}
+      </Box>
+      {actions}
+    </Card>
+  );
+}
+
 function ViewSessions({ book }) {
   const list = M.orderedSessions(book);
   const [zoom, setZoom] = useState(null);
   return (
     <Stack spacing={1.5}>
-      {list.map((s) => <SessionCard key={s.id} book={book} s={s} onZoom={setZoom} />)}
+      {list.map((s) => M.isMeal(s) ? <MealCard key={s.id} book={book} s={s} /> : <SessionCard key={s.id} book={book} s={s} onZoom={setZoom} />)}
       {list.length === 0 && <Alert severity="info">Chưa có buổi nào.</Alert>}
       <PhotoZoom photo={zoom} onClose={() => setZoom(null)} />
     </Stack>
@@ -433,14 +479,14 @@ function SessionHead({ s, picFor, setPicFor, onZoom }) {
   );
 }
 
-function PartChip({ book, s, p, onClick }) {
+function PartChip({ book, s, p, onClick, small }) {
   const m = M.memById(book, p.mid); if (!m) return null;
   const on = M.isPaid(s, p.mid);
   return (
     <Box component={onClick ? "button" : "span"} onClick={onClick}
-      sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, pl: 0.4, pr: 1.1, py: 0.4, borderRadius: 5, font: "inherit", fontSize: 13, fontWeight: 600, cursor: onClick ? "pointer" : "default", transition: "all .15s",
+      sx={{ display: "inline-flex", alignItems: "center", gap: 0.75, pl: 0.4, pr: 1.1, py: small ? 0.2 : 0.4, borderRadius: 5, font: "inherit", fontSize: small ? 12 : 13, fontWeight: 600, cursor: onClick ? "pointer" : "default", transition: "all .15s",
         border: (t) => `1px solid ${on ? "transparent" : alpha(t.palette.grey[500], 0.32)}`, bgcolor: (t) => on ? alpha(t.palette.success.main, 0.16) : t.palette.background.paper, color: on ? "success.dark" : "text.primary", "&:hover": onClick ? { borderColor: "primary.main" } : undefined }}>
-      <MemAvatar m={m} size={22} />
+      <MemAvatar m={m} size={small ? 18 : 22} />
       <span style={on ? { textDecoration: "line-through", textDecorationThickness: 1 } : undefined}>{M.fullName(book, m)}</span>
       {p.weight !== 1 && <Money sx={{ fontSize: 11, opacity: 0.7 }}>×{M.wStr(p.weight)}</Money>}
       {on && <Iconify icon="solar:check-circle-bold" width={16} />}
@@ -499,18 +545,31 @@ function AdminSessions({ B, book, setToast, picFor, setPicFor }) {
     setToast(`Đã thu ${mids.length} người · buổi ${s.date || "?"}`);
   };
   const reopen = (s) => { if (!confirm(`Bỏ dấu "đã trả" của cả ${s.parts.length} người trong buổi ${s.date || "?"}?`)) return; B.mutate((d) => { d.sessions.find((x) => x.id === s.id).paid = {}; }, `Bỏ dấu đã trả cả buổi ${s.date || "?"}`); };
-  const del = (s) => { if (!confirm(`Xóa buổi ${s.date || "?"}? Lịch sử đã thu của buổi này cũng mất.`)) return; B.mutate((d) => { d.sessions = d.sessions.filter((x) => x.id !== s.id); }, `Xóa buổi ${s.date || "?"}`); };
+  const del = (s) => { if (!confirm(`Xóa ${M.isMeal(s) ? "kèo ăn" : "buổi"} ${s.date || "?"}? Lịch sử đã thu của buổi này cũng mất.`)) return; B.mutate((d) => { d.sessions = d.sessions.filter((x) => x.id !== s.id); }, `Xóa buổi ${s.date || "?"}`); };
 
   return (
     <Stack spacing={2}>
       <StatCard due={due} got={got} all={all} pct={all > M.EPS ? Math.round(got / all * 100) : 0} sub={`${M.debtors(book).length} người còn nợ · ${openN}/${book.sessions.length} buổi chưa thu xong`} />
-      <Button variant="contained" size="large" startIcon={<Iconify icon="mingcute:add-line" />} onClick={() => setEdit(newSession())}>Thêm buổi chơi</Button>
+      <Stack direction="row" spacing={1}>
+        <Button variant="contained" size="large" sx={{ flexGrow: 1 }} startIcon={<Iconify icon="mingcute:add-line" />} onClick={() => setEdit(newSession())}>Thêm buổi chơi</Button>
+        <Button variant="outlined" size="large" color="warning" onClick={() => setEdit(newSession(M.MEAL))}>🍜 Kèo ăn</Button>
+      </Stack>
       <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)} sx={{ alignSelf: "flex-start" }}>
         <ToggleButton value="open">Chưa xong · {openN}</ToggleButton>
         <ToggleButton value="done">Đã xong · {book.sessions.length - openN}</ToggleButton>
         <ToggleButton value="all">Tất cả · {book.sessions.length}</ToggleButton>
       </ToggleButtonGroup>
-      {list.map((s) => (
+      {list.map((s) => M.isMeal(s) ? (
+        <MealCard key={s.id} book={book} s={s} onChip={(mid) => togglePaid(s, mid)} actions={
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1 }}>
+            {M.sSettled(s)
+              ? <Button size="small" color="inherit" onClick={() => reopen(s)}>Bỏ dấu tất cả</Button>
+              : <Button size="small" color="inherit" onClick={() => payAll(s)}>Thu hết <Money sx={{ ml: 0.75 }}>{money(M.sDue(s))}</Money></Button>}
+            <Box flexGrow={1} />
+            <IconButton size="small" onClick={() => setEdit(clone(s))}><Iconify icon="solar:pen-bold" width={16} /></IconButton>
+            <IconButton size="small" color="error" onClick={() => del(s)}><Iconify icon="solar:trash-bin-trash-bold" width={16} /></IconButton>
+          </Stack>} />
+      ) : (
         <Card key={s.id} sx={{ p: 2 }}>
           <SessionHead s={s} picFor={picFor} setPicFor={setPicFor} />
           <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1.5, mb: 0.75 }}>Bấm tên để đánh dấu đã trả</Typography>
@@ -533,13 +592,17 @@ function AdminSessions({ B, book, setToast, picFor, setPicFor }) {
   );
 }
 
-const newSession = () => ({ id: M.id(), date: "", court: 0, price: M.DEFAULT_PRICE, shuttles: 0, parts: [], paid: {} });
+const newSession = (kind) => ({ id: M.id(), date: "", court: 0, price: M.DEFAULT_PRICE, shuttles: 0, parts: [], paid: {}, ...(kind === M.MEAL ? { kind: M.MEAL } : {}) });
 const clone = (o) => JSON.parse(JSON.stringify(o));
 const numInput = { inputProps: { inputMode: "numeric", style: { ...monoFont, fontVariantNumeric: "tabular-nums" } } };
 
 function SessionDialog({ B, book, draft, onClose, setToast }) {
   const [d, setD] = useState(draft);
   const [newMem, setNewMem] = useState("");
+  const [order, setOrder] = useState("recent");   // recent = chơi gần nhất · count = nhiều buổi nhất
+  const [q, setQ] = useState("");
+  const [showOff, setShowOff] = useState(false);
+  const meal = M.isMeal(d);
   const editing = book.sessions.some((s) => s.id === d.id);
   const upd = (patch) => setD((cur) => ({ ...cur, ...patch }));
   const chosen = new Map(d.parts.map((p) => [p.mid, p.weight]));
@@ -556,47 +619,82 @@ function SessionDialog({ B, book, draft, onClose, setToast }) {
     if (!d.parts.length) { alert("Chọn ít nhất 1 người chơi."); return; }
     if (M.sWeight(d) <= 0) { alert("Tổng hệ số đang bằng 0 — không chia được tiền."); return; }
     const fixed = clone(d);
+    if (meal) { fixed.shuttles = 0; fixed.parts = fixed.parts.map((p) => ({ ...p, weight: 1 })); }   // kèo ăn: chia đều
     Object.keys(fixed.paid).forEach((k) => { if (!fixed.parts.some((p) => p.mid === k)) delete fixed.paid[k]; });
-    B.mutate((bk) => { const i = bk.sessions.findIndex((s) => s.id === fixed.id); if (i < 0) bk.sessions.push(fixed); else bk.sessions[i] = fixed; }, `${editing ? "Sửa" : "Thêm"} buổi ${fixed.date || "?"} · ${money(M.sTotal(fixed))} · ${fixed.parts.length} người`);
-    setToast(editing ? "Đã lưu buổi" : "Đã thêm buổi"); onClose();
+    B.mutate((bk) => { const i = bk.sessions.findIndex((s) => s.id === fixed.id); if (i < 0) bk.sessions.push(fixed); else bk.sessions[i] = fixed; }, `${editing ? "Sửa" : "Thêm"} ${meal ? "kèo ăn" : "buổi"} ${fixed.date || "?"} · ${money(M.sTotal(fixed))} · ${fixed.parts.length} người`);
+    setToast(editing ? "Đã lưu" : meal ? "Đã thêm kèo ăn" : "Đã thêm buổi"); onClose();
   };
+  // danh sách chọn người: ẩn người đã tắt (trừ khi đã có trong buổi), lọc tên, sắp theo gần đây / số buổi
+  const stat = new Map(book.members.map((m) => [m.id, { last: M.lastPlayed(book, m.id), n: M.playCount(book, m.id), due: M.memberDue(book, m.id) }]));
+  const nOff = book.members.filter((m) => M.isOff(m) && !chosen.has(m.id)).length;
+  const pickList = book.members
+    .filter((m) => showOff || !M.isOff(m) || chosen.has(m.id))
+    .filter((m) => !q || M.norm(m.name).includes(M.norm(q)))
+    .sort((a, b) => {
+      const A = stat.get(a.id), Bs = stat.get(b.id);
+      return (order === "recent" ? Bs.last - A.last || Bs.n - A.n : Bs.n - A.n || Bs.last - A.last) || a.name.localeCompare(b.name, "vi");
+    });
   return (
     <Dialog open onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>{editing ? "Sửa buổi" : "Buổi mới"}</DialogTitle>
+      <DialogTitle>{editing ? (meal ? "Sửa kèo ăn" : "Sửa buổi") : (meal ? "🍜 Kèo ăn mới" : "Buổi mới")}</DialogTitle>
       <DialogContent>
-        <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "1fr 1fr", mt: 1 }}>
+        {!editing && (
+          <ToggleButtonGroup size="small" exclusive fullWidth value={meal ? "meal" : "play"} sx={{ mt: 0.5 }}
+            onChange={(_, v) => v && setD((cur) => { const n = { ...cur }; if (v === "meal") n.kind = M.MEAL; else delete n.kind; return n; })}>
+            <ToggleButton value="play">🏸 Buổi cầu</ToggleButton>
+            <ToggleButton value="meal">🍜 Kèo ăn</ToggleButton>
+          </ToggleButtonGroup>
+        )}
+        {meal ? (
+          <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "1fr 1fr", mt: 1.5 }}>
+            <TextField label="Ngày" placeholder="vd: 20/6" value={d.date} onChange={(e) => upd({ date: e.target.value })} />
+            <TextField label="Tổng bill (k)" type="number" value={d.court || ""} onChange={(e) => upd({ court: +e.target.value || 0 })} {...numInput} />
+          </Box>
+        ) : (
+        <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "1fr 1fr", mt: 1.5 }}>
           <TextField label="Ngày" placeholder="vd: 20/6" value={d.date} onChange={(e) => upd({ date: e.target.value })} />
           <TextField label="Tiền sân (k)" type="number" value={d.court || ""} onChange={(e) => upd({ court: +e.target.value || 0 })} {...numInput} />
           <TextField label="Số cầu" type="number" value={d.shuttles || ""} onChange={(e) => upd({ shuttles: +e.target.value || 0 })} {...numInput} />
           <TextField label="Giá 1 cầu (k)" type="number" value={d.price} onChange={(e) => upd({ price: +e.target.value || M.DEFAULT_PRICE })} {...numInput} />
         </Box>
-        <SectionLabel sx={{ mt: 2.5 }} right={<Typography variant="caption" color="text.secondary">{d.parts.length} đã chọn</Typography>}>Người chơi & hệ số</SectionLabel>
+        )}
+        <SectionLabel sx={{ mt: 2.5 }} right={
+          <ToggleButtonGroup size="small" exclusive value={order} onChange={(_, v) => v && setOrder(v)} sx={{ p: 0.3, gap: 0.3 }}>
+            <ToggleButton value="recent" sx={{ px: 1, py: 0.1, fontSize: 12, whiteSpace: "nowrap" }}>Gần đây</ToggleButton>
+            <ToggleButton value="count" sx={{ px: 1, py: 0.1, fontSize: 12, whiteSpace: "nowrap" }}>Nhiều buổi</ToggleButton>
+          </ToggleButtonGroup>}>{meal ? "Ai đi ăn" : "Người chơi"} · {d.parts.length} đã chọn</SectionLabel>
+        <TextField size="small" fullWidth placeholder="Tìm tên…" value={q} onChange={(e) => setQ(e.target.value)} sx={{ mb: 1 }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><Iconify icon="solar:magnifer-linear" width={18} sx={{ color: "text.disabled" }} /></InputAdornment> }} />
         <Paper variant="outlined" sx={{ maxHeight: 320, overflow: "auto", borderRadius: 1.5 }}>
           <List dense disablePadding>
-            {book.members.map((m) => {
-              const on = chosen.has(m.id), wt = on ? chosen.get(m.id) : 1;
+            {pickList.map((m) => {
+              const on = chosen.has(m.id), wt = on ? chosen.get(m.id) : 1, st = stat.get(m.id);
               return (
                 <ListItem key={m.id} divider sx={{ bgcolor: (t) => on ? alpha(t.palette.primary.main, 0.05) : undefined, flexWrap: "wrap", gap: 0.5 }}>
                   <Checkbox edge="start" checked={on} onChange={() => toggle(m.id)} />
                   <ListItemAvatar sx={{ minWidth: 40 }}><MemAvatar m={m} size={28} /></ListItemAvatar>
-                  <ListItemText primary={M.fullName(book, m)} onClick={() => toggle(m.id)} sx={{ cursor: "pointer", flex: "1 1 80px" }} />
-                  {on && <WeightPicker wt={wt} onPick={(w) => setW(m.id, w)} onCustom={(v) => { if (v === null) setToast(`Hệ số không hợp lệ — nhập 0…${M.W_MAX}, vd 1 · 1.5 · 2`); else setW(m.id, v); }} />}
+                  <ListItemText primary={<>{M.fullName(book, m)}{M.isOff(m) && <Typography component="span" variant="caption" color="text.disabled"> · đã ẩn</Typography>}</>}
+                    secondary={<>{st.n} buổi{st.due > M.EPS && <> · nợ <Money sx={{ color: DUE }}>{money(st.due)}</Money></>}</>}
+                    onClick={() => toggle(m.id)} sx={{ cursor: "pointer", flex: "1 1 80px" }} />
+                  {on && !meal && <WeightPicker wt={wt} onPick={(w) => setW(m.id, w)} onCustom={(v) => { if (v === null) setToast(`Hệ số không hợp lệ — nhập 0…${M.W_MAX}, vd 1 · 1.5 · 2`); else setW(m.id, v); }} />}
                 </ListItem>
               );
             })}
+            {pickList.length === 0 && <EmptyRow>Không tìm thấy ai.</EmptyRow>}
           </List>
         </Paper>
+        {nOff > 0 && <Button size="small" color="inherit" sx={{ mt: 0.5, color: "text.secondary" }} onClick={() => setShowOff((v) => !v)}>{showOff ? "Giấu" : "Hiện"} {nOff} người đã ẩn</Button>}
         <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
           <TextField placeholder="Thêm người mới" value={newMem} onChange={(e) => setNewMem(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addMem()} fullWidth
             InputProps={{ startAdornment: <InputAdornment position="start"><Iconify icon="solar:user-plus-bold" sx={{ color: "text.disabled" }} /></InputAdornment> }} />
           <Button variant="outlined" onClick={addMem}>Thêm</Button>
         </Stack>
         <Stack direction="row" alignItems="center" sx={{ mt: 2, p: 1.5, borderRadius: 1.5, bgcolor: (t) => alpha(t.palette.primary.main, 0.08), color: "primary.darker" }}>
-          <Typography variant="body2" sx={{ flexGrow: 1 }}>Tổng <Money sx={{ fontWeight: 700 }}>{money(M.sTotal(d))}</Money> · <Money>{M.wStr(M.sWeight(d))}</Money> suất</Typography>
-          <Money sx={{ fontWeight: 700, fontSize: 18 }}>{money(M.sPerUnit(d))}<Typography component="span" variant="caption">/suất</Typography></Money>
+          <Typography variant="body2" sx={{ flexGrow: 1 }}>Tổng <Money sx={{ fontWeight: 700 }}>{money(M.sTotal(d))}</Money> · <Money>{meal ? d.parts.length : M.wStr(M.sWeight(d))}</Money> {meal ? "người" : "suất"}</Typography>
+          <Money sx={{ fontWeight: 700, fontSize: 18 }}>{money(meal ? (d.parts.length ? M.sTotal(d) / d.parts.length : 0) : M.sPerUnit(d))}<Typography component="span" variant="caption">/{meal ? "người" : "suất"}</Typography></Money>
         </Stack>
       </DialogContent>
-      <DialogActions><Button color="inherit" onClick={onClose}>Đóng</Button><Button variant="contained" onClick={save}>Lưu buổi</Button></DialogActions>
+      <DialogActions><Button color="inherit" onClick={onClose}>Đóng</Button><Button variant="contained" onClick={save}>{meal ? "Lưu kèo ăn" : "Lưu buổi"}</Button></DialogActions>
     </Dialog>
   );
 }
@@ -623,10 +721,17 @@ function AdminMembers({ B, book, setToast, picFor, setPicFor, pickFile }) {
   const [filter, setFilter] = useState("all");
   const [newName, setNewName] = useState("");
   const [open, setOpen] = useState(null);
-  const rows = book.members.map((m) => ({ m, due: M.memberDue(book, m.id), paid: M.memberPaidSum(book, m.id), n: M.memberSessions(book, m.id).length, nDue: M.memberDueSessions(book, m.id).length }))
-    .sort((a, b) => b.due - a.due || a.m.name.localeCompare(b.m.name, "vi"));
+  const rows = book.members.map((m) => ({ m, due: M.memberDue(book, m.id), paid: M.memberPaidSum(book, m.id), n: M.memberSessions(book, m.id).length, pc: M.playCount(book, m.id), nDue: M.memberDueSessions(book, m.id).length }))
+    .sort(M.byDebtThenPlays(book));
   const nDue = rows.filter((r) => r.due > M.EPS).length;
-  const list = rows.filter((r) => filter === "all" || r.due > M.EPS);
+  const nOn = rows.filter((r) => !M.isOff(r.m)).length, nOffM = rows.length - nOn;
+  const list = rows.filter((r) => filter === "off" ? M.isOff(r.m) : filter === "due" ? r.due > M.EPS : !M.isOff(r.m));
+  const toggleOff = (m) => {
+    const off = M.isOff(m), due = M.memberDue(book, m.id);
+    if (!off && due > M.EPS && !confirm(`${m.name} còn nợ ${money(due)}. Vẫn ẩn? (vẫn hiện ở Thu tiền cho tới khi trả xong)`)) return;
+    B.mutate((d) => { const mm = d.members.find((x) => x.id === m.id); if (!mm) return; if (off) delete mm.off; else mm.off = true; }, `${off ? "Hiện lại" : "Ẩn"} thành viên ${m.name}`);
+    setToast(off ? `Đã hiện lại ${m.name}` : `Đã ẩn ${m.name}`);
+  };
   const add = () => { const nm = newName.trim(); if (!nm) return; B.mutate((d) => d.members.push({ id: M.id(), name: nm, av: "" }), `Thêm thành viên: ${nm}`); setNewName(""); setFilter("all"); };
   const rename = (m) => { const nw = (prompt("Đổi tên:", m.name) || "").trim(); if (!nw || nw === m.name) return; B.mutate((d) => { d.members.find((x) => x.id === m.id).name = nw; }, `Đổi tên: "${m.name}" → "${nw}"`); };
   const note = (m) => { const cur = book.flags?.[m.id] || ""; const nw = prompt(`Ghi chú cho ${m.name} (để trống để xóa):`, cur); if (nw === null) return; B.mutate((d) => { if (nw.trim()) d.flags[m.id] = nw.trim(); else delete d.flags[m.id]; }, `${nw.trim() ? "Đặt" : "Xóa"} ghi chú cho ${m.name}`); };
@@ -651,7 +756,8 @@ function AdminMembers({ B, book, setToast, picFor, setPicFor, pickFile }) {
       </Stack>
       <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)} sx={{ alignSelf: "flex-start" }}>
         <ToggleButton value="due">Còn nợ · {nDue}</ToggleButton>
-        <ToggleButton value="all">Tất cả · {rows.length}</ToggleButton>
+        <ToggleButton value="all">Đang chơi · {nOn}</ToggleButton>
+        {nOffM > 0 && <ToggleButton value="off">Đã ẩn · {nOffM}</ToggleButton>}
       </ToggleButtonGroup>
       <Card><List disablePadding>
         {list.map((r, i) => {
@@ -667,11 +773,12 @@ function AdminMembers({ B, book, setToast, picFor, setPicFor, pickFile }) {
                   </Tooltip>
                 </ListItemAvatar>
                 <ListItemText sx={{ minWidth: 0, flex: "1 1 120px" }} primary={<>{M.fullName(book, m)}{book.flags?.[m.id] && <Iconify icon="solar:notes-bold" width={14} style={{ marginLeft: 4, verticalAlign: -2, opacity: 0.6 }} />}</>}
-                  secondary={r.due > M.EPS ? <>nợ <Money sx={{ color: DUE }}>{money(r.due)}</Money> · {r.nDue}/{r.n} buổi</> : `${r.n} buổi · đã trả đủ`} />
+                  secondary={r.due > M.EPS ? <>nợ <Money sx={{ color: DUE }}>{money(r.due)}</Money> · {r.nDue}/{r.n} buổi</> : `${r.pc} buổi · đã trả đủ`} />
                 <Stack direction="row" spacing={0.25} alignItems="center">
                   {r.due > M.EPS && <Button size="small" color="warning" onClick={() => payAll(m)} sx={{ bgcolor: (t) => alpha(t.palette.warning.main, 0.16), color: "warning.dark", "&:hover": { bgcolor: (t) => alpha(t.palette.warning.main, 0.28) } }}>Thu <Money sx={{ ml: 0.5 }}>{money(r.due)}</Money></Button>}
                   <Tooltip title="Chi tiết"><IconButton size="small" onClick={() => setOpen(isOpen ? null : m.id)}><Iconify icon={isOpen ? "solar:alt-arrow-up-bold" : "solar:alt-arrow-down-bold"} width={18} /></IconButton></Tooltip>
                   <Tooltip title="Ghi chú"><IconButton size="small" onClick={() => note(m)}><Iconify icon="solar:notes-bold" width={18} /></IconButton></Tooltip>
+                  <Tooltip title={M.isOff(m) ? "Hiện lại" : "Ẩn (không chơi nữa)"}><IconButton size="small" onClick={() => toggleOff(m)}><Iconify icon={M.isOff(m) ? "solar:eye-bold" : "solar:eye-closed-bold"} width={18} /></IconButton></Tooltip>
                   <Tooltip title="Đổi tên"><IconButton size="small" onClick={() => rename(m)}><Iconify icon="solar:pen-bold" width={18} /></IconButton></Tooltip>
                   <Tooltip title="Xóa"><IconButton size="small" color="error" onClick={() => del(m)}><Iconify icon="solar:trash-bin-trash-bold" width={18} /></IconButton></Tooltip>
                 </Stack>
@@ -686,7 +793,7 @@ function AdminMembers({ B, book, setToast, picFor, setPicFor, pickFile }) {
             </Box>
           );
         })}
-        {list.length === 0 && <EmptyRow>{rows.length ? "Không ai còn nợ 🎉" : "Chưa có thành viên nào."}</EmptyRow>}
+        {list.length === 0 && <EmptyRow>{!rows.length ? "Chưa có thành viên nào." : filter === "due" ? "Không ai còn nợ 🎉" : "Không có ai ở mục này."}</EmptyRow>}
       </List></Card>
     </Stack>
   );

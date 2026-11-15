@@ -4,6 +4,7 @@
 
 export const DEFAULT_PRICE = 30;
 export const LEGACY = "legacy";
+export const MEAL = "meal"; // kèo ăn: tổng bill nằm ở `court`, shuttles = 0 → bản cũ vẫn tính đúng
 export const LOG_MAX = 250;
 export const EPS = 0.05;
 export const W_MAX = 20;
@@ -49,6 +50,7 @@ export function migrate(o) {
     s.parts = Array.isArray(s.parts) ? s.parts : [];
     s.photo = typeof s.photo === "string" ? s.photo : "";
     if (!s.paid || typeof s.paid !== "object" || Array.isArray(s.paid)) s.paid = {};
+    if (s.kind !== MEAL) delete s.kind;            // chỉ nhận "meal"; thiếu field = buổi cầu
   });
   if (o.paid && typeof o.paid === "object" && !Array.isArray(o.paid)) {
     Object.keys(o.paid).forEach((n) => {
@@ -85,9 +87,11 @@ export function migrate(o) {
     });
     o.flags = remap(o.flags);
   } else {
-    o.members = o.members.map((m) => ({
-      id: m.id || id(), name: String(m.name || "?"), av: typeof m.av === "string" ? m.av : "",
-    }));
+    o.members = o.members.map((m) => {
+      const mm = { id: m.id || id(), name: String(m.name || "?"), av: typeof m.av === "string" ? m.av : "" };
+      if (m.off === true) mm.off = true;           // người đã ẩn (không chơi nữa) — thiếu field = đang chơi
+      return mm;
+    });
   }
   const ids = new Set(o.members.map((m) => m.id));
   o.sessions.forEach((s) => {
@@ -128,6 +132,28 @@ export const memberDueSessions = (book, mid) => memberSessions(book, mid).filter
 export const memberDue = (book, mid) => memberDueSessions(book, mid).reduce((a, s) => a + shareIn(s, mid), 0);
 export const memberPaidSum = (book, mid) =>
   memberSessions(book, mid).filter((s) => isPaid(s, mid)).reduce((a, s) => a + shareIn(s, mid), 0);
+// Kèo ăn + thành viên ẩn + sắp xếp
+export const isMeal = (s) => s && s.kind === MEAL;
+export const isOff = (m) => !!(m && m.off);
+export const playCount = (book, mid) => memberSessions(book, mid).filter((s) => !isMeal(s)).length;
+// vị trí buổi cầu gần nhất người này có mặt (sessions được thêm theo thứ tự thời gian); -1 = chưa chơi
+export function lastPlayed(book, mid) {
+  for (let i = book.sessions.length - 1; i >= 0; i--) {
+    const s = book.sessions[i];
+    if (!isMeal(s) && s.parts.some((p) => p.mid === mid)) return i;
+  }
+  return -1;
+}
+// Danh sách tiền: người nợ nhiều nhất lên đầu; ai đã trả đủ thì xếp theo số buổi đã chơi
+export function byDebtThenPlays(book) {
+  const pc = new Map(book.members.map((m) => [m.id, playCount(book, m.id)]));
+  return (a, b) => {
+    const da = a.due > EPS, db = b.due > EPS;
+    if (da !== db) return da ? -1 : 1;
+    if (da) return b.due - a.due || a.m.name.localeCompare(b.m.name, "vi");
+    return (pc.get(b.m.id) || 0) - (pc.get(a.m.id) || 0) || a.m.name.localeCompare(b.m.name, "vi");
+  };
+}
 export const totalDue = (book) => book.sessions.reduce((a, s) => a + sDue(s), 0);
 export const totalCollected = (book) => book.sessions.reduce((a, s) => a + sCollected(s), 0);
 export const debtors = (book) => book.members.filter((m) => memberDue(book, m.id) > EPS);
@@ -175,6 +201,7 @@ export function diffSummary(mine, theirs) {
     Object.keys(b.paid || {}).forEach((mid) => { if (!(a.paid || {})[mid])
       out.push(`Buổi ${d} · ${nm(theirs, mid)}: web ghi đã trả, máy này chưa`); });
     if ((a.photo || "") !== (b.photo || "")) out.push(`Buổi ${d}: ảnh buổi chơi khác nhau`);
+    if (isMeal(a) !== isMeal(b)) out.push(`Buổi ${d}: loại (cầu / kèo ăn) khác nhau`);
   });
   const mA = new Map((mine.members || []).map((m) => [m.id, m]));
   const mB = new Map((theirs.members || []).map((m) => [m.id, m]));
@@ -182,7 +209,8 @@ export function diffSummary(mine, theirs) {
   mB.forEach((m, k) => { if (!mA.has(k)) out.push(`Người ${m.name}: chỉ có trên web`); });
   mA.forEach((m, k) => { const o = mB.get(k); if (!o) return;
     if (m.name !== o.name) out.push(`Tên khác: "${m.name}" ở máy này / "${o.name}" trên web`);
-    if ((m.av || "") !== (o.av || "")) out.push(`Ảnh đại diện của ${m.name} khác nhau`); });
+    if ((m.av || "") !== (o.av || "")) out.push(`Ảnh đại diện của ${m.name} khác nhau`);
+    if (isOff(m) !== isOff(o)) out.push(`${m.name}: ẩn / hiện khác nhau`); });
   if ((mine.note || "") !== (theirs.note || "")) out.push("Thông tin ngân hàng khác nhau");
   if ((mine.qr || "") !== (theirs.qr || "")) out.push("Mã QR khác nhau");
   return out;
