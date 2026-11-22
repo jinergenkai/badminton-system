@@ -53,3 +53,13 @@ CREATE TABLE IF NOT EXISTS match_players (
 );
 CREATE INDEX IF NOT EXISTS idx_mp_player ON match_players(player_id);
 CREATE INDEX IF NOT EXISTS idx_mp_match ON match_players(match_id);
+
+-- Bảng xếp sân theo ngày (web Pickup): ai có mặt + các sân, mỗi sân 4 ô
+-- (Đỏ 1, Đỏ 2, Xanh 1, Xanh 2). Một JSON/ngày, rev chống ghi đè như sổ tiền.
+-- Sau này phone đọc bảng này để gửi cặp xuống band.
+CREATE TABLE IF NOT EXISTS boards (
+  day        TEXT PRIMARY KEY,            -- YYYY-MM-DD giờ VN
+  data       TEXT NOT NULL,               -- {"present":[id..],"courts":[{"name","slots":[4]}]}
+  rev        INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

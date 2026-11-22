@@ -126,7 +126,7 @@ def elo_ref(matches, k=32, base=1000.0):
 
 def reset_db():
     con = db.connect()
-    for t in ("players", "matches", "match_players", "sessions"):
+    for t in ("players", "matches", "match_players", "sessions", "boards"):
         con.execute(f"DELETE FROM {t}")
     con.commit()
     con.close()
@@ -312,6 +312,68 @@ class TestPickup(Base):
         st, j = http("GET", "/api/pickup?session=buoi1")
         self.assertEqual(st, 200)
         self.assertEqual({p["id"]: p["played"] for p in j["pickup"]}["m0"], 1)
+
+
+class TestBoard(Base):
+    def setUp(self):
+        super().setUp()
+        con = db.connect()
+        con.execute("DELETE FROM boards")
+        con.commit()
+        con.close()
+
+    def board(self, **kw):
+        b = {"present": ["m0", "m1", "m2", "m3", "m4"],
+             "courts": [{"name": "Sân 1", "slots": ["m0", "m1", "m2", "m3"]},
+                        {"name": "Sân 2", "slots": [None, None, None, None]}]}
+        b.update(kw)
+        return b
+
+    def test_empty_default(self):
+        st, j = http("GET", "/api/board?date=" + TODAY)
+        self.assertEqual((st, j["rev"]), (200, 0))
+        self.assertEqual(len(j["board"]["courts"]), 1)
+        self.assertEqual(j["board"]["courts"][0]["slots"], [None] * 4)
+
+    def test_save_rev_and_conflict(self):
+        st, j = http("POST", "/api/board", {"pass": PASS, "date": TODAY, "rev": 0, "board": self.board()})
+        self.assertEqual((st, j["rev"]), (200, 1))
+        self.assertEqual(http("GET", "/api/board?date=" + TODAY)[1]["board"]["courts"][0]["slots"],
+                         ["m0", "m1", "m2", "m3"])
+        # máy khác vẫn cầm rev 0 -> 409 kèm bản server, KHÔNG ghi đè
+        st, j = http("POST", "/api/board", {"pass": PASS, "date": TODAY, "rev": 0,
+                                            "board": self.board(present=[])})
+        self.assertEqual(st, 409)
+        self.assertEqual(j["server"]["rev"], 1)
+        self.assertIn("m4", http("GET", "/api/board?date=" + TODAY)[1]["board"]["present"])
+        # ngày khác độc lập
+        self.assertEqual(http("GET", "/api/board?date=" + YESTERDAY)[1]["rev"], 0)
+
+    def test_validation(self):
+        dup = self.board(courts=[{"name": "A", "slots": ["m0", "m0", None, None]}])
+        self.assertEqual(http("POST", "/api/board", {"pass": PASS, "date": TODAY, "rev": 0, "board": dup})[0], 400)
+        two = self.board(courts=[{"name": "A", "slots": ["m0", None, None, None]},
+                                 {"name": "B", "slots": ["m0", None, None, None]}])
+        self.assertEqual(http("POST", "/api/board", {"pass": PASS, "date": TODAY, "rev": 0, "board": two})[0], 400)
+        bad = self.board(courts=[{"name": "A", "slots": [None, None, None]}])
+        self.assertEqual(http("POST", "/api/board", {"pass": PASS, "date": TODAY, "rev": 0, "board": bad})[0], 400)
+        self.assertEqual(http("POST", "/api/board", {"pass": PASS, "date": TODAY, "rev": 0,
+                                                     "board": self.board(courts=[])})[0], 400)
+        self.assertEqual(http("POST", "/api/board", {"pass": "sai", "date": TODAY, "rev": 0,
+                                                     "board": self.board()})[0], 401)
+        # người trên sân mà quên tick có mặt -> tự thêm vào present
+        st, j = http("POST", "/api/board", {"pass": PASS, "date": TODAY, "rev": 0,
+                                            "board": self.board(present=[])})
+        self.assertEqual(st, 200)
+        self.assertEqual(sorted(j["board"]["present"]), ["m0", "m1", "m2", "m3"])
+
+    def test_last_ended_for_wait_time(self):
+        http("POST", "/api/sync/matches", {"matches": [match("t1", ["m0", "m1"], ["m2", "m3"], 21, 10, TODAY, "18:00")]})
+        by = {p["id"]: p for p in http("GET", "/api/pickup?date=" + TODAY)[1]["pickup"]}
+        # helper match(): ended_at = played_at + 30 giây -> phải lấy giờ RỜI sân, không phải giờ vào
+        self.assertEqual(by["m0"]["last_ended"], TODAY + "T18:00:30.000")
+        self.assertGreater(by["m0"]["last_ended"], by["m0"]["last_played"])
+        self.assertEqual(by["m4"]["last_ended"], "")
 
 
 def tearDownModule():

@@ -253,6 +253,90 @@ def ranking() -> list[dict]:
         con.close()
 
 
+MAX_COURTS = 8
+
+
+def empty_board() -> dict:
+    return {"present": [], "courts": [{"name": "Sân 1", "slots": [None, None, None, None]}]}
+
+
+def clean_board(b) -> dict:
+    """Kiểm + chuẩn hoá bảng xếp sân. Sai cấu trúc -> ValueError (400).
+    Một người chỉ được ở 1 ô trên toàn bảng; người trên sân tự tính là có mặt."""
+    if not isinstance(b, dict):
+        raise ValueError("board phải là object")
+    present = b.get("present") or []
+    courts = b.get("courts") or []
+    if not isinstance(present, list) or not isinstance(courts, list):
+        raise ValueError("present/courts phải là mảng")
+    if not 1 <= len(courts) <= MAX_COURTS:
+        raise ValueError(f"cần 1..{MAX_COURTS} sân")
+    seen: set[str] = set()
+    out_courts = []
+    for i, c in enumerate(courts):
+        if not isinstance(c, dict):
+            raise ValueError("sân phải là object")
+        slots = c.get("slots")
+        if not isinstance(slots, list) or len(slots) != 4:
+            raise ValueError("mỗi sân đúng 4 ô")
+        clean = []
+        for x in slots:
+            if x is None or x == "":
+                clean.append(None)
+                continue
+            pid = str(x)
+            if pid in seen:
+                raise ValueError(f"{pid} đang ở 2 ô cùng lúc")
+            seen.add(pid)
+            clean.append(pid)
+        name = str(c.get("name") or f"Sân {i + 1}").strip()[:20] or f"Sân {i + 1}"
+        out_courts.append({"name": name, "slots": clean})
+    pres = []
+    for x in present + sorted(seen):
+        pid = str(x)
+        if pid and pid not in pres:
+            pres.append(pid)
+    return {"present": pres[:200], "courts": out_courts}
+
+
+def get_board(day: str) -> dict:
+    import json
+    con = connect()
+    try:
+        row = con.execute("SELECT data,rev,updated_at FROM boards WHERE day=?", (day,)).fetchone()
+    finally:
+        con.close()
+    if row is None:
+        return {"date": day, "rev": 0, "updated_at": None, "board": empty_board()}
+    return {"date": day, "rev": row["rev"], "updated_at": row["updated_at"],
+            "board": json.loads(row["data"])}
+
+
+def save_board(day: str, rev: int, board) -> tuple[bool, dict]:
+    """Ghi nếu rev khớp bản trên server. Trả (ok, bản hiện tại sau khi xử lý).
+    Lệch rev -> (False, bản server) để client tự gộp, không đè mất của nhau."""
+    import json
+    clean = clean_board(board)
+    con = connect()
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        row = con.execute("SELECT rev FROM boards WHERE day=?", (day,)).fetchone()
+        cur = row["rev"] if row else 0
+        if int(rev) != cur:
+            con.rollback()
+            return False, get_board(day)
+        con.execute(
+            "INSERT INTO boards(day,data,rev,updated_at) VALUES(?,?,?,datetime('now'))"
+            " ON CONFLICT(day) DO UPDATE SET data=excluded.data, rev=excluded.rev,"
+            " updated_at=excluded.updated_at",
+            (day, json.dumps(clean, ensure_ascii=False), cur + 1),
+        )
+        con.commit()
+    finally:
+        con.close()
+    return True, get_board(day)
+
+
 def pickup_by_date(day: str) -> dict:
     """Cho một NGÀY (YYYY-MM-DD, giờ VN): mỗi người active + số trận đã đánh trong
     ngày + lần cuối vào sân + Elo. Phone gửi played_at dạng ISO giờ local không
@@ -266,7 +350,7 @@ def pickup_by_date(day: str) -> dict:
             " ORDER BY name COLLATE NOCASE"
         ).fetchall()
         rows = con.execute(
-            "SELECT mp.player_id AS pid, m.played_at AS t FROM match_players mp"
+            "SELECT mp.player_id AS pid, m.played_at AS t, m.ended_at AS e FROM match_players mp"
             " JOIN matches m ON m.id=mp.match_id WHERE substr(m.played_at,1,10)=?",
             (day,),
         ).fetchall()
@@ -275,17 +359,21 @@ def pickup_by_date(day: str) -> dict:
         ).fetchone()[0]
         counts: dict[str, dict] = {}
         for row in rows:
-            c = counts.setdefault(row["pid"], {"played": 0, "last": ""})
+            c = counts.setdefault(row["pid"], {"played": 0, "last": "", "end": ""})
             c["played"] += 1
             if (row["t"] or "") > c["last"]:
                 c["last"] = row["t"] or ""
+            # giờ RỜI sân gần nhất (không có ended_at thì lấy giờ vào sân)
+            end = row["e"] or row["t"] or ""
+            if end > c["end"]:
+                c["end"] = end
         out = []
         for p in players:
-            c = counts.get(p["id"], {"played": 0, "last": ""})
+            c = counts.get(p["id"], {"played": 0, "last": "", "end": ""})
             out.append({
                 "id": p["id"], "name": p["name"], "short": p["short"], "avatar": p["avatar"],
                 "elo": p["elo"], "guest": p["source"] == GUEST_SOURCE,
-                "played": c["played"], "last_played": c["last"],
+                "played": c["played"], "last_played": c["last"], "last_ended": c["end"],
             })
         out.sort(key=lambda x: (x["played"], x["last_played"] or "", x["name"].lower()))
         return {"date": day, "matches": n_matches, "pickup": out}

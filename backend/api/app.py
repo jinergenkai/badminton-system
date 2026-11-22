@@ -10,6 +10,8 @@ Chức năng:
   GET  /api/pickup?date=YYYY-MM-DD  -> số trận từng người trong ngày (mặc định hôm nay)
   GET  /api/pickup?session=<id>     -> như trên nhưng theo buổi (cũ, giữ tương thích)
   POST /api/roster/reseed           -> kéo lại danh bạ từ sổ tiền (Blob) + đẩy mirror
+  GET  /api/board?date=             -> bảng xếp sân của ngày (ai có mặt + các sân 4 ô)
+  POST /api/board  {pass,date,rev,board}     -> lưu bảng xếp sân (409 nếu lệch rev)
   POST /api/guests        {pass,name,short?} -> tạo khách vãng lai (mật khẩu quản trị)
   POST /api/guests/hide   {pass,id}          -> ẩn khách
 
@@ -266,6 +268,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"players": db.roster(active_only=False)})
             if path == "/api/ranking":
                 return self._send(200, {"ranking": db.ranking()})
+            if path == "/api/board":
+                day = (q.get("date") or [""])[0].strip() or db.today_vn()
+                if not _is_day(day):
+                    return self._send(400, {"error": "date phải dạng YYYY-MM-DD"})
+                return self._send(200, db.get_board(day))
             if path == "/api/pickup":
                 sid = (q.get("session") or [""])[0]
                 if sid:
@@ -313,6 +320,25 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(e.code, {"error": e.read().decode("utf-8", "ignore")})
             except Exception as e:  # noqa: BLE001
                 return self._send(502, {"error": "không gọi được crawler: " + str(e)})
+        # Bảng xếp sân: web ghi (mật khẩu quản trị), rev chống ghi đè như sổ tiền.
+        if path == "/api/board":
+            body = self._read_json()
+            if not isinstance(body, dict):
+                return self._send(400, {"error": "body không phải JSON"})
+            if not _pass_ok(body.get("pass")):
+                return self._send(401, {"error": "sai mật khẩu quản trị"})
+            day = str(body.get("date") or "").strip()
+            if not _is_day(day):
+                return self._send(400, {"error": "date phải dạng YYYY-MM-DD"})
+            try:
+                ok, cur = db.save_board(day, int(body.get("rev") or 0), body.get("board"))
+            except (ValueError, TypeError) as e:
+                return self._send(400, {"error": str(e)})
+            except Exception as e:  # noqa: BLE001
+                return self._send(500, {"error": str(e)})
+            if not ok:
+                return self._send(409, {"error": "conflict", "server": cur})
+            return self._send(200, {"ok": True, **cur})
         # Khách vãng lai: tạo/ẩn từ web, gate bằng mật khẩu quản trị như trên.
         if path in ("/api/guests", "/api/guests/hide"):
             body = self._read_json()

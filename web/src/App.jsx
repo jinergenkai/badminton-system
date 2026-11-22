@@ -19,7 +19,7 @@ const TABS = [
   { label: "Tiền cầu", icon: "solar:wallet-money-bold-duotone", el: <BillBook />, maxWidth: 600 },
   { label: "Sân trống", icon: "solar:calendar-search-bold-duotone", el: <Courts />, maxWidth: "lg" },
   { label: "Ranking", icon: "solar:cup-star-bold-duotone", el: <Ranking />, maxWidth: "md" },
-  { label: "Pickup", icon: "solar:users-group-rounded-bold-duotone", el: <Pickup />, maxWidth: "md" },
+  { label: "Xếp sân", icon: "solar:users-group-rounded-bold-duotone", el: <Pickup />, maxWidth: 600 },
 ];
 
 export default function App() {
