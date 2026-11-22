@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rankOf, RANKS } from "../src/lib/ranks.js";
-import { RANK_FRAME_SVG } from "../src/components/rank/frames.gen.js";
+import { AWARD_BADGE_SVG, HOST_BADGE_SVG, RANK_FRAME_SVG } from "../src/components/rank/frames.gen.js";
 
 test("hạng theo mốc Elo", () => {
   assert.equal(rankOf(800).key, "dong");
@@ -16,4 +16,9 @@ test("hạng theo mốc Elo", () => {
 
 test("mỗi hạng có khung SVG", () => {
   for (const r of RANKS) assert.ok(RANK_FRAME_SVG[r.key]?.includes("<"), r.key);
+});
+
+test("có huy hiệu host", () => {
+  assert.ok(HOST_BADGE_SVG.includes("#256E4E"));
+  assert.ok(AWARD_BADGE_SVG.includes("<polygon"));
 });

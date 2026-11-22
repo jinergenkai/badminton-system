@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS players (
   played     INTEGER NOT NULL DEFAULT 0,
   source     TEXT NOT NULL DEFAULT 'billbook',  -- billbook | guest | phone
   level      TEXT NOT NULL DEFAULT '',          -- trình độ host đặt -> Elo khởi điểm (db.LEVELS)
+  host       INTEGER NOT NULL DEFAULT 0,        -- 1 = người tổ chức sân (huy hiệu riêng trên web)
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

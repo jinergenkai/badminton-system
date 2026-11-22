@@ -272,9 +272,30 @@ class TestLevels(Base):
             db.DB_PATH = path
             db.init_db(); db.init_db()          # chạy 2 lần không lỗi
             row = {p["id"]: p for p in db.roster()}["x"]
-            self.assertEqual((row["name"], row["level"]), ("Cũ", ""))
+            self.assertEqual((row["name"], row["level"], row["host"]), ("Cũ", "", False))
         finally:
             db.DB_PATH = old
+
+
+class TestHost(Base):
+    def test_host_flag(self):
+        set_ = lambda pid, h, pw=PASS: http("POST", "/api/players/host", {"pass": pw, "id": pid, "host": h})
+        self.assertEqual(set_("m0", True, "sai")[0], 401)
+        self.assertEqual(set_("khong-co", True)[0], 404)
+        self.assertEqual(set_("m0", True)[0], 200)
+        roster = {p["id"]: p for p in http("GET", "/api/roster")[1]["players"]}
+        self.assertIs(roster["m0"]["host"], True)
+        self.assertIs(roster["m1"]["host"], False)
+        pick = {p["id"]: p for p in http("GET", "/api/pickup?date=" + TODAY)[1]["pickup"]}
+        self.assertIs(pick["m0"]["host"], True)
+        http("POST", "/api/sync/matches", {"matches": [match("a", ["m0", "m1"], ["m2", "m3"], 21, 10)]})
+        self.assertIs(self.ranking()["m0"]["host"], True)
+        self.assertEqual(self.ranking()["m0"]["elo"], 1024.0)   # host không đổi Elo
+        set_("m0", False)
+        self.assertIs({p["id"]: p for p in http("GET", "/api/roster")[1]["players"]}["m0"]["host"], False)
+        # kéo lại sổ tiền không xoá cờ host
+        set_("m1", True); app.reseed_from_billbook()
+        self.assertIs({p["id"]: p for p in http("GET", "/api/roster")[1]["players"]}["m1"]["host"], True)
 
 
 class TestGuests(Base):

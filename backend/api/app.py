@@ -13,6 +13,7 @@ Chức năng:
   GET  /api/board?date=             -> bảng xếp sân của ngày (ai có mặt + các sân 4 ô)
   POST /api/board  {pass,date,rev,board}     -> lưu bảng xếp sân (409 nếu lệch rev)
   POST /api/players/level {pass,id,level}    -> đặt trình độ (Elo khởi điểm), tính lại Elo
+  POST /api/players/host  {pass,id,host}     -> đánh dấu host sân (nhãn hiển thị)
   POST /api/guests        {pass,name,short?} -> tạo khách vãng lai (mật khẩu quản trị)
   POST /api/guests/hide   {pass,id}          -> ẩn khách
 
@@ -340,6 +341,23 @@ class Handler(BaseHTTPRequestHandler):
             if not ok:
                 return self._send(409, {"error": "conflict", "server": cur})
             return self._send(200, {"ok": True, **cur})
+        # Host sân: chỉ là nhãn, mật khẩu quản trị.
+        if path == "/api/players/host":
+            body = self._read_json()
+            if not isinstance(body, dict):
+                return self._send(400, {"error": "body không phải JSON"})
+            if not _pass_ok(body.get("pass")):
+                return self._send(401, {"error": "sai mật khẩu quản trị"})
+            con = db.connect()
+            try:
+                ok = db.set_host(con, str(body.get("id") or ""), bool(body.get("host")))
+                con.commit()
+            finally:
+                con.close()
+            if not ok:
+                return self._send(404, {"error": "không có người này"})
+            push_roster_mirror()
+            return self._send(200, {"ok": True})
         # Trình độ (Elo khởi điểm): web đặt, mật khẩu quản trị. Tính lại Elo + đẩy mirror.
         if path == "/api/players/level":
             body = self._read_json()

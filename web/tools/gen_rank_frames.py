@@ -5,6 +5,8 @@
 
 Mỗi hạng vẽ quanh tâm (0,0), avatar r=30 đặt giữa (component RankFrame lo phần avatar).
 Hạng: Đồng · Bạc · Vàng · Bạch kim · Kim cương · Cao thủ (2 vợt chéo).
+Thêm HOST_BADGE_SVG: ruy-băng xanh dưới đáy khung (host sân), vẽ đè lên khung.
+AWARD_BADGE_SVG: mề đay (để dành cho trao giải sau này).
 Sửa hình ở đây rồi chạy lại; đừng sửa tay file .gen.js.
 """
 import math
@@ -102,6 +104,36 @@ gem(cx,cy-48,12,"#D6303A","#FFD0C2","#5A0F14")
 MARK.append(len(out))
 
 
+# Mề đay góc dưới-phải (để dành trao giải; toạ độ theo viewBox khung -68 -82 136 152)
+def award_badge(bx=40, by=40, r=17):
+    o=[]
+    # dải ruy-băng sau mề đay
+    o.append(f'<path d="M{bx-9} {by+8} l-5 16 l7 -4 l4 7 l4 -15 Z" fill="#1A5139" stroke="#0E3324" stroke-width="1"/>')
+    o.append(f'<path d="M{bx+9} {by+8} l5 16 l-7 -4 l-4 7 l-4 -15 Z" fill="#256E4E" stroke="#0E3324" stroke-width="1"/>')
+    # mề đay: viền vàng răng cưa + lõi xanh sân
+    n=16
+    pts=" ".join(f"{bx+(r if i%2==0 else r-2.6)*math.cos(math.pi*i/n):.1f},{by+(r if i%2==0 else r-2.6)*math.sin(math.pi*i/n):.1f}" for i in range(2*n))
+    o.append(f'<polygon points="{pts}" fill="#F2C94C" stroke="#7A5200" stroke-width="1.2" stroke-linejoin="round"/>')
+    o.append(f'<circle cx="{bx}" cy="{by}" r="{r-4.5}" fill="#256E4E" stroke="#FFE8A3" stroke-width="1.2"/>')
+    # quả cầu lông: chóp cork + tán lông
+    o.append(f'<path d="M{bx-3} {by+2.5} L{bx-7.5} {by-8} L{bx+7.5} {by-8} L{bx+3} {by+2.5} Z" fill="#FFFFFF" stroke="#D5EDE1" stroke-width="0.6"/>')
+    for x in (-4.5,-1.5,1.5,4.5):
+        o.append(f'<line x1="{bx+x*0.45:.1f}" y1="{by+2.5}" x2="{bx+x:.1f}" y2="{by-8}" stroke="#9CC7B2" stroke-width="0.7"/>')
+    o.append(f'<path d="M{bx-7.5} {by-8} Q{bx} {by-10.5} {bx+7.5} {by-8}" fill="none" stroke="#9CC7B2" stroke-width="0.8"/>')
+    o.append(f'<path d="M{bx-3.4} {by+2.2} A3.4 3.4 0 0 0 {bx+3.4} {by+2.2} Z" fill="#F2C94C" stroke="#7A5200" stroke-width="0.7"/>')
+    return "".join(o)
+
+# Huy hiệu host: ruy-băng xanh đuôi xẻ nằm dưới đáy khung, giữa có quả cầu (không ôm viền,
+# không đè vợt Cao thủ; giống nhau ở mọi hạng)
+def host_badge():
+    G,GD,GT,Y,YD="#256E4E","#0E3324","#163F2D","#F2C94C","#7A5200"
+    y,w,h=56,22,9
+    return (f'<path d="M{-w-9} {y-2} l9 0 l0 {h} l-9 0 l4 -{h/2} Z" fill="{GT}" stroke="{GD}" stroke-width="1"/>'
+            f'<path d="M{w+9} {y-2} l-9 0 l0 {h} l9 0 l-4 -{h/2} Z" fill="{GT}" stroke="{GD}" stroke-width="1"/>'
+            f'<path d="M{-w} {y-5} Q0 {y-1} {w} {y-5} L{w} {y+5} Q0 {y+9} {-w} {y+5} Z" fill="{G}" stroke="{Y}" stroke-width="1.3"/>'
+            f'<circle cx="0" cy="{y+1.5}" r="5.6" fill="{Y}" stroke="{YD}" stroke-width="1.2"/>'
+            f'<path d="M-2.2 {y+2.8} L-3.6 {y-1.5} H3.6 L2.2 {y+2.8} Z" fill="#fff" stroke="{YD}" stroke-width="0.6"/>')
+
 import json, os
 keys = ["dong", "bac", "vang", "bach-kim", "kim-cuong", "cao-thu"]
 parts, start = {}, 0
@@ -111,6 +143,10 @@ dst = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "src", "com
 js = ("// TỰ SINH từ tools/gen_rank_frames.py — đừng sửa tay.\n"
       "// Khung hạng (SVG, tâm 0,0; avatar r=30 nằm giữa). viewBox chung: RANK_VIEWBOX.\n"
       'export const RANK_VIEWBOX = "-68 -82 136 152";\n'
-      "export const RANK_FRAME_SVG = " + json.dumps(parts, ensure_ascii=False, indent=1) + ";\n")
+      "export const RANK_FRAME_SVG = " + json.dumps(parts, ensure_ascii=False, indent=1) + ";\n"
+      "// Huy hiệu host sân: ruy-băng xanh dưới đáy khung, vẽ đè lên khung hạng.\n"
+      "export const HOST_BADGE_SVG = " + json.dumps(host_badge(), ensure_ascii=False) + ";\n"
+      "// Mề đay — để dành cho trao giải (chưa dùng trong UI).\n"
+      "export const AWARD_BADGE_SVG = " + json.dumps(award_badge(), ensure_ascii=False) + ";\n")
 open(dst, "w", encoding="utf-8", newline="\n").write(js)
 print("ghi", os.path.normpath(dst), {k: len(v) for k, v in parts.items()})

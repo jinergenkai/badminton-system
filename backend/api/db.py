@@ -79,6 +79,8 @@ def init_db() -> None:
         cols = {r[1] for r in con.execute("PRAGMA table_info(players)")}
         if "level" not in cols:
             con.execute("ALTER TABLE players ADD COLUMN level TEXT NOT NULL DEFAULT ''")
+        if "host" not in cols:
+            con.execute("ALTER TABLE players ADD COLUMN host INTEGER NOT NULL DEFAULT 0")
         con.commit()
     finally:
         con.close()
@@ -129,13 +131,15 @@ def upsert_player(con: sqlite3.Connection, p: dict) -> str:
 def _with_guest(row) -> dict:
     d = dict(row)
     d["guest"] = d.get("source") == GUEST_SOURCE
+    if "host" in d:
+        d["host"] = bool(d["host"])
     return d
 
 
 def roster(active_only: bool = False) -> list[dict]:
     con = connect()
     try:
-        sql = ("SELECT id,name,short,avatar,active,phone_id,elo,wins,losses,played,source,level"
+        sql = ("SELECT id,name,short,avatar,active,phone_id,elo,wins,losses,played,source,level,host"
                " FROM players")
         if active_only:
             sql += " WHERE active=1"
@@ -189,6 +193,13 @@ def set_level(con: sqlite3.Connection, pid: str, level: str) -> bool:
         return False
     recompute_ratings(con)
     return True
+
+
+def set_host(con: sqlite3.Connection, pid: str, host: bool) -> bool:
+    """Đánh dấu người tổ chức sân (host). Chỉ là nhãn hiển thị — không đổi Elo/quyền."""
+    cur = con.execute("UPDATE players SET host=?, updated_at=datetime('now') WHERE id=?",
+                      (1 if host else 0, str(pid or "")))
+    return cur.rowcount > 0
 
 
 def unknown_ids(con: sqlite3.Connection, ids) -> list[str]:
@@ -286,7 +297,7 @@ def ranking() -> list[dict]:
     con = connect()
     try:
         return [_with_guest(x) for x in con.execute(
-            "SELECT id,name,short,avatar,elo,wins,losses,played,source,level FROM players"
+            "SELECT id,name,short,avatar,elo,wins,losses,played,source,level,host FROM players"
             " WHERE active=1 AND played>0 ORDER BY elo DESC, wins DESC, name COLLATE NOCASE"
         ).fetchall()]
     finally:
@@ -386,7 +397,7 @@ def pickup_by_date(day: str) -> dict:
     con = connect()
     try:
         players = con.execute(
-            "SELECT id,name,short,avatar,elo,source,level FROM players WHERE active=1"
+            "SELECT id,name,short,avatar,elo,source,level,host FROM players WHERE active=1"
             " ORDER BY name COLLATE NOCASE"
         ).fetchall()
         rows = con.execute(
@@ -412,7 +423,7 @@ def pickup_by_date(day: str) -> dict:
             c = counts.get(p["id"], {"played": 0, "last": "", "end": ""})
             out.append({
                 "id": p["id"], "name": p["name"], "short": p["short"], "avatar": p["avatar"],
-                "elo": p["elo"], "guest": p["source"] == GUEST_SOURCE, "level": p["level"],
+                "elo": p["elo"], "guest": p["source"] == GUEST_SOURCE, "level": p["level"], "host": bool(p["host"]),
                 "played": c["played"], "last_played": c["last"], "last_ended": c["end"],
             })
         out.sort(key=lambda x: (x["played"], x["last_played"] or "", x["name"].lower()))

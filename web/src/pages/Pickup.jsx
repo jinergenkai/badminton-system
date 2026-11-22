@@ -191,7 +191,7 @@ function DragChip({ p }) {
 }
 
 // ---------- dialog "hôm nay ai tới" ----------
-function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddGuest, onLevel }) {
+function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddGuest, onLevel, onHost }) {
   const [q, setQ] = useState("");
   const [lvMenu, setLvMenu] = useState(null); // {el, p}
   const [guest, setGuest] = useState("");
@@ -222,7 +222,7 @@ function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddG
               return (
                 <ListItem key={p.id} divider sx={{ bgcolor: (t) => (on ? alpha(t.palette.primary.main, 0.05) : undefined) }}>
                   <Checkbox edge="start" checked={on} disabled={!isAdmin} onChange={() => onToggle(p.id)} />
-                  <ListItemAvatar sx={{ minWidth: 40 }}><PAvatar p={p} size={28} /></ListItemAvatar>
+                  <ListItemAvatar sx={{ minWidth: 46 }}><RankFrame p={p} size={38} sx={{ my: -0.5 }} /></ListItemAvatar>
                   <ListItemText onClick={() => isAdmin && onToggle(p.id)} sx={{ cursor: isAdmin ? "pointer" : "default" }}
                     primary={<Box component="span" sx={{ display: "inline-flex", alignItems: "center" }}>{p.name}{p.guest && <GuestTag />}</Box>}
                     secondary={`${p.played} trận hôm nay · ${Math.round(p.elo || 1000)}`} secondaryTypographyProps={{ noWrap: true }} />
@@ -258,6 +258,10 @@ function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddG
             </MenuItem>
           ))}
           <MenuItem onClick={() => { onLevel(lvMenu.p, ""); setLvMenu(null); }}><ListItemText primary="Chưa đặt" secondary="như Trung bình (1000)" /></MenuItem>
+          <MenuItem divider={false} sx={{ borderTop: (t) => `1px dashed ${t.palette.divider}` }}
+            onClick={() => { onHost(lvMenu.p, !lvMenu.p.host); setLvMenu(null); }}>
+            <ListItemText primary={lvMenu?.p.host ? "Bỏ host sân" : "Đặt làm host sân"} secondary="huy hiệu riêng, vẫn giữ khung hạng" />
+          </MenuItem>
         </Menu>
       </DialogContent>
       <DialogActions><Button variant="contained" onClick={onClose}>Xong</Button></DialogActions>
@@ -379,6 +383,13 @@ export default function Pickup() {
       await api.setLevel(auth.passRef.current, p.id, level);
       await loadCounts(st.current.day);
       setToast(`${p.name}: ${levelOf(level)?.label || "chưa đặt trình"} — Elo đã tính lại`);
+    } catch (e) { setToast(String(e.message || e)); }
+  };
+  const onHost = async (p, host) => {
+    try {
+      await api.setHost(auth.passRef.current, p.id, host);
+      await loadCounts(st.current.day);
+      setToast(host ? `${p.name} là host sân` : `${p.name} không còn là host`);
     } catch (e) { setToast(String(e.message || e)); }
   };
   const onAddGuest = async (name) => {
@@ -540,7 +551,7 @@ export default function Pickup() {
           <DragOverlay dropAnimation={null}>{dragPid ? <DragChip p={people.get(dragPid)} /> : null}</DragOverlay>
 
           <PresentDialog open={openPresent} onClose={() => setOpenPresent(false)} list={counts.pickup} present={present}
-            isAdmin={isAdmin} onToggle={(id) => update((b) => C.togglePresent(b, id))} onAddGuest={onAddGuest} onLevel={onLevel} />
+            isAdmin={isAdmin} onToggle={(id) => update((b) => C.togglePresent(b, id))} onAddGuest={onAddGuest} onLevel={onLevel} onHost={onHost} />
         </DndContext>
       )}
 
