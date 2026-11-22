@@ -240,12 +240,14 @@ def save_match(con: sqlite3.Connection, m: dict) -> str:
     return mid
 
 
-def recompute_ratings(con: sqlite3.Connection) -> None:
-    """Tính lại elo/wins/losses/played cho mọi người từ đầu, theo thứ tự thời gian.
+def _elo_replay(con: sqlite3.Connection):
+    """Chạy lại Elo theo thứ tự thời gian. Trả (rating, stat, events):
+    events = mỗi trận có kết quả: {id, a, b, winner, ra, rb, before{pid:elo}, delta{pid:+/-}}.
     Đôi: dùng elo trung bình đội, cập nhật đều cho từng người trong đội."""
     base = {r["id"]: base_elo(r["level"]) for r in con.execute("SELECT id, level FROM players")}
     rating: dict[str, float] = {}
     stat: dict[str, list[int]] = {}  # pid -> [wins, losses, played]
+    events: list[dict] = []
 
     def r(pid: str) -> float:
         return rating.setdefault(pid, base.get(pid, BASE_ELO))
@@ -271,26 +273,90 @@ def recompute_ratings(con: sqlite3.Connection) -> None:
         eb = 1.0 - ea
         sa = 1.0 if winner == "A" else 0.0
         sb = 1.0 - sa
+        before = {p: r(p) for p in a + b}
         # K theo từng người: N trận đầu dùng K_NEW (tính trước khi cộng trận này)
         k = lambda p: K_NEW if s(p)[2] < NEW_GAMES else K_FACTOR  # noqa: E731
+        delta = {}
         for p in a:
-            rating[p] = r(p) + k(p) * (sa - ea)
+            delta[p] = k(p) * (sa - ea)
+            rating[p] = r(p) + delta[p]
             st = s(p); st[2] += 1; st[0 if winner == "A" else 1] += 1
         for p in b:
-            rating[p] = r(p) + k(p) * (sb - eb)
+            delta[p] = k(p) * (sb - eb)
+            rating[p] = r(p) + delta[p]
             st = s(p); st[2] += 1; st[0 if winner == "B" else 1] += 1
+        events.append({"id": mid, "a": a, "b": b, "winner": winner, "ra": ra, "rb": rb,
+                       "before": before, "delta": delta})
+    return rating, stat, events
 
+
+def recompute_ratings(con: sqlite3.Connection) -> None:
+    """Tính lại elo/wins/losses/played cho mọi người từ đầu, theo thứ tự thời gian."""
+    base = {r["id"]: base_elo(r["level"]) for r in con.execute("SELECT id, level FROM players")}
+    rating, stat, _ = _elo_replay(con)
     # reset rồi ghi lại cho mọi player (người chưa đánh -> Elo khởi điểm theo trình, 0 trận)
     con.execute("UPDATE players SET elo=?, wins=0, losses=0, played=0", (BASE_ELO,))
     for pid, b in base.items():
         if b != BASE_ELO:
             con.execute("UPDATE players SET elo=? WHERE id=?", (b, pid))
     for pid in set(list(rating) + list(stat)):
-        w, l, pl = s(pid)
+        w, l, pl = stat.get(pid, [0, 0, 0])
         con.execute(
             "UPDATE players SET elo=?, wins=?, losses=?, played=? WHERE id=?",
-            (round(r(pid), 1), w, l, pl, pid),
+            (round(rating.get(pid, base.get(pid, BASE_ELO)), 1), w, l, pl, pid),
         )
+
+
+PROFILE_COLS = "id,name,short,avatar,elo,wins,losses,played,source,level,host"
+
+
+def profile(pid: str) -> dict | None:
+    """Hồ sơ 1 người: thông tin + mọi trận đã đánh (cũ -> mới) kèm Elo trước trận, +/- Elo,
+    Elo trung bình 2 đội, tỉ số, chuỗi điểm (để web tính huy hiệu), và bảng tên người liên quan."""
+    con = connect()
+    try:
+        row = con.execute(f"SELECT {PROFILE_COLS} FROM players WHERE id=?", (pid,)).fetchone()
+        if not row:
+            return None
+        _, _, events = _elo_replay(con)
+        mine = [e for e in events if pid in e["a"] or pid in e["b"]]
+        info = {}
+        if mine:
+            q = ",".join("?" * len(mine))
+            for m in con.execute(
+                f"SELECT id,played_at,ended_at,team_a_score,team_b_score,rally_sequence,duration_seconds"
+                f" FROM matches WHERE id IN ({q})", [e["id"] for e in mine]
+            ).fetchall():
+                info[m["id"]] = m
+        out, seen = [], {pid}
+        for e in mine:
+            m = info.get(e["id"])
+            if m is None:
+                continue
+            team = "A" if pid in e["a"] else "B"
+            mates, opps = (e["a"], e["b"]) if team == "A" else (e["b"], e["a"])
+            sa, sb = m["team_a_score"], m["team_b_score"]
+            seq = m["rally_sequence"] or ""
+            out.append({
+                "id": e["id"], "played_at": m["played_at"], "ended_at": m["ended_at"],
+                "team": team, "won": e["winner"] == team,
+                "partners": [x for x in mates if x != pid], "opponents": list(opps),
+                "score": sa if team == "A" else sb, "opp_score": sb if team == "A" else sa,
+                "elo_before": round(e["before"][pid], 1), "delta": round(e["delta"][pid], 1),
+                "team_elo": round(e["ra"] if team == "A" else e["rb"], 1),
+                "opp_elo": round(e["rb"] if team == "A" else e["ra"], 1),
+                # chuỗi điểm theo góc nhìn người này: W = đội mình ghi, L = đối thủ ghi
+                "rallies": "".join("W" if c == team else "L" for c in seq if c in "AB"),
+                "duration": m["duration_seconds"],
+            })
+            seen.update(mates); seen.update(opps)
+        people = {}
+        q = ",".join("?" * len(seen))
+        for x in con.execute(f"SELECT {PROFILE_COLS} FROM players WHERE id IN ({q})", list(seen)).fetchall():
+            people[x["id"]] = _with_guest(x)
+        return {"player": _with_guest(row), "matches": out, "people": people}
+    finally:
+        con.close()
 
 
 def ranking() -> list[dict]:

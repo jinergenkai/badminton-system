@@ -11,12 +11,14 @@ import { Label } from "../components/label/index.jsx";
 import { Chart, useChart } from "../components/chart/index.jsx";
 import Money from "../components/Money.jsx";
 import RankFrame from "../components/rank/RankFrame.jsx";
+import { useProfile } from "../components/profile/Profile.jsx";
 import { rankOf } from "../lib/ranks.js";
 
 const MEDAL = ["#F5B70A", "#A9B4C0", "#CD7F45"];
 
 export default function Ranking() {
   const theme = useTheme();
+  const openProfile = useProfile();
   const [rows, setRows] = useState(null);
   const [err, setErr] = useState("");
 
@@ -83,7 +85,7 @@ export default function Ranking() {
                   {rows.map((p, i) => {
                     const rate = p.played ? Math.round((p.wins / p.played) * 100) : 0;
                     return (
-                      <TableRow key={p.id} hover>
+                      <TableRow key={p.id} hover onClick={() => openProfile(p)} sx={{ cursor: "pointer" }}>
                         <TableCell>
                           {i < 3
                             ? <Box sx={{ width: 28, height: 28, borderRadius: "50%", display: "grid", placeItems: "center", bgcolor: alpha(MEDAL[i], 0.2), color: MEDAL[i] }}><Iconify icon="solar:medal-ribbons-star-bold-duotone" width={20} /></Box>

@@ -7,6 +7,7 @@ Chức năng:
   POST /api/players                 -> tạo/sửa người chơi (Flutter/host); đẩy mirror lên Blob
   POST /api/sync/matches            -> Flutter đẩy trận; tính lại Elo
   GET  /api/ranking                 -> bảng xếp hạng (Elo)
+  GET  /api/profile?id=            -> hồ sơ 1 người: các trận + Elo trước/sau, đồng đội, đối thủ
   GET  /api/pickup?date=YYYY-MM-DD  -> số trận từng người trong ngày (mặc định hôm nay)
   GET  /api/pickup?session=<id>     -> như trên nhưng theo buổi (cũ, giữ tương thích)
   POST /api/roster/reseed           -> kéo lại danh bạ từ sổ tiền (Blob) + đẩy mirror
@@ -270,6 +271,14 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"players": db.roster(active_only=False)})
             if path == "/api/ranking":
                 return self._send(200, {"ranking": db.ranking()})
+            if path == "/api/profile":
+                pid = (q.get("id") or [""])[0].strip()
+                if not pid:
+                    return self._send(400, {"error": "thiếu id"})
+                prof = db.profile(pid)
+                if prof is None:
+                    return self._send(404, {"error": "không có người này"})
+                return self._send(200, prof)
             if path == "/api/board":
                 day = (q.get("date") or [""])[0].strip() or db.today_vn()
                 if not _is_day(day):

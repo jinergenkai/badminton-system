@@ -92,6 +92,8 @@ export const api = {
   },
 
   // ----- Trình độ (Elo khởi điểm) -----
+  // Hồ sơ 1 người (trận + Elo trước/sau). Không có backend -> lỗi, UI hiện phần sổ tiền.
+  getProfile: (id) => (API_BASE ? jget(`${API_BASE}/api/profile?id=${encodeURIComponent(id)}`) : Promise.reject(new Error("cần VITE_API_BASE"))),
   setLevel: (pass, id, level) => jpost(`${API_BASE}/api/players/level`, { pass, id, level }),
   setHost: (pass, id, host) => jpost(`${API_BASE}/api/players/host`, { pass, id, host }),
 

@@ -13,6 +13,7 @@ import { Iconify } from "../components/iconify/index.jsx";
 import { Label } from "../components/label/index.jsx";
 import WidgetSummary from "../components/WidgetSummary.jsx";
 import Money, { SectionLabel } from "../components/Money.jsx";
+import { MeProfileStrip, MonthTopCard } from "../components/profile/BookExtras.jsx";
 
 const money = (x) => M.fmt(x);
 const ME_KEY = "bmw_me";
@@ -176,6 +177,7 @@ function ViewAll({ book, goMe, runExport }) {
   return (
     <Stack spacing={2}>
       <StatCard due={due} got={got} all={all} pct={pct} sub={`${nDue} người còn nợ · ${book.sessions.length} buổi đã chơi`} />
+      <MonthTopCard book={book} />
       <SearchBox placeholder="Tìm tên…" value={q} onChange={setQ} />
       <Stack direction="row" alignItems="center" spacing={1}>
         <ToggleButtonGroup size="small" exclusive value={filter} onChange={(_, v) => v && setFilter(v)}>
@@ -260,6 +262,7 @@ function ViewMe({ book, setToast, runExport }) {
   const copyRef = () => { try { navigator.clipboard.writeText(M.payRef(m)); } catch { /* */ } setToast("Đã chép nội dung chuyển khoản"); };
   return (
     <Stack spacing={2}>
+      <MeProfileStrip book={book} m={m} />
       <Card sx={{ overflow: "hidden" }}>
         <Box sx={{ px: 2.5, pt: 2.5, pb: 3, color: "#fff", background: (t) => `linear-gradient(135deg, ${t.palette.primary.main}, ${t.palette.primary.darker})` }}>
           <Stack direction="row" alignItems="center" spacing={1.75}>

@@ -298,6 +298,36 @@ class TestHost(Base):
         self.assertIs({p["id"]: p for p in http("GET", "/api/roster")[1]["players"]}["m1"]["host"], True)
 
 
+class TestProfile(Base):
+    def test_profile_matches_and_elo(self):
+        m1 = match("p1", ["m0", "m1"], ["m2", "m3"], 21, 15, hh="10:00")
+        m1["rally_sequence"] = "BBBBBB" + "A" * 21 + "B" * 9   # m0 bị dẫn 0-6 rồi thắng
+        m2 = match("p2", ["m0", "m2"], ["m1", "m3"], 18, 21, hh="23:10")
+        http("POST", "/api/sync/matches", {"matches": [m1, m2]})
+        st, j = http("GET", "/api/profile?id=m0")
+        self.assertEqual(st, 200)
+        self.assertEqual(j["player"]["id"], "m0")
+        ms = j["matches"]
+        self.assertEqual([m["id"] for m in ms], ["p1", "p2"])          # cũ -> mới
+        a, b = ms
+        self.assertTrue(a["won"]); self.assertFalse(b["won"])
+        self.assertEqual(a["partners"], ["m1"]); self.assertEqual(sorted(a["opponents"]), ["m2", "m3"])
+        self.assertEqual((a["score"], a["opp_score"]), (21, 15))
+        self.assertEqual((b["score"], b["opp_score"]), (18, 21))
+        self.assertTrue(a["rallies"].startswith("LLLLLLW"))
+        self.assertEqual(a["elo_before"], 1000.0); self.assertEqual(a["delta"], 24.0)
+        # Elo cuối = trước trận 2 + delta trận 2 = Elo trên ranking (cùng một phép tính)
+        self.assertAlmostEqual(b["elo_before"], a["elo_before"] + a["delta"], places=1)
+        self.assertAlmostEqual(self.ranking()["m0"]["elo"], b["elo_before"] + b["delta"], places=0)
+        self.assertEqual(set(j["people"]), {"m0", "m1", "m2", "m3"})
+
+    def test_profile_unknown_and_missing(self):
+        self.assertEqual(http("GET", "/api/profile?id=khong-co")[0], 404)
+        self.assertEqual(http("GET", "/api/profile")[0], 400)
+        st, j = http("GET", "/api/profile?id=m5")
+        self.assertEqual(st, 200); self.assertEqual(j["matches"], [])
+
+
 class TestGuests(Base):
     def test_create_needs_admin_pass(self):
         self.assertEqual(http("POST", "/api/guests", {"pass": "sai", "name": "Khách A"})[0], 401)

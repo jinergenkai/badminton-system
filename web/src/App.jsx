@@ -13,6 +13,7 @@ import BillBook from "./pages/BillBook.jsx";
 import Courts from "./pages/Courts.jsx";
 import Ranking from "./pages/Ranking.jsx";
 import Pickup from "./pages/Pickup.jsx";
+import { ProfileProvider } from "./components/profile/Profile.jsx";
 
 // maxWidth: Tiền cầu giữ cột hẹp ~600px như bản gốc (phone-first)
 const TABS = [
@@ -29,6 +30,7 @@ export default function App() {
   const cur = TABS[tab];
 
   return (
+    <ProfileProvider>
     <Box sx={{ minHeight: "100dvh", pb: isMobile ? "calc(72px + env(safe-area-inset-bottom))" : 4 }}>
       <AppBar position="sticky" color="inherit"
         sx={{
@@ -68,5 +70,6 @@ export default function App() {
       )}
       <PwaPrompts />
     </Box>
+    </ProfileProvider>
   );
 }
