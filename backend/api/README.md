@@ -20,7 +20,10 @@ Flutter **đọc được kể cả khi home server tắt**. Backend là nơi **
 | GET | `/api/health` | sống chưa + số người |
 | GET | `/api/roster` | danh bạ người chơi |
 | GET | `/api/ranking` | bảng xếp hạng Elo (người đã đánh ≥1 trận) |
-| GET | `/api/pickup?session=<id>` | gợi ý xoay người cho một buổi |
+| GET | `/api/pickup?date=YYYY-MM-DD` | số trận từng người trong ngày (mặc định hôm nay, giờ VN) + tổng trận |
+| GET | `/api/pickup?session=<id>` | như trên theo buổi (cũ, giữ tương thích) |
+| POST | `/api/guests` | tạo khách vãng lai `{pass,name}` → id `g-…`, tên ngắn có `*` |
+| POST | `/api/guests/hide` | ẩn khách `{pass,id}` (chỉ khách) |
 | POST | `/api/players` | tạo/sửa người `{players:[{id,name,short?,avatar?,phone_id?}]}` |
 | POST | `/api/sync/matches` | đẩy trận (xem payload dưới) |
 | POST | `/api/roster/reseed` | kéo lại danh bạ từ sổ tiền + đẩy mirror |
@@ -67,6 +70,24 @@ rồi Redeploy. Web gọi ranking/pickup qua domain của api (đặt ở tab **
 Dokploy, service `api`, port `8000`, HTTPS Let's Encrypt).
 
 Quản trị từ PC: bật WireGuard → `http://10.8.0.4:8002`.
+
+**Khách vãng lai** tạo trên web (tab Pickup, cần mở khoá quản trị), gate bằng
+mật khẩu quản trị giống phần Sân trống. Khách không nằm trong sổ tiền; id `g-…`
+không bao giờ trùng id sổ tiền. Khách có lên ranking (có nhãn "khách").
+
+**Danh bạ tự cập nhật:** api kéo lại thành viên sổ tiền mỗi `RESEED_MINUTES`
+phút (mặc định 10, `0` = tắt) và chỉ đẩy mirror khi có thay đổi. Người mới thêm
+ở web tự sang backend → phone bấm *Kéo roster* là thấy.
+
+**Sync trả `unknown`:** id người chơi không có trong danh bạ (vd `p12` tạo trên
+phone) — trận vẫn lưu nhưng người đó không lên ranking; phone hiện cảnh báo.
+
+## Test + dữ liệu ảo
+
+```bash
+python -m unittest discover -s tests -v     # DB tạm + fake Vercel, không đụng data thật
+python tools/seed_demo.py                   # tạo data/demo.db (từ chối ghi vào badminton.db)
+```
 
 ## Chạy thử ở máy
 

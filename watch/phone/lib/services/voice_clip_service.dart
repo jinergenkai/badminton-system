@@ -30,7 +30,8 @@ class VoiceClipService extends GetxService {
   /// Bump when processSpeech changes: only out/ is redone.
   /// p3 (2026-10-03): LUFS target + clean limiter; Name boost removed — it
   /// was what made TTS crackle on court.
-  static const _proc = 'p3';
+  /// p4 (2026-11): no compressor, -16 LUFS, at most +6 dB up, -1.5 dBFS.
+  static const _proc = 'p4';
 
   /// Evict least-recently-used files above this.
   static const _maxBytes = 40 * 1024 * 1024;

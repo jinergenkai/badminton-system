@@ -3,23 +3,31 @@ import 'dart:typed_data';
 
 /// Loudness for TTS output, in pure Dart.
 ///
-/// Android TTS writes 16-bit PCM WAV. The chain is the one
-/// tools/normalize_voice.py runs on the bundled MP3s, with the same numbers,
-/// so a TTS line spliced between two recorded clips sounds as loud as they
-/// do:
-///   trim → compress (-28 dB, 6:1) → gain to [kTargetLufs] → peak limiter
-///   at -0.5 dBFS (look-ahead, so it turns the gain down instead of bending
-///   the wave: no crackle).
+/// Android TTS writes 16-bit PCM WAV. Same target as
+/// tools/normalize_voice.py runs on the bundled MP3s, so a TTS line spliced
+/// between two recorded clips sounds about as loud as they do:
+///   trim → gain towards [kTargetLufs], never more than [kMaxBoostDb] up →
+///   peak limiter at -1.5 dBFS (look-ahead, so it turns the gain down
+///   instead of bending the wave: no crackle).
+///
+/// 2026-11: no compressor and no big make-up gain any more. The old chain
+/// (6:1 compression, up to +40 dB to reach -10 LUFS) pulled the TTS engine's
+/// own noise up with the voice and made the Bluetooth speaker distort.
+/// Loudness on court is the volume sliders' job.
 ///
 /// Every entry point returns null for anything that is not 16-bit PCM WAV;
 /// the caller then plays the file as it is.
 
 /// Loudness of every voice clip, integrated LUFS (EBU R128). Kept in step
 /// with TARGET_LUFS in tools/normalize_voice.py.
-const double kTargetLufs = -10.0;
+const double kTargetLufs = -16.0;
 
-/// Peak ceiling: -0.5 dBFS, as the MP3s' limiter.
-const double kCeiling = 0.944;
+/// Most a render is ever turned UP, in dB (turning down is unlimited).
+/// Kept in step with MAX_BOOST_DB in tools/normalize_voice.py.
+const double kMaxBoostDb = 6.0;
+
+/// Peak ceiling: -1.5 dBFS, as the MP3s' limiter.
+const double kCeiling = 0.841;
 
 /// Plain gain, peaks held under [kCeiling] by the limiter.
 Uint8List? boostWav(Uint8List bytes, double gain, {double silence = 0.01}) {
@@ -34,8 +42,9 @@ Uint8List? boostWav(Uint8List bytes, double gain, {double silence = 0.01}) {
   return pcm.write(x);
 }
 
-/// The bundled clips' treatment, landing on [targetLufs]. [boost] is extra
-/// gain on top (1.0 = as loud as the clips); the limiter keeps it clean.
+/// The bundled clips' treatment: towards [targetLufs], but never turned up
+/// by more than [kMaxBoostDb] in total. [boost] shifts the target (1.0 = as
+/// loud as the clips); the cap still holds.
 Uint8List? processSpeech(Uint8List bytes,
     {double boost = 1.0, double targetLufs = kTargetLufs, double silence = 0.01}) {
   final pcm = _Pcm.parse(bytes);
@@ -43,19 +52,23 @@ Uint8List? processSpeech(Uint8List bytes,
   final x = pcm.trimmed(silence);
   if (x == null) return null;
   final ch = pcm.channels, sr = pcm.rate;
-  _compress(x, ch, sr);
   final target = targetLufs + 20 * math.log(boost <= 0 ? 1e-6 : boost) / math.ln10;
-  // A few rounds: the limiter takes a little back from the loudest lines
-  // (measured: 1 dB short after one round on a peaky one).
+  final maxGain = math.pow(10, kMaxBoostDb / 20).toDouble();
+  // Gain applied so far, over every round (the limiter's own turn-downs are
+  // not counted, so the real boost is never above the cap).
+  var total = 1.0;
+  // A few rounds: the limiter takes a little back from the loudest lines.
   for (var round = 0; round < 5; round++) {
     final l = lufsOf(x, ch, sr);
     if (l == null) break;
     if (round > 0 && (target - l).abs() <= 0.3) break;
-    // Capped: a near-silent render would otherwise be pushed into noise.
-    final g = math.min(math.pow(10, (target - l) / 20).toDouble(), 100.0);
+    var g = math.pow(10, (target - l) / 20).toDouble();
+    if (total * g > maxGain) g = maxGain / total;
+    if ((g - 1).abs() < 0.005) break; // at the cap, or already there
     for (var i = 0; i < x.length; i++) {
       x[i] *= g;
     }
+    total *= g;
     _limit(x, ch, sr);
   }
   return pcm.write(x);
@@ -144,28 +157,6 @@ Float64List _kWeight(Float64List x, int ch, int c, int sr) {
     out[f] = w;
   }
   return out;
-}
-
-/// Feed-forward compressor on the frame peak, like ffmpeg's acompressor
-/// with the MP3s' "loud" profile (-28 dB, 6:1, attack 3 ms, release 60 ms).
-void _compress(Float64List x, int ch, int sr,
-    {double thresholdDb = -28, double ratio = 6, double attackMs = 3, double releaseMs = 60}) {
-  final t = math.pow(10, thresholdDb / 20).toDouble();
-  final a = math.exp(-1 / (sr * attackMs / 1000));
-  final r = math.exp(-1 / (sr * releaseMs / 1000));
-  var env = 0.0;
-  for (var f = 0; f < x.length ~/ ch; f++) {
-    var peak = 0.0;
-    for (var c = 0; c < ch; c++) {
-      peak = math.max(peak, x[f * ch + c].abs());
-    }
-    env = peak > env ? a * env + (1 - a) * peak : r * env + (1 - r) * peak;
-    if (env <= t) continue;
-    final g = t * math.pow(env / t, 1 / ratio) / env;
-    for (var c = 0; c < ch; c++) {
-      x[f * ch + c] *= g;
-    }
-  }
 }
 
 /// Look-ahead peak limiter, like ffmpeg's alimiter: the gain ramps down over

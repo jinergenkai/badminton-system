@@ -19,6 +19,31 @@ SCHEMA = HERE / "schema.sql"
 K_FACTOR = 32          # bước điều chỉnh Elo mỗi trận
 BASE_ELO = 1000.0
 
+# Khách vãng lai: tạo trên web (không có trong sổ tiền). id 'g-<hex>' — id sổ
+# tiền là base36 chữ+số, không có '-', nên không bao giờ trùng.
+GUEST_SOURCE = "guest"
+GUEST_MARK = "*"       # đuôi tên ngắn trên band/bảng: "Tuấn*"
+SHORT_MAX = 8          # = PlayerService.shortMax phía Flutter
+
+
+def guest_short(name: str, short: str = "") -> str:
+    """Tên ngắn cho khách, luôn kết thúc bằng GUEST_MARK và vừa SHORT_MAX ký tự."""
+    import re
+    base = (short or "").strip().rstrip(GUEST_MARK).strip()
+    if not base:
+        # "Tuấn (bạn An)" -> "Tuấn"; "Nguyễn Văn Tuấn" -> "Tuấn" (tên gọi ở cuối)
+        clean = re.sub(r"\(.*?\)|\[.*?\]", " ", name or "")
+        parts = [re.sub(r"[^\w]", "", w) for w in clean.split()]
+        parts = [w for w in parts if w]
+        base = parts[-1] if parts else "Khach"
+    return base[: SHORT_MAX - len(GUEST_MARK)] + GUEST_MARK
+
+
+def today_vn() -> str:
+    """Ngày hôm nay ở VN (YYYY-MM-DD), không phụ thuộc TZ của container."""
+    from datetime import datetime, timedelta, timezone
+    return datetime.now(timezone(timedelta(hours=7))).strftime("%Y-%m-%d")
+
 
 def connect() -> sqlite3.Connection:
     Path(DB_PATH).parent.mkdir(parents=True, exist_ok=True)
@@ -79,6 +104,12 @@ def upsert_player(con: sqlite3.Connection, p: dict) -> str:
     return pid
 
 
+def _with_guest(row) -> dict:
+    d = dict(row)
+    d["guest"] = d.get("source") == GUEST_SOURCE
+    return d
+
+
 def roster(active_only: bool = False) -> list[dict]:
     con = connect()
     try:
@@ -87,9 +118,52 @@ def roster(active_only: bool = False) -> list[dict]:
         if active_only:
             sql += " WHERE active=1"
         sql += " ORDER BY name COLLATE NOCASE"
-        return [dict(r) for r in con.execute(sql).fetchall()]
+        return [_with_guest(r) for r in con.execute(sql).fetchall()]
     finally:
         con.close()
+
+
+def add_guest(con: sqlite3.Connection, name: str, short: str = "") -> dict:
+    """Tạo khách vãng lai. Trùng tên với một khách đang active -> trả lại người cũ
+    (bấm 2 lần không ra 2 người)."""
+    import secrets
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("khách cần tên")
+    if len(name) > 60:
+        raise ValueError("tên quá dài")
+    row = con.execute(
+        "SELECT id FROM players WHERE source=? AND active=1 AND name=? COLLATE NOCASE",
+        (GUEST_SOURCE, name),
+    ).fetchone()
+    if row is not None:
+        pid = row["id"]
+    else:
+        pid = "g-" + secrets.token_hex(4)
+        con.execute(
+            "INSERT INTO players(id,name,short,avatar,source) VALUES(?,?,?,?,?)",
+            (pid, name, guest_short(name, short), "", GUEST_SOURCE),
+        )
+    return _with_guest(con.execute(
+        "SELECT id,name,short,avatar,active,phone_id,elo,wins,losses,played,source"
+        " FROM players WHERE id=?", (pid,)).fetchone())
+
+
+def hide_guest(con: sqlite3.Connection, pid: str) -> bool:
+    """Ẩn khách (active=0). Chỉ khách — người của sổ tiền không ẩn ở đây được.
+    Trận cũ giữ nguyên, Elo vẫn tính."""
+    cur = con.execute("UPDATE players SET active=0, updated_at=datetime('now')"
+                      " WHERE id=? AND source=?", (str(pid or ""), GUEST_SOURCE))
+    return cur.rowcount > 0
+
+
+def unknown_ids(con: sqlite3.Connection, ids) -> list[str]:
+    """Các id người chơi không có trong bảng players (vd 'p12' từ phone chưa nối)."""
+    out = []
+    for pid in sorted({str(x) for x in ids if str(x).strip()}):
+        if con.execute("SELECT 1 FROM players WHERE id=?", (pid,)).fetchone() is None:
+            out.append(pid)
+    return out
 
 
 def save_match(con: sqlite3.Connection, m: dict) -> str:
@@ -171,10 +245,50 @@ def recompute_ratings(con: sqlite3.Connection) -> None:
 def ranking() -> list[dict]:
     con = connect()
     try:
-        return [dict(x) for x in con.execute(
-            "SELECT id,name,short,avatar,elo,wins,losses,played FROM players"
-            " WHERE active=1 AND played>0 ORDER BY elo DESC, wins DESC"
+        return [_with_guest(x) for x in con.execute(
+            "SELECT id,name,short,avatar,elo,wins,losses,played,source FROM players"
+            " WHERE active=1 AND played>0 ORDER BY elo DESC, wins DESC, name COLLATE NOCASE"
         ).fetchall()]
+    finally:
+        con.close()
+
+
+def pickup_by_date(day: str) -> dict:
+    """Cho một NGÀY (YYYY-MM-DD, giờ VN): mỗi người active + số trận đã đánh trong
+    ngày + lần cuối vào sân + Elo. Phone gửi played_at dạng ISO giờ local không
+    offset, nên 10 ký tự đầu chính là ngày VN.
+    Xếp: ít trận nhất trước, cùng số trận thì ai nghỉ lâu hơn trước."""
+    day = (day or "").strip()[:10]
+    con = connect()
+    try:
+        players = con.execute(
+            "SELECT id,name,short,avatar,elo,source FROM players WHERE active=1"
+            " ORDER BY name COLLATE NOCASE"
+        ).fetchall()
+        rows = con.execute(
+            "SELECT mp.player_id AS pid, m.played_at AS t FROM match_players mp"
+            " JOIN matches m ON m.id=mp.match_id WHERE substr(m.played_at,1,10)=?",
+            (day,),
+        ).fetchall()
+        n_matches = con.execute(
+            "SELECT COUNT(*) FROM matches WHERE substr(played_at,1,10)=?", (day,)
+        ).fetchone()[0]
+        counts: dict[str, dict] = {}
+        for row in rows:
+            c = counts.setdefault(row["pid"], {"played": 0, "last": ""})
+            c["played"] += 1
+            if (row["t"] or "") > c["last"]:
+                c["last"] = row["t"] or ""
+        out = []
+        for p in players:
+            c = counts.get(p["id"], {"played": 0, "last": ""})
+            out.append({
+                "id": p["id"], "name": p["name"], "short": p["short"], "avatar": p["avatar"],
+                "elo": p["elo"], "guest": p["source"] == GUEST_SOURCE,
+                "played": c["played"], "last_played": c["last"],
+            })
+        out.sort(key=lambda x: (x["played"], x["last_played"] or "", x["name"].lower()))
+        return {"date": day, "matches": n_matches, "pickup": out}
     finally:
         con.close()
 

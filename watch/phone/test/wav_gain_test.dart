@@ -97,9 +97,19 @@ void main() {
     expect(lufsOf(x, 1, 48000), closeTo(-23.0, 0.2));
   });
 
-  test('processSpeech: quiet and loud renders land on the target', () {
-    expect(lufsOfWav(processSpeech(wav(speechLike(0.05)))!), closeTo(kTargetLufs, 0.6));
+  test('processSpeech: loud and mid renders land on the target', () {
     expect(lufsOfWav(processSpeech(wav(speechLike(0.9)))!), closeTo(kTargetLufs, 0.6));
+    expect(lufsOfWav(processSpeech(wav(speechLike(0.5)))!), closeTo(kTargetLufs, 0.6));
+  });
+
+  test('processSpeech: a quiet render is turned up by kMaxBoostDb at most', () {
+    // 0.05 amplitude reads about -33 LUFS: reaching -16 would need +17 dB,
+    // which is exactly the boost that used to drag the TTS noise up.
+    final input = wav(speechLike(0.05));
+    final before = lufsOfWav(boostWav(input, 1.0)!); // same trim, no gain
+    final after = lufsOfWav(processSpeech(input)!);
+    expect(after - before, closeTo(kMaxBoostDb, 0.3));
+    expect(after, lessThan(kTargetLufs));
   });
 
   test('processSpeech: peaks stay at the ceiling', () {

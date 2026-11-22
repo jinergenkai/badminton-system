@@ -7,8 +7,14 @@ Chức năng:
   POST /api/players                 -> tạo/sửa người chơi (Flutter/host); đẩy mirror lên Blob
   POST /api/sync/matches            -> Flutter đẩy trận; tính lại Elo
   GET  /api/ranking                 -> bảng xếp hạng (Elo)
-  GET  /api/pickup?session=<id>     -> gợi ý xoay người cho một buổi
+  GET  /api/pickup?date=YYYY-MM-DD  -> số trận từng người trong ngày (mặc định hôm nay)
+  GET  /api/pickup?session=<id>     -> như trên nhưng theo buổi (cũ, giữ tương thích)
   POST /api/roster/reseed           -> kéo lại danh bạ từ sổ tiền (Blob) + đẩy mirror
+  POST /api/guests        {pass,name,short?} -> tạo khách vãng lai (mật khẩu quản trị)
+  POST /api/guests/hide   {pass,id}          -> ẩn khách
+
+Danh bạ sổ tiền được kéo lại định kỳ (RESEED_MINUTES, mặc định 10) để người mới
+thêm ở web tự sang backend/phone — kể cả khi home server vừa sống lại.
 
 Bảo vệ ghi (POST): từ internet phải kèm `Authorization: Bearer <API_TOKEN>`;
 máy trong TRUSTED_NETS (WireGuard) thì khỏi token. Đọc (GET) mở.
@@ -21,6 +27,8 @@ import ipaddress
 import json
 import os
 import sys
+import threading
+import time
 import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -38,6 +46,11 @@ CRAWLER_URL = os.environ.get("CRAWLER_URL", "http://crawler:8000").rstrip("/")
 # Token kích cào/đổi cấu hình — PHẢI khớp token crawler kiểm (TRIGGER_TOKEN/PUSH_TOKEN).
 CRAWLER_TOKEN = (os.environ.get("CRAWLER_TOKEN") or os.environ.get("TRIGGER_TOKEN") or os.environ.get("PUSH_TOKEN") or "").strip()
 ADMIN_PASS = os.environ.get("ADMIN_PASS", "").strip()         # gate đổi cấu hình / kích cào
+# Kéo lại danh bạ sổ tiền mỗi N phút (0 = tắt). Chỉ đẩy mirror khi có thay đổi.
+try:
+    RESEED_MINUTES = max(0.0, float(os.environ.get("RESEED_MINUTES", "10")))
+except ValueError:
+    RESEED_MINUTES = 10.0
 
 
 def _pass_ok(given) -> bool:
@@ -93,6 +106,15 @@ def _nets() -> list:
 _TRUSTED = _nets()
 
 
+def _is_day(s: str) -> bool:
+    from datetime import date
+    try:
+        date.fromisoformat(s)
+        return len(s) == 10
+    except ValueError:
+        return False
+
+
 def _trusted(ip: str) -> bool:
     try:
         addr = ipaddress.ip_address(ip)
@@ -132,17 +154,37 @@ def fetch_billbook_members() -> list[dict]:
     return [m for m in out if m["id"]]
 
 
-def reseed_from_billbook() -> int:
-    members = fetch_billbook_members()
-    con = db.connect()
-    try:
-        for m in members:
-            db.upsert_player(con, m)
-        con.commit()
-    finally:
-        con.close()
-    push_roster_mirror()
+_reseed_lock = threading.Lock()
+
+
+def reseed_from_billbook(force_push: bool = True) -> int:
+    """Upsert thành viên sổ tiền vào players (giữ nguyên id). Không xoá ai, không
+    đụng khách. force_push=False: chỉ đẩy mirror khi danh bạ thật sự đổi
+    (tránh ghi Blob vô ích mỗi lần chạy định kỳ)."""
+    members = fetch_billbook_members()       # lỗi mạng -> raise trước khi đụng DB
+    with _reseed_lock:
+        before = db.roster()
+        con = db.connect()
+        try:
+            for m in members:
+                db.upsert_player(con, m)
+            con.commit()
+        finally:
+            con.close()
+        changed = db.roster() != before
+    if force_push or changed:
+        push_roster_mirror()
     return len(members)
+
+
+def _reseed_loop():
+    """Chạy nền: kéo danh bạ định kỳ. Lỗi chỉ log, không bao giờ làm chết server."""
+    while True:
+        time.sleep(RESEED_MINUTES * 60)
+        try:
+            reseed_from_billbook(force_push=False)
+        except Exception as e:  # noqa: BLE001
+            print(f"[reseed] bỏ qua ({e})", flush=True)
 
 
 def push_roster_mirror() -> bool:
@@ -226,9 +268,12 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(200, {"ranking": db.ranking()})
             if path == "/api/pickup":
                 sid = (q.get("session") or [""])[0]
-                if not sid:
-                    return self._send(400, {"error": "cần ?session=<id>"})
-                return self._send(200, {"session": sid, "pickup": db.pickup(sid)})
+                if sid:
+                    return self._send(200, {"session": sid, "pickup": db.pickup(sid)})
+                day = (q.get("date") or [""])[0].strip() or db.today_vn()
+                if not _is_day(day):
+                    return self._send(400, {"error": "date phải dạng YYYY-MM-DD"})
+                return self._send(200, db.pickup_by_date(day))
             # --- Sân trống: proxy sang crawler (đọc công khai) ---
             if path == "/api/courts":
                 data = _crawler_get("/api/data")
@@ -268,6 +313,34 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(e.code, {"error": e.read().decode("utf-8", "ignore")})
             except Exception as e:  # noqa: BLE001
                 return self._send(502, {"error": "không gọi được crawler: " + str(e)})
+        # Khách vãng lai: tạo/ẩn từ web, gate bằng mật khẩu quản trị như trên.
+        if path in ("/api/guests", "/api/guests/hide"):
+            body = self._read_json()
+            if not isinstance(body, dict):
+                return self._send(400, {"error": "body không phải JSON"})
+            if not _pass_ok(body.get("pass")):
+                return self._send(401, {"error": "sai mật khẩu quản trị"})
+            try:
+                con = db.connect()
+                try:
+                    if path == "/api/guests":
+                        g = db.add_guest(con, str(body.get("name") or ""), str(body.get("short") or ""))
+                        con.commit()
+                        out = {"ok": True, "player": g}
+                    else:
+                        ok = db.hide_guest(con, str(body.get("id") or ""))
+                        con.commit()
+                        if not ok:
+                            return self._send(404, {"error": "không phải khách (hoặc không có)"})
+                        out = {"ok": True}
+                finally:
+                    con.close()
+            except ValueError as e:
+                return self._send(400, {"error": str(e)})
+            except Exception as e:  # noqa: BLE001
+                return self._send(500, {"error": str(e)})
+            push_roster_mirror()
+            return self._send(200, out)
         if not self._may_write():
             return self._send(401, {"error": "cần Authorization: Bearer <API_TOKEN>"})
         body = self._read_json()
@@ -299,12 +372,17 @@ class Handler(BaseHTTPRequestHandler):
                                 (str(s["id"]), str(s.get("played_on") or ""),
                                  float(s.get("court_cost") or 0), str(s.get("note") or "")),
                             )
-                    saved = [db.save_match(con, m) for m in matches]
+                    saved = [db.save_match(con, m) for m in matches if isinstance(m, dict)]
+                    ids = [pid for m in matches if isinstance(m, dict)
+                           for pid in list(m.get("team_a") or []) + list(m.get("team_b") or [])]
+                    unknown = db.unknown_ids(con, ids)
                     db.recompute_ratings(con)
                     con.commit()
                 finally:
                     con.close()
-                return self._send(200, {"ok": True, "saved": len(saved)})
+                # unknown: id không có trong danh bạ -> trận vẫn lưu nhưng người đó
+                # KHÔNG lên ranking (vd 'p12' tạo trên phone chưa nối với web).
+                return self._send(200, {"ok": True, "saved": len(saved), "unknown": unknown})
 
             if path == "/api/roster/reseed":
                 n = reseed_from_billbook()
@@ -329,6 +407,10 @@ def main():
             print(f"[seed] nạp {n} người từ sổ tiền", flush=True)
         except Exception as e:  # noqa: BLE001
             print(f"[seed] bỏ qua ({e})", flush=True)
+
+    if BILLBOOK_URL and RESEED_MINUTES > 0:
+        threading.Thread(target=_reseed_loop, name="reseed", daemon=True).start()
+        print(f"[reseed] kéo danh bạ sổ tiền mỗi {RESEED_MINUTES:g} phút", flush=True)
 
     srv = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"api chạy http://{args.host}:{args.port}  (players={db.players_count()})", flush=True)

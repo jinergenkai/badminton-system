@@ -89,9 +89,12 @@ export default function Ranking() {
                         </TableCell>
                         <TableCell>
                           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ py: 0.75 }}>
-                            <Avatar src={p.avatar || undefined} sx={{ width: 36, height: 36, bgcolor: "primary.main", color: "#fff" }}>{(p.name || "?").slice(0, 1)}</Avatar>
+                            <Avatar src={p.avatar || undefined} sx={{ width: 36, height: 36, bgcolor: p.guest ? "warning.main" : "primary.main", color: "#fff" }}>{(p.name || "?").slice(0, 1)}</Avatar>
                             <Box sx={{ minWidth: 0 }}>
-                              <Typography variant="subtitle2" noWrap>{p.name}</Typography>
+                              <Typography variant="subtitle2" noWrap sx={{ display: "flex", alignItems: "center" }}>
+                                {p.name}
+                                {p.guest && <Label color="warning" sx={{ ml: 0.75, height: 20, fontSize: 11 }}>khách</Label>}
+                              </Typography>
                               <Typography variant="caption" color="text.secondary">{p.played} trận<Box component="span" sx={{ display: { sm: "none" } }}> · {p.wins}T {p.losses}B</Box></Typography>
                             </Box>
                           </Stack>

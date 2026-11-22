@@ -136,7 +136,16 @@ class SyncService extends GetxService {
       }
       final j = await _postJson('/api/sync/matches', {'matches': payload});
       final saved = (j['saved'] as num?)?.toInt() ?? 0;
-      lastResult.value = 'Đẩy $saved/${payload.length} trận lên backend.';
+      // Id không có trong danh bạ web (vd người tạo trên phone, chưa nối):
+      // trận vẫn lưu nhưng người đó KHÔNG lên ranking -> phải báo cho host.
+      final unknown = (j['unknown'] as List? ?? const []).map((e) => '$e').toList();
+      final names = unknown.map((id) => ps.roster.firstWhereOrNull(
+              (p) => p.id == id || p.externalId == id)?.name ?? id).join(', ');
+      lastResult.value = 'Đẩy $saved/${payload.length} trận lên backend.' +
+          (unknown.isEmpty
+              ? ''
+              : '\n⚠ ${unknown.length} người chưa nối với web nên KHÔNG lên ranking: $names.'
+                  ' Thêm họ trên web (sổ tiền hoặc khách) rồi bấm Kéo roster.');
       return saved;
     } finally {
       busy.value = false;

@@ -66,6 +66,36 @@ export const api = {
     jget(`${API_BASE}/api/pickup?session=${encodeURIComponent(sessionId)}`).then(
       (j) => j.pickup || [],
     ),
+  // Theo NGÀY (YYYY-MM-DD giờ VN): { date, matches, pickup:[{id,name,short,avatar,elo,guest,played,last_played}] }
+  getPickupDay: (day) => {
+    if (!API_BASE) return Promise.reject(new Error("cần VITE_API_BASE"));
+    return jget(`${API_BASE}/api/pickup?date=${encodeURIComponent(day)}`);
+  },
+
+  // ----- Khách vãng lai (backend, mật khẩu quản trị) -----
+  addGuest: (pass, name) => jpost(`${API_BASE}/api/guests`, { pass, name }).then((j) => j.player),
+  hideGuest: (pass, id) => jpost(`${API_BASE}/api/guests/hide`, { pass, id }),
 };
+
+/** Ngày hôm nay theo giờ VN (UTC+7), YYYY-MM-DD — không phụ thuộc múi giờ máy. */
+export const todayVN = () => new Date(Date.now() + 7 * 3600 * 1000).toISOString().slice(0, 10);
+
+/**
+ * Chia 4 người thành 2 cặp cân Elo nhất. Có 3 cách chia; chọn cách lệch tổng Elo ít
+ * nhất (hoà thì giữ thứ tự gốc). Trả { red:[p,p], blue:[p,p], diff }.
+ * Đỏ = đội A, Xanh = đội B — cùng quy ước với band/phone (log AABB…).
+ */
+export function balancePairs(four) {
+  if (!four || four.length !== 4) return null;
+  const e = (p) => Number(p.elo) || 1000;
+  const [a, b, c, d] = four;
+  const splits = [[[a, b], [c, d]], [[a, c], [b, d]], [[a, d], [b, c]]];
+  let best = null;
+  for (const [x, y] of splits) {
+    const diff = Math.abs(e(x[0]) + e(x[1]) - e(y[0]) - e(y[1]));
+    if (!best || diff < best.diff - 1e-9) best = { red: x, blue: y, diff };
+  }
+  return best;
+}
 
 export { API_BASE };
