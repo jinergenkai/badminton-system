@@ -10,8 +10,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Avatar, Box, Button, Card, Checkbox, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, Divider, IconButton, InputAdornment, List, ListItem, ListItemAvatar,
-  ListItemText, Paper, Snackbar, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
+  DialogContent, DialogTitle, IconButton, InputAdornment, List, ListItem, ListItemAvatar,
+  ListItemText, Menu, MenuItem, Paper, Snackbar, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
 import {
   DndContext, DragOverlay, MouseSensor, TouchSensor, pointerWithin, rectIntersection,
@@ -24,10 +24,11 @@ const collide = (args) => {
   const hits = pointerWithin(args);
   return hits.length ? hits : rectIntersection(args);
 };
-import { alpha, useTheme } from "@mui/material/styles";
+import { alpha } from "@mui/material/styles";
 import { api, API_BASE, todayVN } from "../lib/api.js";
 import * as C from "../lib/courts.js";
 import { useAuth } from "../lib/auth.jsx";
+import { LEVELS, levelOf } from "../lib/levels.js";
 import { Iconify } from "../components/iconify/index.jsx";
 import { Label } from "../components/label/index.jsx";
 import Money, { SectionLabel } from "../components/Money.jsx";
@@ -61,7 +62,7 @@ function Slot({ ci, si, p, side, selected, onClick, disabled }) {
         const c = t.palette[side];
         const hot = drop.isOver || selected;
         return {
-          display: "flex", alignItems: "center", gap: 1, width: 1, minHeight: 56, px: 1, py: 0.75, borderRadius: 1.25,
+          display: "flex", alignItems: "center", gap: 1, width: 1, minHeight: 52, px: 1, py: 0.5, borderRadius: 1.25,
           font: "inherit", textAlign: "left", cursor: disabled ? "default" : "pointer", transition: "all .15s",
           touchAction: "manipulation", userSelect: "none", WebkitTouchCallout: "none",
           opacity: drag.isDragging ? 0.35 : 1,
@@ -100,7 +101,7 @@ function CourtCard({ court, ci, people, sel, setSel, isAdmin, onSlot, onAuto, on
     </Box>
   );
   return (
-    <Card sx={{ p: 2 }}>
+    <Card sx={{ p: 1.5 }}>
       {/* tên sân đã có trên thanh chọn sân — ở đây chỉ Đỏ | độ lệch Elo | Xanh */}
       <Box sx={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", columnGap: 1, px: 0.5, mb: 0.75, minHeight: 30 }}>
         <Typography variant="overline" sx={{ color: "error.main", fontWeight: 800 }}>Đỏ</Typography>
@@ -116,7 +117,7 @@ function CourtCard({ court, ci, people, sel, setSel, isAdmin, onSlot, onAuto, on
       {/* mặt sân: viền nét đứt, lưới (dọc, giữa) và vạch giữa (ngang) — chỉ gợi ý kiểu vạch sân */}
       <Box sx={(t) => ({
         position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "auto auto",
-        columnGap: 3, rowGap: 2, p: 1.25, borderRadius: 1.5,
+        columnGap: 3, rowGap: 1.5, p: 1, borderRadius: 1.5,
         border: `1.5px dashed ${alpha(t.palette.grey[500], 0.36)}`, bgcolor: alpha(t.palette.primary.main, 0.03),
         "&::before": { content: '""', position: "absolute", top: 6, bottom: 6, left: "50%", borderLeft: `2px dashed ${alpha(t.palette.primary.main, 0.36)}` },
         "&::after": { content: '""', position: "absolute", left: 6, right: 6, top: "50%", borderTop: `1px dashed ${alpha(t.palette.grey[500], 0.32)}` },
@@ -128,16 +129,16 @@ function CourtCard({ court, ci, people, sel, setSel, isAdmin, onSlot, onAuto, on
           typography: "caption", fontWeight: 700, color: "text.disabled" })}>vs</Box>
       </Box>
       {isAdmin && (
-        <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
-          <Button fullWidth variant="contained" onClick={() => onAuto(ci)} disabled={full} startIcon={<Iconify icon="solar:shuffle-bold" width={18} />}>Tự xếp</Button>
-          <Button fullWidth variant="outlined" color="inherit" onClick={() => onClear(ci)} disabled={!ps.some(Boolean)} startIcon={<Iconify icon="solar:check-circle-bold" width={18} />}>Xong trận</Button>
+        <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+          <Button fullWidth size="small" variant="contained" onClick={() => onAuto(ci)} disabled={full} startIcon={<Iconify icon="solar:shuffle-bold" width={18} />}>Tự xếp</Button>
+          <Button fullWidth size="small" variant="outlined" color="inherit" onClick={() => onClear(ci)} disabled={!ps.some(Boolean)} startIcon={<Iconify icon="solar:check-circle-bold" width={18} />}>Xong trận</Button>
         </Stack>
       )}
     </Card>
   );
 }
 
-// ---------- card người chờ ----------
+// ---------- card người chờ (gọn, 2 cột trên điện thoại) ----------
 function WaitCard({ p, rank, onClick, disabled, now }) {
   const first = rank < 4;
   const drag = useDraggable({ id: `p:${p.id}`, data: { pid: p.id }, disabled });
@@ -145,32 +146,32 @@ function WaitCard({ p, rank, onClick, disabled, now }) {
     <Card ref={drag.setNodeRef} component="button" type="button" onClick={onClick} disabled={disabled}
       {...(disabled ? {} : { ...drag.attributes, ...drag.listeners })}
       sx={(t) => ({
-        p: 1.25, display: "flex", alignItems: "center", gap: 1, width: 1, font: "inherit", textAlign: "left",
-        cursor: disabled ? "default" : "grab", boxShadow: "none",
+        position: "relative", p: 0.75, pr: first ? 3 : 0.75, display: "flex", alignItems: "center", gap: 0.75, width: 1, minWidth: 0,
+        font: "inherit", textAlign: "left", cursor: disabled ? "default" : "grab", boxShadow: "none", borderRadius: 1.25,
         touchAction: "manipulation", userSelect: "none", WebkitTouchCallout: "none", opacity: drag.isDragging ? 0.35 : 1,
         border: `1px solid ${first ? alpha(t.palette.primary.main, 0.4) : alpha(t.palette.grey[500], 0.2)}`,
         bgcolor: first ? alpha(t.palette.primary.main, 0.04) : "background.paper",
         "&:hover": disabled ? undefined : { borderColor: "primary.main" },
       })}>
-      <PAvatar p={p} size={36} />
+      <PAvatar p={p} size={30} />
       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
-        <Typography variant="subtitle2" noWrap sx={{ display: "flex", alignItems: "center" }}>
-          <Box component="span" sx={{ overflow: "hidden", textOverflow: "ellipsis" }}>{p.name}</Box>{p.guest && <GuestTag />}
+        <Typography variant="subtitle2" noWrap sx={{ fontSize: 13, lineHeight: 1.35 }}>
+          {p.name}{p.guest && " *"}
         </Typography>
-        <Typography variant="caption" color="text.secondary" component="div" noWrap>
-          {p.played} trận · {C.waitLabel(p, now)} · <Money sx={{ fontSize: 11, fontWeight: 500 }}>{Math.round(p.elo || 1000)}</Money>
+        <Typography variant="caption" color="text.secondary" component="div" noWrap sx={{ fontSize: 11 }}>
+          {p.played}tr · {C.waitLabel(p, now)} · <Money sx={{ fontSize: 11, fontWeight: 500 }}>{Math.round(p.elo || 1000)}</Money>
         </Typography>
       </Box>
-      {first && <Label color="primary" sx={{ flexShrink: 0 }}>#{rank + 1}</Label>}
+      {first && <Money sx={{ position: "absolute", top: 4, right: 6, fontSize: 11, color: "primary.main" }}>#{rank + 1}</Money>}
     </Card>
   );
 }
 
 // ---------- khay: thả người từ sân về đây để gỡ ----------
-function TrayZone({ children }) {
+function TrayZone({ children, sx }) {
   const drop = useDroppable({ id: "tray" });
   return (
-    <Box ref={drop.setNodeRef} sx={(t) => ({ borderRadius: 2, transition: "all .15s", outline: drop.isOver ? `2px dashed ${t.palette.primary.main}` : "none", outlineOffset: 4 })}>
+    <Box ref={drop.setNodeRef} sx={[(t) => ({ borderRadius: 2, transition: "all .15s", outline: drop.isOver ? `2px dashed ${t.palette.primary.main}` : "none", outlineOffset: 2 }), ...(Array.isArray(sx) ? sx : [sx])]}>
       {children}
     </Box>
   );
@@ -189,8 +190,9 @@ function DragChip({ p }) {
 }
 
 // ---------- dialog "hôm nay ai tới" ----------
-function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddGuest }) {
+function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddGuest, onLevel }) {
   const [q, setQ] = useState("");
+  const [lvMenu, setLvMenu] = useState(null); // {el, p}
   const [guest, setGuest] = useState("");
   const [busy, setBusy] = useState(false);
   const shown = useMemo(() => {
@@ -222,7 +224,14 @@ function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddG
                   <ListItemAvatar sx={{ minWidth: 40 }}><PAvatar p={p} size={28} /></ListItemAvatar>
                   <ListItemText onClick={() => isAdmin && onToggle(p.id)} sx={{ cursor: isAdmin ? "pointer" : "default" }}
                     primary={<Box component="span" sx={{ display: "inline-flex", alignItems: "center" }}>{p.name}{p.guest && <GuestTag />}</Box>}
-                    secondary={`${p.played} trận hôm nay · Elo ${Math.round(p.elo || 1000)}`} />
+                    secondary={`${p.played} trận hôm nay · ${Math.round(p.elo || 1000)}`} secondaryTypographyProps={{ noWrap: true }} />
+                  {(isAdmin || p.level) && (
+                    <Label role={isAdmin ? "button" : undefined} color={p.level ? "primary" : "default"} variant={p.level ? "soft" : "outlined"}
+                      onClick={isAdmin ? (e) => setLvMenu({ el: e.currentTarget, p }) : undefined}
+                      sx={{ flexShrink: 0, cursor: isAdmin ? "pointer" : "default", border: p.level ? undefined : "1px dashed", font: "inherit", fontSize: 11 }}>
+                      {levelOf(p.level)?.label || "Trình?"}
+                    </Label>
+                  )}
                 </ListItem>
               );
             })}
@@ -238,8 +247,17 @@ function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddG
           </Stack>
         )}
         <Typography variant="caption" color="text.secondary" sx={{ display: "block", mt: 1 }}>
-          Thành viên thêm ở Tiền cầu. Khách có dấu * trên band.
+          Thành viên thêm ở Tiền cầu. Khách có dấu * trên band. Trình độ = Elo khởi điểm
+          (Newbie 800 → Giỏi 1200); 10 trận đầu Elo thay đổi nhanh hơn.
         </Typography>
+        <Menu anchorEl={lvMenu?.el} open={!!lvMenu} onClose={() => setLvMenu(null)}>
+          {LEVELS.map((l) => (
+            <MenuItem key={l.key} selected={lvMenu?.p.level === l.key} onClick={() => { onLevel(lvMenu.p, l.key); setLvMenu(null); }}>
+              <ListItemText primary={l.label} secondary={`bắt đầu ${l.elo}`} />
+            </MenuItem>
+          ))}
+          <MenuItem onClick={() => { onLevel(lvMenu.p, ""); setLvMenu(null); }}><ListItemText primary="Chưa đặt" secondary="như Trung bình (1000)" /></MenuItem>
+        </Menu>
       </DialogContent>
       <DialogActions><Button variant="contained" onClick={onClose}>Xong</Button></DialogActions>
     </Dialog>
@@ -247,7 +265,6 @@ function PresentDialog({ open, onClose, list, present, onToggle, isAdmin, onAddG
 }
 
 export default function Pickup() {
-  const theme = useTheme();
   const auth = useAuth();
   const isAdmin = auth.isAdmin;
   const [day, setDay] = useState(todayVN);
@@ -356,6 +373,13 @@ export default function Pickup() {
     update((b) => C.autoFill(b, c, counts?.pickup || [], Date.now()));
     setSel(null);
   };
+  const onLevel = async (p, level) => {
+    try {
+      await api.setLevel(auth.passRef.current, p.id, level);
+      await loadCounts(st.current.day);
+      setToast(`${p.name}: ${levelOf(level)?.label || "chưa đặt trình"} — Elo đã tính lại`);
+    } catch (e) { setToast(String(e.message || e)); }
+  };
   const onAddGuest = async (name) => {
     try {
       const g = await api.addGuest(auth.passRef.current, name);
@@ -368,7 +392,7 @@ export default function Pickup() {
   // kéo-thả. Điện thoại: giữ 0.2s mới kéo (chạm nhanh vẫn là chạm, vuốt vẫn là vuốt/cuộn).
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 8 } }),
   );
   const [dragPid, setDragPid] = useState(null);
   const dragged = useRef(false); // có kéo trong lần chạm này -> đừng hiểu là vuốt đổi sân
@@ -404,45 +428,37 @@ export default function Pickup() {
   };
 
   const isToday = day === todayVN();
+  const ready = board && counts;
+
+  // Điện thoại: cả màn vừa khít 1 màn hình (trừ thanh trên 60 + thanh dưới 64 + lề),
+  // KHÔNG cuộn trang -> kéo thả không bị lẫn với cuộn. Chỉ khay người chờ tự cuộn bên trong.
+  // Máy tính: chảy bình thường.
+  const FIT = { xs: "calc(100dvh - 166px - env(safe-area-inset-bottom))", sm: "auto" };
 
   return (
-    <Stack spacing={2.5}>
-      <Stack direction="row" alignItems="center" spacing={1}>
-        <Box sx={{ flexGrow: 1 }}>
-          <Typography variant="h4" sx={{ fontFamily: theme.typography.fontSecondaryFamily, fontWeight: 800, lineHeight: 1.1 }}>Xếp sân</Typography>
-          <Typography variant="caption" color="text.secondary">Chờ lâu nhất vào trước · cặp chia cân Elo</Typography>
-        </Box>
-        {saving ? <Label color="info" variant="soft" startIcon={<Iconify icon="solar:cloud-upload-bold" />}>Đang lưu</Label>
-          : isAdmin && <Label color="primary" variant="soft" startIcon={<Iconify icon="solar:verified-check-bold" />}>Quản trị</Label>}
-      </Stack>
-
-      <Card sx={{ px: 1, pt: 0.75, pb: 1.5 }}>
-        <Stack direction="row" alignItems="center">
-          <IconButton onClick={() => setDay((d) => C.shiftDay(d, -1))}><Iconify icon="solar:alt-arrow-left-bold" /></IconButton>
-          <Stack alignItems="center" sx={{ flexGrow: 1 }}>
-            <Typography variant="subtitle1">{C.dayLabel(day)}</Typography>
-            {isToday ? <Label color="success" sx={{ height: 18, fontSize: 10 }}>Hôm nay</Label>
-              : <Button size="small" onClick={() => setDay(todayVN())} sx={{ py: 0, minHeight: 0, fontSize: 12 }}>Về hôm nay</Button>}
-          </Stack>
-          <IconButton onClick={() => setDay((d) => C.shiftDay(d, 1))}><Iconify icon="solar:alt-arrow-right-bold" /></IconButton>
-          <IconButton onClick={() => { setNow(Date.now()); loadAll(day); }} sx={{ color: "text.secondary" }}><Iconify icon="solar:refresh-bold" /></IconButton>
-        </Stack>
-        {board && counts && (
-          <>
-            <Stack direction="row" divider={<Divider orientation="vertical" flexItem sx={{ borderStyle: "dashed" }} />} sx={{ mt: 1.25, px: 0.5 }}>
-              {[["Có mặt", present.size, "text.primary"], ["Đang chờ", tray.length, "warning.dark"], ["Trên sân", busy.size, "primary.main"], ["Trận", counts.matches, "info.dark"]].map(([k, v, c]) => (
-                <Box key={k} sx={{ flex: 1, textAlign: "center", minWidth: 0 }}>
-                  <Money sx={{ fontSize: 20, fontWeight: 700, color: c, display: "block", lineHeight: 1.3 }}>{v}</Money>
-                  <Typography variant="caption" color="text.secondary" noWrap component="div">{k}</Typography>
-                </Box>
-              ))}
-            </Stack>
-            <Button fullWidth size="small" variant={present.size ? "outlined" : "contained"} color={present.size ? "inherit" : "primary"}
-              onClick={() => setOpenPresent(true)} startIcon={<Iconify icon="solar:user-plus-bold" width={18} />} sx={{ mt: 1.25, mx: 0.5, width: "calc(100% - 8px)" }}>
-              Hôm nay ai tới · {present.size} người
+    <Stack spacing={1.25} sx={{ height: FIT, minHeight: { xs: 480, sm: 0 }, overflow: { xs: "hidden", sm: "visible" } }}>
+      {/* thanh trên: ngày + ai tới + trạng thái, 1 dòng */}
+      <Card sx={{ px: 0.5, py: 0.5, flexShrink: 0 }}>
+        <Stack direction="row" alignItems="center" spacing={0.25}>
+          <IconButton size="small" onClick={() => setDay((d) => C.shiftDay(d, -1))}><Iconify icon="solar:alt-arrow-left-bold" /></IconButton>
+          <Box sx={{ textAlign: "center", minWidth: 0 }} onClick={() => !isToday && setDay(todayVN())}>
+            <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.2 }}>{C.dayLabel(day)}</Typography>
+            <Typography variant="caption" noWrap sx={{ color: isToday ? "success.main" : "primary.main", fontWeight: 600, lineHeight: 1.2, display: "block", cursor: isToday ? "default" : "pointer" }}>
+              {isToday ? "Hôm nay" : "Về hôm nay"}
+            </Typography>
+          </Box>
+          <IconButton size="small" onClick={() => setDay((d) => C.shiftDay(d, 1))}><Iconify icon="solar:alt-arrow-right-bold" /></IconButton>
+          <Box sx={{ flexGrow: 1 }} />
+          {ready && (
+            <Button size="small" variant={present.size ? "outlined" : "contained"} color={present.size ? "inherit" : "primary"}
+              onClick={() => setOpenPresent(true)} startIcon={<Iconify icon="solar:user-plus-bold" width={16} />} sx={{ whiteSpace: "nowrap", px: 1 }}>
+              Ai tới · {present.size}
             </Button>
-          </>
-        )}
+          )}
+          <IconButton size="small" onClick={() => { setNow(Date.now()); loadAll(day); }} sx={{ color: saving ? "info.main" : "text.secondary" }}>
+            <Iconify icon={saving ? "solar:cloud-upload-bold" : "solar:refresh-bold"} />
+          </IconButton>
+        </Stack>
       </Card>
 
       {err && (
@@ -451,27 +467,28 @@ export default function Pickup() {
           {!API_BASE && <><br />Chưa cấu hình <code>VITE_API_BASE</code> — màn này cần backend.</>}
         </Alert>
       )}
-      {!err && (!board || !counts) && <Box sx={{ display: "grid", placeItems: "center", py: 6 }}><CircularProgress /></Box>}
+      {!err && !ready && <Box sx={{ display: "grid", placeItems: "center", py: 6 }}><CircularProgress /></Box>}
 
-      {board && counts && (
-        <DndContext sensors={sensors} collisionDetection={collide} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragPid(null)} autoScroll={{ threshold: { x: 0, y: 0.15 } }}>
-          {!isAdmin && <Alert severity="info">Đang xem. Mở khoá <b>Quản trị</b> (góc trên) để xếp sân.</Alert>}
+      {ready && (
+        <DndContext sensors={sensors} collisionDetection={collide} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragPid(null)}
+          autoScroll={false}>
+          {!isAdmin && <Alert severity="info" sx={{ py: 0, flexShrink: 0 }}>Đang xem. Mở khoá <b>Quản trị</b> để xếp sân.</Alert>}
 
-          <Stack direction="row" spacing={1} alignItems="center">
-            <ToggleButtonGroup exclusive value={courtIdx} onChange={(_, v) => { if (v != null) { setCi(v); setSel(null); } }}
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+            <ToggleButtonGroup size="small" exclusive value={courtIdx} onChange={(_, v) => { if (v != null) { setCi(v); setSel(null); } }}
               sx={{ flexGrow: 1, overflowX: "auto", flexWrap: "nowrap" }}>
               {board.courts.map((c, i) => {
                 const n = c.slots.filter(Boolean).length;
                 return (
-                  <ToggleButton key={i} value={i} sx={{ py: 0.6, px: 1.5, whiteSpace: "nowrap", flexShrink: 0 }}>
+                  <ToggleButton key={i} value={i} sx={{ py: 0.4, px: 1.25, whiteSpace: "nowrap", flexShrink: 0 }}>
                     {c.name}<Box component="span" sx={{ ml: 0.75, fontSize: 11, opacity: 0.7 }}>{n}/4</Box>
                   </ToggleButton>
                 );
               })}
             </ToggleButtonGroup>
             {isAdmin && board.courts.length < C.MAX_COURTS && (
-              <IconButton onClick={() => { update((b) => C.addCourt(b)); setCi(board.courts.length); setSel(null); }}
-                sx={{ border: (t) => `1px dashed ${alpha(t.palette.grey[500], 0.4)}`, borderRadius: 1.25 }}>
+              <IconButton size="small" onClick={() => { update((b) => C.addCourt(b)); setCi(board.courts.length); setSel(null); }}
+                sx={{ border: (t) => `1px dashed ${alpha(t.palette.grey[500], 0.4)}`, borderRadius: 1.25 }} aria-label="Thêm sân">
                 <Iconify icon="mingcute:add-line" />
               </IconButton>
             )}
@@ -480,43 +497,49 @@ export default function Pickup() {
           {/* pan-y: trình duyệt chỉ tự cuộn dọc, vuốt ngang để đổi sân. overscroll none: chặn
               Chrome Android hiểu vuốt ngang là "quay lại trang trước" (thoát khỏi web). */}
           <Box onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={() => { touch.current = null; }}
-            sx={{ touchAction: "pan-y", overscrollBehaviorX: "none" }}>
+            sx={{ touchAction: "pan-y", overscrollBehaviorX: "none", flexShrink: 0, position: "relative" }}>
             <CourtCard court={board.courts[courtIdx]} ci={courtIdx} people={people} sel={sel} setSel={setSel} isAdmin={isAdmin} now={now}
               onSlot={onSlot} onAuto={onAuto} onClear={(c) => { update((b) => C.clearCourt(b, c)); setSel(null); }}
               onRemove={(c) => { update((b) => C.removeCourt(b, c)); setCi(Math.max(0, c - 1)); setSel(null); }}
               canRemove={board.courts.length > 1} />
             {board.courts.length > 1 && (
-              <Stack direction="row" justifyContent="center" spacing={0.75} sx={{ mt: 1.25 }}>
+              <Stack direction="row" justifyContent="center" spacing={0.75} sx={{ position: "absolute", left: 0, right: 0, bottom: -9 }}>
                 {board.courts.map((_, i) => (
-                  <Box key={i} sx={{ width: i === courtIdx ? 16 : 6, height: 6, borderRadius: 3, transition: "all .2s",
+                  <Box key={i} sx={{ width: i === courtIdx ? 14 : 5, height: 5, borderRadius: 3, transition: "all .2s",
                     bgcolor: i === courtIdx ? "primary.main" : (t) => alpha(t.palette.grey[500], 0.32) }} />
                 ))}
               </Stack>
             )}
           </Box>
 
-          <TrayZone>
-            <SectionLabel right={sel && isAdmin ? <Label color={sel.si < 2 ? "error" : "info"}>→ {board.courts[sel.ci]?.name} · {sel.si < 2 ? "Đỏ" : "Xanh"} {sel.si % 2 + 1}</Label> : null}>
-              Đang chờ · {tray.length}
-            </SectionLabel>
-            {tray.length === 0 ? (
-              <Card sx={{ p: 3, textAlign: "center" }}>
-                <Typography variant="body2" color="text.secondary">
-                  {present.size === 0 ? "Chưa ai có mặt — bấm \"Hôm nay ai tới\"." : "Ai có mặt cũng đang trên sân."}
-                </Typography>
-              </Card>
-            ) : (
-              <Box sx={{ display: "grid", gap: 1, gridTemplateColumns: { xs: "1fr", sm: "repeat(2,1fr)" } }}>
-                {tray.map((p, i) => <WaitCard key={p.id} p={p} rank={i} now={now} disabled={!isAdmin} onClick={() => pick(p)} />)}
+          {/* khay: chiếm phần còn lại, tự cuộn bên trong; thả người từ sân vào đây để gỡ */}
+          <TrayZone sx={{ flex: { xs: "1 1 0", sm: "0 0 auto" }, minHeight: 0, display: "flex", flexDirection: "column" }}>
+            <Stack direction="row" alignItems="center" sx={{ px: 0.5, mb: 0.5, flexShrink: 0 }}>
+              <Box sx={{ typography: "overline", color: "text.secondary", flexGrow: 1 }}>
+                Đang chờ · {tray.length}
+                <Box component="span" sx={{ textTransform: "none", fontWeight: 500, ml: 0.75 }}>· {busy.size} trên sân · {counts.matches} trận hôm nay</Box>
               </Box>
-            )}
-            {isAdmin && busy.size > 0 && <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1, textAlign: "center" }}>Giữ rồi kéo người trên sân thả vào đây để gỡ ra</Typography>}
+              {sel && isAdmin && <Label color={sel.si < 2 ? "error" : "info"}>→ {sel.si < 2 ? "Đỏ" : "Xanh"} {sel.si % 2 + 1}</Label>}
+            </Stack>
+            <Box sx={{ flex: 1, minHeight: 0, overflowY: { xs: "auto", sm: "visible" }, overscrollBehavior: "contain", pb: 0.5 }}>
+              {tray.length === 0 ? (
+                <Card sx={{ p: 2.5, textAlign: "center" }}>
+                  <Typography variant="body2" color="text.secondary">
+                    {present.size === 0 ? "Chưa ai có mặt — bấm \"Ai tới\"." : "Ai có mặt cũng đang trên sân."}
+                  </Typography>
+                </Card>
+              ) : (
+                <Box sx={{ display: "grid", gap: 0.75, gridTemplateColumns: { xs: "repeat(2, minmax(0,1fr))", sm: "repeat(3, minmax(0,1fr))" } }}>
+                  {tray.map((p, i) => <WaitCard key={p.id} p={p} rank={i} now={now} disabled={!isAdmin} onClick={() => pick(p)} />)}
+                </Box>
+              )}
+            </Box>
           </TrayZone>
 
           <DragOverlay dropAnimation={null}>{dragPid ? <DragChip p={people.get(dragPid)} /> : null}</DragOverlay>
 
           <PresentDialog open={openPresent} onClose={() => setOpenPresent(false)} list={counts.pickup} present={present}
-            isAdmin={isAdmin} onToggle={(id) => update((b) => C.togglePresent(b, id))} onAddGuest={onAddGuest} />
+            isAdmin={isAdmin} onToggle={(id) => update((b) => C.togglePresent(b, id))} onAddGuest={onAddGuest} onLevel={onLevel} />
         </DndContext>
       )}
 

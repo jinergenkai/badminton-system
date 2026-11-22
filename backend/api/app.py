@@ -12,6 +12,7 @@ Chức năng:
   POST /api/roster/reseed           -> kéo lại danh bạ từ sổ tiền (Blob) + đẩy mirror
   GET  /api/board?date=             -> bảng xếp sân của ngày (ai có mặt + các sân 4 ô)
   POST /api/board  {pass,date,rev,board}     -> lưu bảng xếp sân (409 nếu lệch rev)
+  POST /api/players/level {pass,id,level}    -> đặt trình độ (Elo khởi điểm), tính lại Elo
   POST /api/guests        {pass,name,short?} -> tạo khách vãng lai (mật khẩu quản trị)
   POST /api/guests/hide   {pass,id}          -> ẩn khách
 
@@ -339,6 +340,26 @@ class Handler(BaseHTTPRequestHandler):
             if not ok:
                 return self._send(409, {"error": "conflict", "server": cur})
             return self._send(200, {"ok": True, **cur})
+        # Trình độ (Elo khởi điểm): web đặt, mật khẩu quản trị. Tính lại Elo + đẩy mirror.
+        if path == "/api/players/level":
+            body = self._read_json()
+            if not isinstance(body, dict):
+                return self._send(400, {"error": "body không phải JSON"})
+            if not _pass_ok(body.get("pass")):
+                return self._send(401, {"error": "sai mật khẩu quản trị"})
+            try:
+                con = db.connect()
+                try:
+                    ok = db.set_level(con, str(body.get("id") or ""), str(body.get("level") or ""))
+                    con.commit()
+                finally:
+                    con.close()
+            except ValueError as e:
+                return self._send(400, {"error": str(e)})
+            if not ok:
+                return self._send(404, {"error": "không có người này"})
+            push_roster_mirror()
+            return self._send(200, {"ok": True})
         # Khách vãng lai: tạo/ẩn từ web, gate bằng mật khẩu quản trị như trên.
         if path in ("/api/guests", "/api/guests/hide"):
             body = self._read_json()

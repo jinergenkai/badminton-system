@@ -24,6 +24,7 @@ Flutter **đọc được kể cả khi home server tắt**. Backend là nơi **
 | GET | `/api/pickup?session=<id>` | như trên theo buổi (cũ, giữ tương thích) |
 | GET | `/api/board?date=` | bảng xếp sân của ngày: ai có mặt + các sân (4 ô Đỏ1, Đỏ2, Xanh1, Xanh2) |
 | POST | `/api/board` | lưu bảng `{pass,date,rev,board}` — lệch `rev` → 409 kèm bản server |
+| POST | `/api/players/level` | đặt trình độ `{pass,id,level}` (newbie/yeu/tb-yeu/tb/kha/gioi hoặc `""`) → tính lại Elo |
 | POST | `/api/guests` | tạo khách vãng lai `{pass,name}` → id `g-…`, tên ngắn có `*` |
 | POST | `/api/guests/hide` | ẩn khách `{pass,id}` (chỉ khách) |
 | POST | `/api/players` | tạo/sửa người `{players:[{id,name,short?,avatar?,phone_id?}]}` |
@@ -80,6 +81,11 @@ không bao giờ trùng id sổ tiền. Khách có lên ranking (có nhãn "khá
 **Danh bạ tự cập nhật:** api kéo lại thành viên sổ tiền mỗi `RESEED_MINUTES`
 phút (mặc định 10, `0` = tắt) và chỉ đẩy mirror khi có thay đổi. Người mới thêm
 ở web tự sang backend → phone bấm *Kéo roster* là thấy.
+
+**Elo:** mỗi người bắt đầu theo trình host đặt (Newbie 800 · Yếu 900 · TB yếu 950 ·
+TB 1000 · Khá 1100 · Giỏi 1200; chưa đặt = 1000). Đội = trung bình 2 người. Sau mỗi
+trận: K × (kết quả − kỳ vọng), K = 48 cho 10 trận đầu của người đó, sau đó 32. Tỉ số
+không tính. Đổi trình → Elo tính lại từ đầu.
 
 **Bảng xếp sân** (`boards`, 1 dòng/ngày) do tab *Xếp sân* trên web ghi. Một người
 chỉ ở 1 ô; người trên sân tự tính là có mặt. Pickup trả thêm `last_ended` (giờ rời

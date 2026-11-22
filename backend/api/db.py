@@ -18,6 +18,24 @@ SCHEMA = HERE / "schema.sql"
 
 K_FACTOR = 32          # bước điều chỉnh Elo mỗi trận
 BASE_ELO = 1000.0
+# Người mới: K lớn hơn trong N trận đầu để Elo nhanh về đúng trình.
+K_NEW = 48
+NEW_GAMES = 10
+
+# Trình độ host chọn -> Elo khởi điểm. '' = chưa đặt (= Trung bình, 1000).
+# Giữ cùng thứ tự/khóa với web/src/lib/levels.js.
+LEVELS = {
+    "newbie": ("Newbie", 800.0),
+    "yeu": ("Yếu", 900.0),
+    "tb-yeu": ("TB yếu", 950.0),
+    "tb": ("Trung bình", 1000.0),
+    "kha": ("Khá", 1100.0),
+    "gioi": ("Giỏi", 1200.0),
+}
+
+
+def base_elo(level: str) -> float:
+    return LEVELS.get(level or "", ("", BASE_ELO))[1]
 
 # Khách vãng lai: tạo trên web (không có trong sổ tiền). id 'g-<hex>' — id sổ
 # tiền là base36 chữ+số, không có '-', nên không bao giờ trùng.
@@ -57,6 +75,10 @@ def init_db() -> None:
     con = connect()
     try:
         con.executescript(SCHEMA.read_text(encoding="utf-8"))
+        # migrate: cột level cho DB tạo trước khi có trình độ (SQLite không có ADD COLUMN IF NOT EXISTS)
+        cols = {r[1] for r in con.execute("PRAGMA table_info(players)")}
+        if "level" not in cols:
+            con.execute("ALTER TABLE players ADD COLUMN level TEXT NOT NULL DEFAULT ''")
         con.commit()
     finally:
         con.close()
@@ -113,7 +135,7 @@ def _with_guest(row) -> dict:
 def roster(active_only: bool = False) -> list[dict]:
     con = connect()
     try:
-        sql = ("SELECT id,name,short,avatar,active,phone_id,elo,wins,losses,played,source"
+        sql = ("SELECT id,name,short,avatar,active,phone_id,elo,wins,losses,played,source,level"
                " FROM players")
         if active_only:
             sql += " WHERE active=1"
@@ -157,6 +179,18 @@ def hide_guest(con: sqlite3.Connection, pid: str) -> bool:
     return cur.rowcount > 0
 
 
+def set_level(con: sqlite3.Connection, pid: str, level: str) -> bool:
+    """Đặt trình độ (Elo khởi điểm) rồi tính lại toàn bộ Elo. level '' = bỏ đặt."""
+    level = (level or "").strip()
+    if level and level not in LEVELS:
+        raise ValueError("trình độ không hợp lệ: " + level)
+    cur = con.execute("UPDATE players SET level=?, updated_at=datetime('now') WHERE id=?", (level, str(pid or "")))
+    if cur.rowcount == 0:
+        return False
+    recompute_ratings(con)
+    return True
+
+
 def unknown_ids(con: sqlite3.Connection, ids) -> list[str]:
     """Các id người chơi không có trong bảng players (vd 'p12' từ phone chưa nối)."""
     out = []
@@ -198,11 +232,12 @@ def save_match(con: sqlite3.Connection, m: dict) -> str:
 def recompute_ratings(con: sqlite3.Connection) -> None:
     """Tính lại elo/wins/losses/played cho mọi người từ đầu, theo thứ tự thời gian.
     Đôi: dùng elo trung bình đội, cập nhật đều cho từng người trong đội."""
+    base = {r["id"]: base_elo(r["level"]) for r in con.execute("SELECT id, level FROM players")}
     rating: dict[str, float] = {}
     stat: dict[str, list[int]] = {}  # pid -> [wins, losses, played]
 
     def r(pid: str) -> float:
-        return rating.setdefault(pid, BASE_ELO)
+        return rating.setdefault(pid, base.get(pid, BASE_ELO))
 
     def s(pid: str) -> list[int]:
         return stat.setdefault(pid, [0, 0, 0])
@@ -225,15 +260,20 @@ def recompute_ratings(con: sqlite3.Connection) -> None:
         eb = 1.0 - ea
         sa = 1.0 if winner == "A" else 0.0
         sb = 1.0 - sa
+        # K theo từng người: N trận đầu dùng K_NEW (tính trước khi cộng trận này)
+        k = lambda p: K_NEW if s(p)[2] < NEW_GAMES else K_FACTOR  # noqa: E731
         for p in a:
-            rating[p] = r(p) + K_FACTOR * (sa - ea)
+            rating[p] = r(p) + k(p) * (sa - ea)
             st = s(p); st[2] += 1; st[0 if winner == "A" else 1] += 1
         for p in b:
-            rating[p] = r(p) + K_FACTOR * (sb - eb)
+            rating[p] = r(p) + k(p) * (sb - eb)
             st = s(p); st[2] += 1; st[0 if winner == "B" else 1] += 1
 
-    # reset rồi ghi lại cho mọi player (người chưa đánh -> BASE_ELO, 0 trận)
+    # reset rồi ghi lại cho mọi player (người chưa đánh -> Elo khởi điểm theo trình, 0 trận)
     con.execute("UPDATE players SET elo=?, wins=0, losses=0, played=0", (BASE_ELO,))
+    for pid, b in base.items():
+        if b != BASE_ELO:
+            con.execute("UPDATE players SET elo=? WHERE id=?", (b, pid))
     for pid in set(list(rating) + list(stat)):
         w, l, pl = s(pid)
         con.execute(
@@ -246,7 +286,7 @@ def ranking() -> list[dict]:
     con = connect()
     try:
         return [_with_guest(x) for x in con.execute(
-            "SELECT id,name,short,avatar,elo,wins,losses,played,source FROM players"
+            "SELECT id,name,short,avatar,elo,wins,losses,played,source,level FROM players"
             " WHERE active=1 AND played>0 ORDER BY elo DESC, wins DESC, name COLLATE NOCASE"
         ).fetchall()]
     finally:
@@ -346,7 +386,7 @@ def pickup_by_date(day: str) -> dict:
     con = connect()
     try:
         players = con.execute(
-            "SELECT id,name,short,avatar,elo,source FROM players WHERE active=1"
+            "SELECT id,name,short,avatar,elo,source,level FROM players WHERE active=1"
             " ORDER BY name COLLATE NOCASE"
         ).fetchall()
         rows = con.execute(
@@ -372,7 +412,7 @@ def pickup_by_date(day: str) -> dict:
             c = counts.get(p["id"], {"played": 0, "last": "", "end": ""})
             out.append({
                 "id": p["id"], "name": p["name"], "short": p["short"], "avatar": p["avatar"],
-                "elo": p["elo"], "guest": p["source"] == GUEST_SOURCE,
+                "elo": p["elo"], "guest": p["source"] == GUEST_SOURCE, "level": p["level"],
                 "played": c["played"], "last_played": c["last"], "last_ended": c["end"],
             })
         out.sort(key=lambda x: (x["played"], x["last_played"] or "", x["name"].lower()))

@@ -91,6 +91,9 @@ export const api = {
     return j;
   },
 
+  // ----- Trình độ (Elo khởi điểm) -----
+  setLevel: (pass, id, level) => jpost(`${API_BASE}/api/players/level`, { pass, id, level }),
+
   // ----- Khách vãng lai (backend, mật khẩu quản trị) -----
   addGuest: (pass, name) => jpost(`${API_BASE}/api/guests`, { pass, name }).then((j) => j.player),
   hideGuest: (pass, id) => jpost(`${API_BASE}/api/guests/hide`, { pass, id }),

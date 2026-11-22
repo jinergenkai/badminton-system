@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS players (
   wins       INTEGER NOT NULL DEFAULT 0,
   losses     INTEGER NOT NULL DEFAULT 0,
   played     INTEGER NOT NULL DEFAULT 0,
-  source     TEXT NOT NULL DEFAULT 'billbook',  -- billbook | phone
+  source     TEXT NOT NULL DEFAULT 'billbook',  -- billbook | guest | phone
+  level      TEXT NOT NULL DEFAULT '',          -- trình độ host đặt -> Elo khởi điểm (db.LEVELS)
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

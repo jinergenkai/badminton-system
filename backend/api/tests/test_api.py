@@ -108,19 +108,25 @@ def match(mid, a, b, sa, sb, day=TODAY, hh="10:00"):
             "winner": "A" if sa > sb else "B", "rally_sequence": "", "duration_seconds": 600}
 
 
-def elo_ref(matches, k=32, base=1000.0):
-    """Cài đặt Elo độc lập để đối chiếu (không dùng code của db.py)."""
-    r = {}
+def elo_ref(matches, bases=None):
+    """Cài đặt Elo độc lập để đối chiếu (không dùng code của db.py):
+    khởi điểm theo trình (mặc định 1000), K=48 cho 10 trận đầu của mỗi người, sau đó 32."""
+    bases = bases or {}
+    r, n = {}, {}
     for m in sorted(matches, key=lambda m: (m["played_at"], m["id"])):
         a, b = m["team_a"], m["team_b"]
-        ra = sum(r.get(p, base) for p in a) / len(a)
-        rb = sum(r.get(p, base) for p in b) / len(b)
+        get = lambda p: r.get(p, bases.get(p, 1000.0))  # noqa: E731
+        ra = sum(get(p) for p in a) / len(a)
+        rb = sum(get(p) for p in b) / len(b)
         ea = 1 / (1 + 10 ** ((rb - ra) / 400))
         sa = 1.0 if m["winner"] == "A" else 0.0
+        k = lambda p: 48 if n.get(p, 0) < 10 else 32  # noqa: E731
         for p in a:
-            r[p] = r.get(p, base) + k * (sa - ea)
+            r[p] = get(p) + k(p) * (sa - ea)
         for p in b:
-            r[p] = r.get(p, base) + k * ((1 - sa) - (1 - ea))
+            r[p] = get(p) + k(p) * ((1 - sa) - (1 - ea))
+        for p in a + b:
+            n[p] = n.get(p, 0) + 1
     return r
 
 
@@ -152,8 +158,8 @@ class TestElo(Base):
         st, j = http("POST", "/api/sync/matches", {"matches": [match("x1", ["m0", "m1"], ["m2", "m3"], 21, 15)]})
         self.assertEqual((st, j["saved"], j["unknown"]), (200, 1, []))
         r = self.ranking()
-        # cả 4 bắt đầu 1000 -> kỳ vọng 0.5 -> thắng +16, thua -16
-        self.assertEqual([r[p]["elo"] for p in ("m0", "m1", "m2", "m3")], [1016.0, 1016.0, 984.0, 984.0])
+        # cả 4 bắt đầu 1000, đều là người mới (K=48) -> kỳ vọng 0.5 -> thắng +24, thua -24
+        self.assertEqual([r[p]["elo"] for p in ("m0", "m1", "m2", "m3")], [1024.0, 1024.0, 976.0, 976.0])
         self.assertEqual((r["m0"]["wins"], r["m0"]["losses"], r["m0"]["played"]), (1, 0, 1))
         self.assertEqual((r["m2"]["wins"], r["m2"]["losses"], r["m2"]["played"]), (0, 1, 1))
         self.assertNotIn("m4", r)  # chưa đánh -> không lên ranking
@@ -173,7 +179,7 @@ class TestElo(Base):
         r = self.ranking()
         for pid, want in ref.items():
             self.assertAlmostEqual(r[pid]["elo"], round(want, 1), places=1, msg=pid)
-        # tổng Elo được bảo toàn (đánh đôi, cập nhật đều mỗi người)
+        # ai cũng < 10 trận -> cùng K -> tổng Elo vẫn bảo toàn
         self.assertAlmostEqual(sum(p["elo"] for p in r.values()), 1000.0 * len(r), places=0)
         # thứ tự ranking = Elo giảm dần
         elos = [p["elo"] for p in http("GET", "/api/ranking")[1]["ranking"]]
@@ -194,7 +200,7 @@ class TestElo(Base):
         http("POST", "/api/sync/matches", {"matches": [match("a", ["m0", "m1"], ["m2", "m3"], 18, 21)]})
         r = self.ranking()
         self.assertEqual((r["m0"]["wins"], r["m0"]["losses"], r["m0"]["played"]), (0, 1, 1))
-        self.assertEqual(r["m2"]["elo"], 1016.0)
+        self.assertEqual(r["m2"]["elo"], 1024.0)
 
     def test_unknown_phone_id_is_reported_not_ranked(self):
         st, j = http("POST", "/api/sync/matches", {"matches": [match("a", ["m0", "p12"], ["m2", "m3"], 21, 10)]})
@@ -207,6 +213,68 @@ class TestElo(Base):
     def test_bad_payload(self):
         self.assertEqual(http("POST", "/api/sync/matches", {"x": 1})[0], 400)
         self.assertEqual(http("POST", "/api/sync/matches", {"matches": [{"team_a": ["m0"]}]})[0], 500)
+
+
+class TestLevels(Base):
+    def set_level(self, pid, level, pw=PASS):
+        return http("POST", "/api/players/level", {"pass": pw, "id": pid, "level": level})
+
+    def test_level_sets_start_elo_and_recomputes(self):
+        self.assertEqual(self.set_level("m0", "gioi")[0], 200)
+        self.assertEqual(self.set_level("m1", "newbie")[0], 200)
+        roster = {p["id"]: p for p in http("GET", "/api/roster")[1]["players"]}
+        self.assertEqual((roster["m0"]["level"], roster["m0"]["elo"]), ("gioi", 1200.0))  # chưa đánh vẫn hiện Elo khởi điểm
+        self.assertEqual(roster["m1"]["elo"], 800.0)
+        self.assertEqual(roster["m2"]["elo"], 1000.0)
+        ms = [match("a", ["m0", "m2"], ["m1", "m3"], 21, 12), match("b", ["m1", "m0"], ["m2", "m3"], 21, 19, hh="10:30")]
+        http("POST", "/api/sync/matches", {"matches": ms})
+        ref = elo_ref(ms, {"m0": 1200.0, "m1": 800.0})
+        r = self.ranking()
+        for pid in ("m0", "m1", "m2", "m3"):
+            self.assertAlmostEqual(r[pid]["elo"], round(ref[pid], 1), places=1, msg=pid)
+        # đổi trình SAU khi đã có trận -> Elo tính lại từ đầu với mốc mới
+        self.set_level("m1", "tb")
+        ref2 = elo_ref(ms, {"m0": 1200.0})
+        self.assertAlmostEqual(self.ranking()["m1"]["elo"], round(ref2["m1"], 1), places=1)
+        # bỏ đặt -> về 1000
+        self.set_level("m0", "")
+        self.assertAlmostEqual(self.ranking()["m0"]["elo"], round(elo_ref(ms)["m0"], 1), places=1)
+
+    def test_k_drops_after_ten_games(self):
+        ms = [match(f"k{i:02d}", ["m0", "m1"], ["m2", "m3"], 21, 10, hh=f"{8 + i // 4:02d}:{(i % 4) * 15:02d}") for i in range(12)]
+        http("POST", "/api/sync/matches", {"matches": ms})
+        ref = elo_ref(ms)
+        r = self.ranking()
+        self.assertAlmostEqual(r["m0"]["elo"], round(ref["m0"], 1), places=1)
+        # tự tính tay trận 11: K phải là 32 chứ không còn 48
+        r10 = elo_ref(ms[:10])
+        ea = 1 / (1 + 10 ** (((r10["m2"] + r10["m3"]) / 2 - (r10["m0"] + r10["m1"]) / 2) / 400))
+        self.assertAlmostEqual(elo_ref(ms[:11])["m0"] - r10["m0"], 32 * (1 - ea), places=6)
+
+    def test_level_validation_and_auth(self):
+        self.assertEqual(self.set_level("m0", "gioi", pw="sai")[0], 401)
+        self.assertEqual(self.set_level("m0", "sieu-nhan")[0], 400)
+        self.assertEqual(self.set_level("khong-co", "tb")[0], 404)
+
+    def test_migrate_old_db_without_level_column(self):
+        import sqlite3
+        path = os.path.join(TMP, "old.db")
+        con = sqlite3.connect(path)
+        con.execute("CREATE TABLE players (id TEXT PRIMARY KEY, name TEXT NOT NULL, short TEXT NOT NULL DEFAULT '',"
+                    " avatar TEXT NOT NULL DEFAULT '', active INTEGER NOT NULL DEFAULT 1, phone_id TEXT NOT NULL DEFAULT '',"
+                    " elo REAL NOT NULL DEFAULT 1000, wins INTEGER NOT NULL DEFAULT 0, losses INTEGER NOT NULL DEFAULT 0,"
+                    " played INTEGER NOT NULL DEFAULT 0, source TEXT NOT NULL DEFAULT 'billbook',"
+                    " created_at TEXT NOT NULL DEFAULT (datetime('now')), updated_at TEXT NOT NULL DEFAULT (datetime('now')))")
+        con.execute("INSERT INTO players(id,name) VALUES('x','Cũ')")
+        con.commit(); con.close()
+        old = db.DB_PATH
+        try:
+            db.DB_PATH = path
+            db.init_db(); db.init_db()          # chạy 2 lần không lỗi
+            row = {p["id"]: p for p in db.roster()}["x"]
+            self.assertEqual((row["name"], row["level"]), ("Cũ", ""))
+        finally:
+            db.DB_PATH = old
 
 
 class TestGuests(Base):
@@ -273,7 +341,7 @@ class TestReseed(Base):
         FakeVercel.members[0]["name"] = "Hùng (đổi tên)"
         app.reseed_from_billbook()
         r = self.ranking()
-        self.assertEqual(r["m0"]["elo"], 1016.0)
+        self.assertEqual(r["m0"]["elo"], 1024.0)
         self.assertEqual(r["m0"]["name"], "Hùng (đổi tên)")
 
 
