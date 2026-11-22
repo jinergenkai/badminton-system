@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test test/courts.test.mjs"
+    "test": "node --test test/courts.test.mjs test/ranks.test.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "6.3.1",

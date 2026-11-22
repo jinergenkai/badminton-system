@@ -29,6 +29,7 @@ import { api, API_BASE, todayVN } from "../lib/api.js";
 import * as C from "../lib/courts.js";
 import { useAuth } from "../lib/auth.jsx";
 import { LEVELS, levelOf } from "../lib/levels.js";
+import RankFrame from "../components/rank/RankFrame.jsx";
 import { Iconify } from "../components/iconify/index.jsx";
 import { Label } from "../components/label/index.jsx";
 import Money, { SectionLabel } from "../components/Money.jsx";
@@ -73,7 +74,7 @@ function Slot({ ci, si, p, side, selected, onClick, disabled }) {
       }}>
       {p ? (
         <>
-          <PAvatar p={p} size={30} color={`${side}.main`} />
+          <RankFrame p={p} size={42} sx={{ my: -0.5 }} />
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="subtitle2" noWrap sx={{ lineHeight: 1.3 }}>{p.short || p.name}</Typography>
             <Typography variant="caption" color="text.secondary" noWrap component="div">{p.played} trận · <Money sx={{ fontSize: 11, fontWeight: 500 }}>{Math.round(p.elo || 1000)}</Money></Typography>
@@ -153,7 +154,7 @@ function WaitCard({ p, rank, onClick, disabled, now }) {
         bgcolor: first ? alpha(t.palette.primary.main, 0.04) : "background.paper",
         "&:hover": disabled ? undefined : { borderColor: "primary.main" },
       })}>
-      <PAvatar p={p} size={30} />
+      <RankFrame p={p} size={44} sx={{ my: -0.5, ml: -0.25 }} />
       <Box sx={{ minWidth: 0, flexGrow: 1 }}>
         <Typography variant="subtitle2" noWrap sx={{ fontSize: 13, lineHeight: 1.35 }}>
           {p.name}{p.guest && " *"}
@@ -183,7 +184,7 @@ function DragChip({ p }) {
   return (
     <Stack direction="row" alignItems="center" spacing={1} sx={(t) => ({ px: 1, py: 0.75, pr: 1.5, borderRadius: 5, width: "max-content",
       bgcolor: "background.paper", boxShadow: t.customShadows?.z16 || 8, border: `1px solid ${t.palette.primary.main}` })}>
-      <PAvatar p={p} size={28} />
+      <RankFrame p={p} size={40} sx={{ my: -0.5 }} />
       <Typography variant="subtitle2">{p.short || p.name}</Typography>
     </Stack>
   );

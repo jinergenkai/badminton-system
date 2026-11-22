@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  Avatar, Box, Card, CardHeader, CircularProgress, Stack, Table, TableBody, TableCell,
+  Box, Card, CardHeader, CircularProgress, Stack, Table, TableBody, TableCell,
   TableContainer, TableHead, TableRow, Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
@@ -10,6 +10,8 @@ import { Iconify } from "../components/iconify/index.jsx";
 import { Label } from "../components/label/index.jsx";
 import { Chart, useChart } from "../components/chart/index.jsx";
 import Money from "../components/Money.jsx";
+import RankFrame from "../components/rank/RankFrame.jsx";
+import { rankOf } from "../lib/ranks.js";
 
 const MEDAL = ["#F5B70A", "#A9B4C0", "#CD7F45"];
 
@@ -89,13 +91,13 @@ export default function Ranking() {
                         </TableCell>
                         <TableCell>
                           <Stack direction="row" alignItems="center" spacing={1.5} sx={{ py: 0.75 }}>
-                            <Avatar src={p.avatar || undefined} sx={{ width: 36, height: 36, bgcolor: p.guest ? "warning.main" : "primary.main", color: "#fff" }}>{(p.name || "?").slice(0, 1)}</Avatar>
+                            <RankFrame p={p} size={50} sx={{ my: -0.75 }} />
                             <Box sx={{ minWidth: 0 }}>
                               <Typography variant="subtitle2" noWrap sx={{ display: "flex", alignItems: "center" }}>
                                 {p.name}
                                 {p.guest && <Label color="warning" sx={{ ml: 0.75, height: 20, fontSize: 11 }}>khách</Label>}
                               </Typography>
-                              <Typography variant="caption" color="text.secondary">{p.played} trận<Box component="span" sx={{ display: { sm: "none" } }}> · {p.wins}T {p.losses}B</Box></Typography>
+                              <Typography variant="caption" color="text.secondary">{rankOf(p.elo).label} · {p.played} trận<Box component="span" sx={{ display: { sm: "none" } }}> · {p.wins}T {p.losses}B</Box></Typography>
                             </Box>
                           </Stack>
                         </TableCell>
