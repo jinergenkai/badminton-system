@@ -70,6 +70,22 @@ test("bỏ có mặt thì gỡ khỏi sân; xoá sân giữ tối thiểu 1 và 
   assert.equal(C.removeCourt(C.removeCourt(b, 0), 0).courts.length, 1);
 });
 
+test("kéo-thả: đổi chỗ giữa 2 ô, từ khay thì đẩy người cũ ra, cùng ô thì giữ nguyên", () => {
+  let b = { present: all, courts: [C.emptyCourt(0), C.emptyCourt(1)] };
+  b = C.place(C.place(b, 0, 0, "a"), 1, 2, "b");
+  const sw = C.moveTo(b, 1, 2, "a");                 // a (sân1 ô0) -> ô của b (sân2 ô2)
+  assert.equal(sw.courts[1].slots[2], "a");
+  assert.equal(sw.courts[0].slots[0], "b");
+  const fromTray = C.moveTo(b, 0, 0, "c");           // c từ khay đè lên a
+  assert.equal(fromTray.courts[0].slots[0], "c");
+  assert.equal(C.courtOf(fromTray, "a"), -1);
+  assert.ok(fromTray.present.includes("c"));
+  assert.equal(C.moveTo(b, 0, 0, "a"), b);
+  const toEmpty = C.moveTo(b, 0, 3, "b");            // ô trống: chỉ dời
+  assert.equal(toEmpty.courts[0].slots[3], "b");
+  assert.equal(toEmpty.courts[1].slots[2], null);
+});
+
 test("ngày", () => {
   assert.equal(C.shiftDay("2026-11-30", 1), "2026-12-01");
   assert.equal(C.shiftDay("2026-03-01", -1), "2026-02-28");

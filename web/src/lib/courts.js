@@ -82,6 +82,31 @@ export function place(board, ci, si, id) {
   return { ...b, courts, present };
 }
 
+/**
+ * Kéo-thả: thả id vào ô [ci, si].
+ *  - Kéo từ một ô khác sang ô đang có người -> ĐỔI CHỖ hai người.
+ *  - Kéo từ khay vào ô đang có người -> người cũ về khay.
+ *  - Thả vào chính ô của mình -> không đổi gì.
+ */
+export function moveTo(board, ci, si, id) {
+  const target = board.courts[ci]?.slots[si];
+  if (target === undefined || target === id) return board;
+  const fromCi = courtOf(board, id);
+  if (target && fromCi >= 0) {
+    const fromSi = board.courts[fromCi].slots.indexOf(id);
+    const courts = board.courts.map((c, i) => ({
+      ...c,
+      slots: c.slots.map((x, j) => {
+        if (i === ci && j === si) return id;
+        if (i === fromCi && j === fromSi) return target;
+        return x;
+      }),
+    }));
+    return { ...board, courts };
+  }
+  return place(board, ci, si, id);
+}
+
 /** Ô trống đầu tiên của sân, ưu tiên ô [pref] nếu trống. -1 nếu đầy. */
 export function firstEmpty(court, pref = -1) {
   if (pref >= 0 && !court.slots[pref]) return pref;

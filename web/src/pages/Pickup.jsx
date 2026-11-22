@@ -4,19 +4,30 @@
 //   3. Khay "Đang chờ": card từng người, xếp chờ lâu nhất trước (chưa đánh = chờ lâu nhất),
 //      rồi ít trận hơn. Chạm card → vào ô đang chọn (hoặc ô trống đầu tiên).
 //      Chạm người trên sân → về khay. "Tự xếp" lấy 4 người ưu tiên, chia cặp lệch Elo ít nhất.
+//      Kéo-thả (giữ ~0.2s trên điện thoại): card → ô, ô → ô (đổi chỗ), ô → khay (gỡ ra).
 // Bảng lưu ở backend theo ngày (rev chống ghi đè) → máy khác cùng thấy; sau này phone
 // đọc bảng này để gửi cặp xuống band. Logic thuần ở lib/courts.js (có test).
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert, Avatar, Box, Button, Card, Checkbox, CircularProgress, Dialog, DialogActions,
-  DialogContent, DialogTitle, IconButton, InputAdornment, List, ListItem, ListItemAvatar,
+  DialogContent, DialogTitle, Divider, IconButton, InputAdornment, List, ListItem, ListItemAvatar,
   ListItemText, Paper, Snackbar, Stack, TextField, ToggleButton, ToggleButtonGroup, Typography,
 } from "@mui/material";
+import {
+  DndContext, DragOverlay, MouseSensor, TouchSensor, pointerWithin, rectIntersection,
+  useDraggable, useDroppable, useSensor, useSensors,
+} from "@dnd-kit/core";
+
+// Ô đích = ô nằm DƯỚI NGÓN TAY (không phải ô chồng nhiều nhất với chip đang kéo — chip nhỏ,
+// lệch trái so với ngón tay nên hay rơi nhầm sang cột Đỏ). Ngoài mọi ô thì mới xét chồng hình.
+const collide = (args) => {
+  const hits = pointerWithin(args);
+  return hits.length ? hits : rectIntersection(args);
+};
 import { alpha, useTheme } from "@mui/material/styles";
 import { api, API_BASE, todayVN } from "../lib/api.js";
 import * as C from "../lib/courts.js";
 import { useAuth } from "../lib/auth.jsx";
-import WidgetSummary from "../components/WidgetSummary.jsx";
 import { Iconify } from "../components/iconify/index.jsx";
 import { Label } from "../components/label/index.jsx";
 import Money, { SectionLabel } from "../components/Money.jsx";
@@ -38,17 +49,24 @@ function PAvatar({ p, size = 32, color }) {
   );
 }
 
-// ---------- một ô trên sân ----------
-function Slot({ p, side, selected, onClick, now, disabled }) {
+// ---------- một ô trên sân (thả vào được; có người thì kéo đi được) ----------
+function Slot({ ci, si, p, side, selected, onClick, disabled }) {
+  const drop = useDroppable({ id: `d:${ci}:${si}`, data: { ci, si }, disabled });
+  const drag = useDraggable({ id: `s:${ci}:${si}`, data: { pid: p?.id }, disabled: disabled || !p });
+  const setRef = (el) => { drop.setNodeRef(el); drag.setNodeRef(el); };
+  const dnd = p && !disabled ? { ...drag.attributes, ...drag.listeners } : {};
   return (
-    <Box component="button" type="button" onClick={onClick} disabled={disabled}
+    <Box ref={setRef} component="button" type="button" onClick={onClick} disabled={disabled} {...dnd}
       sx={(t) => {
         const c = t.palette[side];
+        const hot = drop.isOver || selected;
         return {
-          display: "flex", alignItems: "center", gap: 1, width: 1, minHeight: 56, px: 1, py: 0.75, borderRadius: 1.5,
+          display: "flex", alignItems: "center", gap: 1, width: 1, minHeight: 56, px: 1, py: 0.75, borderRadius: 1.25,
           font: "inherit", textAlign: "left", cursor: disabled ? "default" : "pointer", transition: "all .15s",
-          bgcolor: p ? alpha(c.main, 0.1) : selected ? alpha(c.main, 0.16) : "transparent",
-          border: `${selected ? 2 : 1}px ${p ? "solid" : "dashed"} ${selected ? c.main : alpha(p ? c.main : t.palette.grey[500], p ? 0.4 : 0.48)}`,
+          touchAction: "manipulation", userSelect: "none", WebkitTouchCallout: "none",
+          opacity: drag.isDragging ? 0.35 : 1,
+          bgcolor: drop.isOver ? alpha(c.main, 0.24) : p ? alpha(c.main, 0.1) : selected ? alpha(c.main, 0.14) : t.palette.background.paper,
+          border: `${hot ? 2 : 1}px ${p ? "solid" : "dashed"} ${hot ? c.main : alpha(p ? c.main : t.palette.grey[500], p ? 0.4 : 0.48)}`,
           color: "text.primary",
         };
       }}>
@@ -62,7 +80,7 @@ function Slot({ p, side, selected, onClick, now, disabled }) {
         </>
       ) : (
         <Typography variant="caption" sx={{ color: selected ? `${side}.dark` : "text.disabled", fontWeight: 600, mx: "auto" }}>
-          {selected ? "Chạm người bên dưới" : "Trống"}
+          {selected ? "Chạm / thả người vào" : "Trống"}
         </Typography>
       )}
     </Box>
@@ -74,32 +92,40 @@ function CourtCard({ court, ci, people, sel, setSel, isAdmin, onSlot, onAuto, on
   const ps = court.slots.map((id) => (id ? people.get(id) || { id, name: id, elo: 1000, played: 0 } : null));
   const full = ps.every(Boolean);
   const diff = full ? Math.abs((ps[0].elo || 1000) + (ps[1].elo || 1000) - (ps[2].elo || 1000) - (ps[3].elo || 1000)) : null;
-  const side = (label, color, idx) => (
-    <Box sx={{ minWidth: 0 }}>
-      <Typography variant="overline" sx={{ color: `${color}.main`, fontWeight: 800, display: "block", mb: 0.5 }}>{label}</Typography>
-      <Stack spacing={1}>
-        {idx.map((si) => (
-          <Slot key={si} p={ps[si]} side={color} now={now} disabled={!isAdmin}
-            selected={isAdmin && sel && sel.ci === ci && sel.si === si}
-            onClick={() => onSlot(ci, si)} />
-        ))}
-      </Stack>
+  const slot = (si, color, row, col) => (
+    <Box sx={{ gridRow: row, gridColumn: col, minWidth: 0, position: "relative", zIndex: 1 }}>
+      <Slot ci={ci} si={si} p={ps[si]} side={color} disabled={!isAdmin}
+        selected={isAdmin && sel && sel.ci === ci && sel.si === si}
+        onClick={() => onSlot(ci, si)} />
     </Box>
   );
   return (
     <Card sx={{ p: 2 }}>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.5 }}>
-        <Typography variant="h6" sx={{ flexGrow: 1 }}>{court.name}</Typography>
-        {diff != null && <Label color={diff <= 30 ? "success" : diff <= 80 ? "info" : "warning"}>lệch {Math.round(diff)} Elo</Label>}
-        {/* chỉ xoá được sân TRỐNG — tránh một chạm mất cả 4 người đang đánh */}
-        {isAdmin && canRemove && !ps.some(Boolean) && (
-          <IconButton size="small" onClick={() => onRemove(ci)} sx={{ color: "text.disabled" }}><Iconify icon="solar:trash-bin-trash-bold" width={18} /></IconButton>
-        )}
-      </Stack>
-      <Box sx={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 1, alignItems: "center" }}>
-        {side("Đỏ", "error", C.RED)}
-        <Typography variant="subtitle2" color="text.disabled" sx={{ pt: 3 }}>vs</Typography>
-        {side("Xanh", "info", C.BLUE)}
+      {/* tên sân đã có trên thanh chọn sân — ở đây chỉ Đỏ | độ lệch Elo | Xanh */}
+      <Box sx={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "center", columnGap: 1, px: 0.5, mb: 0.75, minHeight: 30 }}>
+        <Typography variant="overline" sx={{ color: "error.main", fontWeight: 800 }}>Đỏ</Typography>
+        <Stack direction="row" alignItems="center" spacing={0.5}>
+          {diff != null && <Label color={diff <= 30 ? "success" : diff <= 80 ? "info" : "warning"}>lệch {Math.round(diff)} Elo</Label>}
+          {/* chỉ xoá được sân TRỐNG — tránh một chạm mất cả 4 người đang đánh */}
+          {isAdmin && canRemove && !ps.some(Boolean) && (
+            <IconButton size="small" onClick={() => onRemove(ci)} sx={{ color: "text.disabled" }} aria-label={`Xoá ${court.name}`}><Iconify icon="solar:trash-bin-trash-bold" width={18} /></IconButton>
+          )}
+        </Stack>
+        <Typography variant="overline" sx={{ color: "info.main", fontWeight: 800, textAlign: "right" }}>Xanh</Typography>
+      </Box>
+      {/* mặt sân: viền nét đứt, lưới (dọc, giữa) và vạch giữa (ngang) — chỉ gợi ý kiểu vạch sân */}
+      <Box sx={(t) => ({
+        position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "auto auto",
+        columnGap: 3, rowGap: 2, p: 1.25, borderRadius: 1.5,
+        border: `1.5px dashed ${alpha(t.palette.grey[500], 0.36)}`, bgcolor: alpha(t.palette.primary.main, 0.03),
+        "&::before": { content: '""', position: "absolute", top: 6, bottom: 6, left: "50%", borderLeft: `2px dashed ${alpha(t.palette.primary.main, 0.36)}` },
+        "&::after": { content: '""', position: "absolute", left: 6, right: 6, top: "50%", borderTop: `1px dashed ${alpha(t.palette.grey[500], 0.32)}` },
+      })}>
+        {slot(0, "error", 1, 1)}{slot(1, "error", 2, 1)}
+        {slot(2, "info", 1, 2)}{slot(3, "info", 2, 2)}
+        <Box sx={(t) => ({ position: "absolute", left: "50%", top: "50%", transform: "translate(-50%,-50%)", zIndex: 2,
+          px: 0.75, py: 0.1, borderRadius: 1, bgcolor: "background.paper", border: `1px solid ${alpha(t.palette.grey[500], 0.24)}`,
+          typography: "caption", fontWeight: 700, color: "text.disabled" })}>vs</Box>
       </Box>
       {isAdmin && (
         <Stack direction="row" spacing={1} sx={{ mt: 2 }}>
@@ -114,11 +140,14 @@ function CourtCard({ court, ci, people, sel, setSel, isAdmin, onSlot, onAuto, on
 // ---------- card người chờ ----------
 function WaitCard({ p, rank, onClick, disabled, now }) {
   const first = rank < 4;
+  const drag = useDraggable({ id: `p:${p.id}`, data: { pid: p.id }, disabled });
   return (
-    <Card component="button" type="button" onClick={onClick} disabled={disabled}
+    <Card ref={drag.setNodeRef} component="button" type="button" onClick={onClick} disabled={disabled}
+      {...(disabled ? {} : { ...drag.attributes, ...drag.listeners })}
       sx={(t) => ({
         p: 1.25, display: "flex", alignItems: "center", gap: 1, width: 1, font: "inherit", textAlign: "left",
-        cursor: disabled ? "default" : "pointer", boxShadow: "none",
+        cursor: disabled ? "default" : "grab", boxShadow: "none",
+        touchAction: "manipulation", userSelect: "none", WebkitTouchCallout: "none", opacity: drag.isDragging ? 0.35 : 1,
         border: `1px solid ${first ? alpha(t.palette.primary.main, 0.4) : alpha(t.palette.grey[500], 0.2)}`,
         bgcolor: first ? alpha(t.palette.primary.main, 0.04) : "background.paper",
         "&:hover": disabled ? undefined : { borderColor: "primary.main" },
@@ -134,6 +163,28 @@ function WaitCard({ p, rank, onClick, disabled, now }) {
       </Box>
       {first && <Label color="primary" sx={{ flexShrink: 0 }}>#{rank + 1}</Label>}
     </Card>
+  );
+}
+
+// ---------- khay: thả người từ sân về đây để gỡ ----------
+function TrayZone({ children }) {
+  const drop = useDroppable({ id: "tray" });
+  return (
+    <Box ref={drop.setNodeRef} sx={(t) => ({ borderRadius: 2, transition: "all .15s", outline: drop.isOver ? `2px dashed ${t.palette.primary.main}` : "none", outlineOffset: 4 })}>
+      {children}
+    </Box>
+  );
+}
+
+// ---------- chip đi theo ngón tay khi kéo ----------
+function DragChip({ p }) {
+  if (!p) return null;
+  return (
+    <Stack direction="row" alignItems="center" spacing={1} sx={(t) => ({ px: 1, py: 0.75, pr: 1.5, borderRadius: 5, width: "max-content",
+      bgcolor: "background.paper", boxShadow: t.customShadows?.z16 || 8, border: `1px solid ${t.palette.primary.main}` })}>
+      <PAvatar p={p} size={28} />
+      <Typography variant="subtitle2">{p.short || p.name}</Typography>
+    </Stack>
   );
 }
 
@@ -314,13 +365,38 @@ export default function Pickup() {
     } catch (e) { setToast(String(e.message || e)); }
   };
 
+  // kéo-thả. Điện thoại: giữ 0.2s mới kéo (chạm nhanh vẫn là chạm, vuốt vẫn là vuốt/cuộn).
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
+  const [dragPid, setDragPid] = useState(null);
+  const dragged = useRef(false); // có kéo trong lần chạm này -> đừng hiểu là vuốt đổi sân
+  const onDragStart = ({ active }) => {
+    dragged.current = true;
+    setDragPid(active.data.current?.pid || null);
+    try { navigator.vibrate?.(12); } catch { /* */ }
+  };
+  const onDragEnd = ({ active, over }) => {
+    setDragPid(null);
+    const pid = active.data.current?.pid;
+    if (!pid || !over || !isAdmin) return;
+    if (over.id === "tray") {
+      if (String(active.id).startsWith("s:")) update((b) => C.removeEverywhere(b, pid));
+    } else if (over.data.current && over.data.current.si != null) {
+      const { ci: c, si } = over.data.current;
+      update((b) => C.moveTo(b, c, si, pid));
+    }
+    setSel(null);
+  };
+
   // vuốt trái/phải giữa các sân
   const touch = useRef(null);
-  const onTouchStart = (e) => { const t = e.touches[0]; touch.current = { x: t.clientX, y: t.clientY, lx: t.clientX, ly: t.clientY }; };
+  const onTouchStart = (e) => { const t = e.touches[0]; dragged.current = false; touch.current = { x: t.clientX, y: t.clientY, lx: t.clientX, ly: t.clientY }; };
   const onTouchMove = (e) => { const s = touch.current, t = e.touches[0]; if (s && t) { s.lx = t.clientX; s.ly = t.clientY; } };
   const onTouchEnd = () => {
     const s = touch.current; touch.current = null;
-    if (!s || !board) return;
+    if (!s || !board || dragged.current) return;
     const dx = s.lx - s.x, dy = s.ly - s.y;
     if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
     setCi((i) => Math.max(0, Math.min(board.courts.length - 1, i + (dx < 0 ? 1 : -1))));
@@ -340,7 +416,7 @@ export default function Pickup() {
           : isAdmin && <Label color="primary" variant="soft" startIcon={<Iconify icon="solar:verified-check-bold" />}>Quản trị</Label>}
       </Stack>
 
-      <Card sx={{ px: 1, py: 0.75 }}>
+      <Card sx={{ px: 1, pt: 0.75, pb: 1.5 }}>
         <Stack direction="row" alignItems="center">
           <IconButton onClick={() => setDay((d) => C.shiftDay(d, -1))}><Iconify icon="solar:alt-arrow-left-bold" /></IconButton>
           <Stack alignItems="center" sx={{ flexGrow: 1 }}>
@@ -351,6 +427,22 @@ export default function Pickup() {
           <IconButton onClick={() => setDay((d) => C.shiftDay(d, 1))}><Iconify icon="solar:alt-arrow-right-bold" /></IconButton>
           <IconButton onClick={() => { setNow(Date.now()); loadAll(day); }} sx={{ color: "text.secondary" }}><Iconify icon="solar:refresh-bold" /></IconButton>
         </Stack>
+        {board && counts && (
+          <>
+            <Stack direction="row" divider={<Divider orientation="vertical" flexItem sx={{ borderStyle: "dashed" }} />} sx={{ mt: 1.25, px: 0.5 }}>
+              {[["Có mặt", present.size, "text.primary"], ["Đang chờ", tray.length, "warning.dark"], ["Trên sân", busy.size, "primary.main"], ["Trận", counts.matches, "info.dark"]].map(([k, v, c]) => (
+                <Box key={k} sx={{ flex: 1, textAlign: "center", minWidth: 0 }}>
+                  <Money sx={{ fontSize: 20, fontWeight: 700, color: c, display: "block", lineHeight: 1.3 }}>{v}</Money>
+                  <Typography variant="caption" color="text.secondary" noWrap component="div">{k}</Typography>
+                </Box>
+              ))}
+            </Stack>
+            <Button fullWidth size="small" variant={present.size ? "outlined" : "contained"} color={present.size ? "inherit" : "primary"}
+              onClick={() => setOpenPresent(true)} startIcon={<Iconify icon="solar:user-plus-bold" width={18} />} sx={{ mt: 1.25, mx: 0.5, width: "calc(100% - 8px)" }}>
+              Hôm nay ai tới · {present.size} người
+            </Button>
+          </>
+        )}
       </Card>
 
       {err && (
@@ -362,17 +454,7 @@ export default function Pickup() {
       {!err && (!board || !counts) && <Box sx={{ display: "grid", placeItems: "center", py: 6 }}><CircularProgress /></Box>}
 
       {board && counts && (
-        <>
-          <Box sx={{ display: "grid", gap: 1.5, gridTemplateColumns: "repeat(2,1fr)" }}>
-            <WidgetSummary color="primary" icon="solar:users-group-rounded-bold-duotone" title="Có mặt" total={present.size} caption={`${tray.length} đang chờ · ${busy.size} trên sân`} />
-            <WidgetSummary color="info" icon="solar:ranking-bold-duotone" title="Trận hôm nay" total={counts.matches} caption="đồng bộ từ phone" />
-          </Box>
-
-          <Button variant={present.size ? "outlined" : "contained"} color={present.size ? "inherit" : "primary"} onClick={() => setOpenPresent(true)}
-            startIcon={<Iconify icon="solar:user-plus-bold" width={18} />} sx={{ alignSelf: "stretch" }}>
-            Hôm nay ai tới · {present.size} người
-          </Button>
-
+        <DndContext sensors={sensors} collisionDetection={collide} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setDragPid(null)} autoScroll={{ threshold: { x: 0, y: 0.15 } }}>
           {!isAdmin && <Alert severity="info">Đang xem. Mở khoá <b>Quản trị</b> (góc trên) để xếp sân.</Alert>}
 
           <Stack direction="row" spacing={1} alignItems="center">
@@ -413,7 +495,7 @@ export default function Pickup() {
             )}
           </Box>
 
-          <Box>
+          <TrayZone>
             <SectionLabel right={sel && isAdmin ? <Label color={sel.si < 2 ? "error" : "info"}>→ {board.courts[sel.ci]?.name} · {sel.si < 2 ? "Đỏ" : "Xanh"} {sel.si % 2 + 1}</Label> : null}>
               Đang chờ · {tray.length}
             </SectionLabel>
@@ -428,11 +510,14 @@ export default function Pickup() {
                 {tray.map((p, i) => <WaitCard key={p.id} p={p} rank={i} now={now} disabled={!isAdmin} onClick={() => pick(p)} />)}
               </Box>
             )}
-          </Box>
+            {isAdmin && busy.size > 0 && <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 1, textAlign: "center" }}>Giữ rồi kéo người trên sân thả vào đây để gỡ ra</Typography>}
+          </TrayZone>
+
+          <DragOverlay dropAnimation={null}>{dragPid ? <DragChip p={people.get(dragPid)} /> : null}</DragOverlay>
 
           <PresentDialog open={openPresent} onClose={() => setOpenPresent(false)} list={counts.pickup} present={present}
             isAdmin={isAdmin} onToggle={(id) => update((b) => C.togglePresent(b, id))} onAddGuest={onAddGuest} />
-        </>
+        </DndContext>
       )}
 
       <Snackbar open={!!toast} autoHideDuration={3200} onClose={() => setToast("")} message={toast}
