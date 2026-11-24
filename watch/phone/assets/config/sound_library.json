@@ -392,6 +392,24 @@
       "display": "UNSTOPPABLE",
       "text": "Unstoppable!",
       "glow": "fire"
+    },
+    {
+      "id": "mo_man_lyria_1",
+      "display": "CẦU BAY\nLƯỚI RUNG",
+      "text": "Cầu bay, lưới rung!",
+      "glow": "fire"
+    },
+    {
+      "id": "mo_man_lyria_2",
+      "display": "CẦU BAY\nLƯỚI RUNG",
+      "text": "Cầu bay, lưới rung!",
+      "glow": "fire"
+    },
+    {
+      "id": "mo_man_lyria_3",
+      "display": "CẦU BAY\nLƯỚI RUNG",
+      "text": "Cầu bay, lưới rung!",
+      "glow": "fire"
     }
   ],
   "triggers": [
@@ -551,7 +569,10 @@
         "game_on_1",
         "game_on_2",
         "lets_dance_1",
-        "here_we_go_1"
+        "here_we_go_1",
+        "mo_man_lyria_1",
+        "mo_man_lyria_2",
+        "mo_man_lyria_3"
       ]
     }
   ]
