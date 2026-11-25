@@ -38,6 +38,11 @@ class HypeVoiceController extends GetxController {
   static const int _setPoint = 21;
   static const int _comebackDeficitThreshold = 4;
 
+  /// Chance that an ordinary point (no streak, nothing else matched) still
+  /// gets a hype line, so the court hears more than streak calls.
+  static const double anyPointChance = 0.25;
+  final Random _rng = Random();
+
   /// When each trigger fires — the conditions are code, in
   /// [_triggerMatches]; what they play is the Sound Library. A trigger in
   /// sound_library.json that is not listed here never fires.
@@ -55,6 +60,8 @@ class HypeVoiceController extends GetxController {
     'streak_low': 'Streak of 2 or 3',
     'random_meme': 'Any streak of 2+ (mixed in)',
     'first_point_of_match': 'New set starts',
+    'first_point': 'First point of the set is scored',
+    'any_point': 'Any other point (25% chance)',
   };
 
   SoundLibraryService? get _lib => SoundLibraryService.maybe;
@@ -377,6 +384,13 @@ class HypeVoiceController extends GetxController {
         // selection within the merged pool keeps these "meme" files in
         // rotation alongside the regular streak voices.
         return streakCount.value >= 2;
+
+      case 'first_point':
+        return newA + newB == 1;
+
+      case 'any_point':
+        // Lowest priority: only plays when nothing else matched this point.
+        return streakCount.value == 1 && _rng.nextDouble() < anyPointChance;
 
       case 'first_point_of_match':
       case 'manual_trigger':

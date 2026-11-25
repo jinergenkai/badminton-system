@@ -563,6 +563,36 @@
       ]
     },
     {
+      "id": "first_point",
+      "priority": 40,
+      "pool": [
+        "game_on_1",
+        "game_on_2",
+        "lets_dance_1",
+        "here_we_go_1",
+        "mo_man_lyria_1",
+        "mo_man_lyria_2",
+        "mo_man_lyria_3"
+      ]
+    },
+    {
+      "id": "any_point",
+      "priority": 10,
+      "pool": [
+        "female_pack/chay_the_nho_f",
+        "female_pack/xinh_trai_co_gi_sai_f",
+        "female_pack/qua_tang_mien_phi_f",
+        "female_pack/an_sung_troi_ban_f",
+        "female_pack/toi_cong_chuyen_f",
+        "female_pack/nhu_dieu_dut_day_f",
+        "female_pack/duong_cau_lam_tho_f",
+        "female_pack/con_mua_ban_thang_f",
+        "female_pack/man_nhan_f",
+        "female_pack/dep_nhu_mo_f",
+        "female_pack/sao_ma_hay_vay_troi_f"
+      ]
+    },
+    {
       "id": "first_point_of_match",
       "priority": 0,
       "pool": [
