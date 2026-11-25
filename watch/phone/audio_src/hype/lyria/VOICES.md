@@ -19,8 +19,8 @@ Từ gói 14: thêm "Nói đúng từng câu sau, không thêm bớt chữ:" tr�
 | 2 | ok, bỏ "Ngũ sát" (khó hiểu) | Bản hype cầu lông vui nhộn: giọng bình luận viên bóng đá hài hước, nói nhanh, cười khoái chí, dí dỏm, mỗi câu lên giọng cao hơn câu trước. |
 | 10 | chất âm tốt nhưng lời "chợ búa" | Bản hype cầu lông vui: giọng anh bán hàng chợ vui tính đang rao hàng, nói tự nhiên như người thật, dí dỏm, không chỉnh giọng, không autotune. |
 | **11** | **HAY** | Bản hype cầu lông vui vẻ trẻ trung: giọng MC trẻ Gen Z, năng lượng, cười tươi, nói tự nhiên như người thật, không chỉnh giọng, không autotune. |
-| **12** | **HAY** | Bản hype cầu lông vui nhộn: giọng nữ trẻ lém lỉnh, trêu đùa dễ thương, cười khúc khích, nói tự nhiên như người thật, không chỉnh giọng, không autotune. |
-| **13** | **HAY** | Bản hype cầu lông khí thế: giọng nam trẻ phấn khích, sung sức, vui vẻ, nói tự nhiên như người thật, không chỉnh giọng, không autotune. |
+| **12** | **HAY NHẤT** | Bản hype cầu lông vui nhộn: giọng nữ trẻ lém lỉnh, trêu đùa dễ thương, cười khúc khích, nói tự nhiên như người thật, không chỉnh giọng, không autotune. |
+| **13** | **HAY NHẤT** | Bản hype cầu lông khí thế: giọng nam trẻ phấn khích, sung sức, vui vẻ, nói tự nhiên như người thật, không chỉnh giọng, không autotune. |
 
 | 14 | (chờ nghe) Mở màn | Bản hype mở màn trận cầu lông: giọng MC sự kiện trẻ, vui vẻ, hào hứng, nói tự nhiên như người thật, không chỉnh giọng, không autotune. |
 | 15 | (chờ nghe) Kết trận | Bản kết trận cầu lông vui: giọng MC trẻ vui tính, hào hứng, cuối câu cười nhẹ, nói tự nhiên như người thật, không chỉnh giọng, không autotune. |
@@ -30,3 +30,9 @@ Từ gói 14: thêm "Nói đúng từng câu sau, không thêm bớt chữ:" tr�
 
 Lời từng gói: xem `../lyria_packs.md`. Quy tắc lời: chỉ dựa vào thứ app biết từ điểm số
 (đầu trận, điểm đầu, chuỗi, cắt chuỗi, lội ngược dòng, deuce, hết trận) — không tả loại cú đánh.
+
+## Clip đã đưa vào app (26/11/2026)
+
+72 clip cắt từ bản gốc (không tách giọng), tên `g<gói>_<slug>` trong `audio_src/hype/`, nhóm phát nằm ở
+`assets/config/sound_library.json`. Hùng chấm gói **12, 13 hay nhất** — cần thêm câu thì gen lại đúng prompt giọng của hai gói này.
+Hai câu tả cú đánh (`g12_cau_ra_ngoai_san…`, `g12_dap_hut…`) chỉ nằm trong `manual_trigger`: trọng tài bấm giữ trên band khi gặp pha đó.
