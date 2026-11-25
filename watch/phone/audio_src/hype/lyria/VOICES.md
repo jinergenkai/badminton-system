@@ -36,3 +36,27 @@ Lời từng gói: xem `../lyria_packs.md`. Quy tắc lời: chỉ dựa vào th
 72 clip cắt từ bản gốc (không tách giọng), tên `g<gói>_<slug>` trong `audio_src/hype/`, nhóm phát nằm ở
 `assets/config/sound_library.json`. Hùng chấm gói **12, 13 hay nhất** — cần thêm câu thì gen lại đúng prompt giọng của hai gói này.
 Hai câu tả cú đánh (`g12_cau_ra_ngoai_san…`, `g12_dap_hut…`) chỉ nằm trong `manual_trigger`: trọng tài bấm giữ trên band khi gặp pha đó.
+
+## Tạo lại giọng gói 12 / 13 — prompt y nguyên (copy từ chat Gemini)
+
+**Gói 12** (nữ trẻ lém lỉnh — Hùng: "nhạc xịn vãi") — chat gốc: gemini.google.com/app/4cdd694a1098d220
+```
+Bản hype cầu lông vui nhộn: giọng nữ trẻ lém lỉnh, trêu đùa dễ thương, cười khúc khích, nói tự nhiên như người thật, không chỉnh giọng, không autotune. Các câu: "Nín!" "Nín luôn!" "Toang rồi!" "Ối dồi ôi!" "Còn đúng cái nịt!" "Gì căng vậy!" "Tạch rồi!" "Thôi xong!" "Hết cứu!" "Đi về đi!" Giọng là chính, rõ chữ, gần như a cappella. Nhạc nền tối giản: chỉ một tiếng trống hoặc vỗ tay ngay sau mỗi câu, không giai điệu, không synth, không bass liên tục. Giữa các câu im lặng một nhịp.
+```
+Lưu ý: prompt này KHÔNG có "Nói đúng từng câu sau, không thêm bớt chữ" — Gemini tự chế thêm câu vần
+(vd. "Cầu ra ngoài sân mà cứ ngỡ trong vạch"), và chính phần chế đó làm gói 12 hay. Muốn câu mới cùng giọng:
+giữ nguyên đầu + đuôi, chỉ thay danh sách "Các câu".
+
+**Gói 13** (nam trẻ phấn khích) — chat gốc: gemini.google.com/app/3e82661ac2403259
+```
+Bản hype cầu lông khí thế: giọng nam trẻ phấn khích, sung sức, vui vẻ, nói tự nhiên như người thật, không chỉnh giọng, không autotune. Các câu: "Bá khí quá vậy!" "Không ai cản nổi!" "Một mình cân hết!" "Quá dữ!" "Chơi lớn!" "Lên luôn!" "Đỉnh cao phong độ!" "Ai sợ thì đi về!" "Thắng đời một không!" Giọng là chính, rõ chữ, gần như a cappella. Nhạc nền tối giản: chỉ một tiếng trống hoặc vỗ tay ngay sau mỗi câu, không giai điệu, không synth, không bass liên tục. Giữa các câu im lặng một nhịp.
+```
+
+## Tự cắt clip và đưa vào app
+
+1. `cd watch/phone/audio_src/hype/lyria && python3 -m http.server 8000` → mở http://localhost:8000/cat_clip.html
+   (mở thẳng file:// không được vì trình duyệt chặn tải mp3). Gói mới: thêm `goiN.mp3` vào thư mục này và một dòng vào `PACKS`
+   trong cat_clip.html (hoặc bấm "＋ File của bạn").
+2. Chọn đoạn → gõ câu có dấu → chọn nhóm → **Lưu clip**. Xong bấm **Copy danh sách**, dán vào `list.txt`.
+3. `cd watch/phone && python3 tools/add_hype_clips.py list.txt` (thêm `--dry-run` để xem trước)
+   → `python3 tools/normalize_voice.py --changed`.

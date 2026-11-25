@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cắt clip hype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: bàn làm việc nhanh, gọn, như máy cắt băng ở sân cầu
+   IDEA: sân cầu lông — nền xanh sân, vạch trắng, cầu vàng là vùng chọn
+   PICTURE: dải sóng âm lớn là chính, vùng gợi ý đánh số như ô sân
+   COLOUR+TYPE: xanh sân #1f6b4a, vạch trắng, nhấn vàng cầu #f2c94c; Be Vietnam Pro
+   LAYOUT: chọn gói → sóng âm → nút điều khiển → danh sách clip */
+:root{color-scheme:light dark;--bg:light-dark(#f3f6f2,#0c1612);--card:light-dark(#fff,#13221b);--ink:light-dark(#0f1d17,#e8f1ec);--mute:light-dark(#5b6b63,#9db0a6);--court:#1f6b4a;--courtD:#164e36;--line:#ffffffcc;--acc:#f2c94c;--bad:#e5533d;--bd:light-dark(#dbe4de,#21362b)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Be Vietnam Pro",system-ui,sans-serif;overflow-x:clip}
+.wrap{max-width:1100px;margin:0 auto;padding:16px max(4vw,12px) 40px}
+h1{font-size:clamp(24px,4vw,34px);line-height:1.1;margin:4px 0 4px;font-weight:800}
+.sub{color:var(--mute);margin:0 0 14px;font-size:14px}
+.packs{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+.packs button,.file{flex:none}
+button,select,input,.file{font:inherit;font-size:15px;min-height:44px;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--ink);padding:0 14px;cursor:pointer}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--acc);outline-offset:1px}
+button.on{background:var(--court);color:#fff;border-color:var(--court)}
+button.pri{background:var(--acc);color:#1b1400;border-color:var(--acc);font-weight:700}
+button.ghost{background:transparent}
+.file{display:inline-flex;align-items:center;gap:6px}.file input{display:none}
+.court{margin-top:12px;background:var(--court);border-radius:14px;padding:10px;box-shadow:0 10px 30px -14px #0007}
+.scroller{overflow-x:auto;overflow-y:hidden;border-radius:8px;border:2px solid var(--line);touch-action:pan-x}
+.wave{position:relative;height:190px;background:var(--courtD)}
+.wave canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.bar .grow{flex:1 1 160px}
+.zoom{display:flex;align-items:center;gap:8px;color:#fff;font-size:14px}
+.zoom input{min-height:auto;padding:0;accent-color:var(--acc);width:140px}
+.time{font-variant-numeric:tabular-nums;color:#fff;font-weight:600;white-space:nowrap}
+.panel{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:14px;margin-top:14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,230px),1fr));gap:10px}
+label{font-size:13px;color:var(--mute);display:block;margin-bottom:4px}
+input[type=text],select{width:100%}
+.nudge{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.nudge button{padding:0 4px;font-size:14px}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:grid;grid-template-columns:auto 1fr auto auto;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--bd)}
+.list li:first-child{border-top:0}
+.tag{font-size:12px;color:var(--mute)}
+.num{font-variant-numeric:tabular-nums;white-space:nowrap;font-size:13px;color:var(--mute)}
+.empty{color:var(--mute);font-size:14px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:1}
+textarea{width:100%;min-height:110px;font:13px/1.4 ui-monospace,monospace;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--ink);padding:8px}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Cắt clip hype</h1>
+  <p class="sub">Chọn gói → kéo trên sóng âm để chọn đoạn (vùng vàng) → nghe thử → ghi câu và nhóm → Lưu. Xong bấm “Copy danh sách” rồi dán cho Claude để cắt file thật.</p>
+
+  <div class="packs" id="packs"></div>
+
+  <div class="court">
+    <div class="scroller" id="scroller"><div class="wave" id="wave"><canvas id="cv"></canvas></div></div>
+    <div class="bar">
+      <button class="pri" id="playSel">▶ Nghe đoạn chọn</button>
+      <button id="stop">■ Dừng</button>
+      <span class="time" id="selTime">Chưa chọn đoạn</span>
+      <span class="grow"></span>
+      <button class="ghost" id="panL" aria-label="Lùi" style="color:#fff">◀</button><button class="ghost" id="panR" aria-label="Tới" style="color:#fff">▶</button><span class="zoom">Phóng to <input type="range" id="zoom" min="1" max="12" step="0.5" value="3"></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="grid">
+      <div>
+        <label>Chỉnh đầu đoạn</label>
+        <div class="nudge"><button data-n="s,-0.1">−0.1</button><button data-n="s,-0.02">−0.02</button><button data-n="s,0.02">+0.02</button><button data-n="s,0.1">+0.1</button></div>
+      </div>
+      <div>
+        <label>Chỉnh cuối đoạn</label>
+        <div class="nudge"><button data-n="e,-0.1">−0.1</button><button data-n="e,-0.02">−0.02</button><button data-n="e,0.02">+0.02</button><button data-n="e,0.1">+0.1</button></div>
+      </div>
+      <div>
+        <label for="txt">Câu trong clip</label>
+        <input type="text" id="txt" placeholder="vd: Toang rồi ông giáo ạ">
+      </div>
+      <div>
+        <label for="grp">Nhóm phát</label>
+        <select id="grp"></select>
+      </div>
+    </div>
+    <div class="bar"><button class="pri" id="save">＋ Lưu clip</button><span class="tag" id="hint">Mẹo: chạm vào ô số trên sóng âm để chọn nhanh đoạn máy đã gợi ý.</span></div>
+  </div>
+
+  <div class="panel">
+    <div class="bar" style="margin-top:0"><b class="grow">Clip đã lưu (<span id="cnt">0</span>)</b><button id="copy">Copy danh sách</button><button class="ghost" id="clear">Xoá hết</button></div>
+    <ul class="list" id="list"></ul>
+    <details style="margin-top:10px"><summary class="tag">Xem danh sách dạng chữ (nếu nút Copy không chạy, giữ để chọn rồi copy tay)</summary><textarea id="out" readonly></textarea></details>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+{
+const PACKS=[
+ {k:"1",name:"Gói 1 · Mở màn"},{k:"2",name:"Gói 2 · Chuỗi thắng"},{k:"10",name:"Gói 10 · Hết sảy"},
+ {k:"11",name:"Gói 11 · Khen Gen Z"},{k:"12",name:"Gói 12 · Cà khịa"},{k:"13",name:"Gói 13 · Khí thế"},
+ {k:"14",name:"Gói 14 · Mở màn"},{k:"15",name:"Gói 15 · Kết trận"},{k:"16",name:"Gói 16 · Khen"},{k:"17",name:"Gói 17 · Cà khịa"},{k:"18",name:"Gói 18 · Deuce"}];
+const GROUPS=[["first_point_of_match","Bắt đầu trận mới"],["first_point","Điểm đầu tiên của set"],["streak_low","Chuỗi 2–3"],["streak_high","Chuỗi từ 4"],["streak_5_plus","Chuỗi từ 5"],["shutdown","Cắt chuỗi / cà khịa"],["comeback","Lội ngược dòng"],["crucial_moment","Điểm quyết định / deuce"],["match_end","Hết trận"],["any_point","Điểm bình thường (25%)"],["random_meme","Meme (kèm chuỗi từ 2)"],["manual_trigger","Trọng tài bấm (giữ trên band)"]];
+const $=id=>document.getElementById(id);
+const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
+let ac,buf=null,peaks=null,pack=null,segs={},sel=null,src=null,playStart=0,playFrom=0,playing=false,clips=store.get("hype_clips",[]);
+const cv=$("cv"),wave=$("wave"),scroller=$("scroller");
+$("grp").innerHTML=GROUPS.map(([v,l])=>`<option value="${v}">${l}</option>`).join("");
+$("grp").value=store.get("hype_grp","any_point");
+$("grp").onchange=()=>store.set("hype_grp",$("grp").value);
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=t=>t.toFixed(2)+"s";
+function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),1600)}
+
+function renderPacks(){
+  $("packs").innerHTML=PACKS.map(p=>`<button data-k="${p.k}" class="${pack===p.k?"on":""}">${p.name}</button>`).join("")+
+   `<label class="file"><input type="file" id="up" accept="audio/*">＋ File của bạn</label>`;
+  $("packs").querySelectorAll("button").forEach(b=>b.onclick=()=>loadPack(b.dataset.k));
+  $("up").onchange=e=>{const f=e.target.files[0];if(f)loadBuffer(f.arrayBuffer(),"file:"+f.name)};
+}
+async function loadBuffer(abP,key){
+  ac=ac||new AudioContext();stop();
+  $("selTime").textContent="Đang tải…";
+  try{buf=await ac.decodeAudioData(await abP)}catch(e){$("selTime").textContent="Không đọc được file";return}
+  pack=key;sel=null;computePeaks();renderPacks();draw();updSel();
+}
+function loadPack(k){loadBuffer(fetch(`goi${k}.mp3`).then(r=>r.arrayBuffer()),k)}
+function computePeaks(){
+  const d=buf.getChannelData(0),n=4000,step=Math.floor(d.length/n);peaks=new Float32Array(n);
+  for(let i=0;i<n;i++){let m=0;for(let j=i*step;j<(i+1)*step;j+=4){const v=Math.abs(d[j]);if(v>m)m=v}peaks[i]=m}
+}
+function width(){return Math.max(scroller.clientWidth,scroller.clientWidth*+$("zoom").value)}
+const t2x=t=>t/buf.duration*cv.clientWidth, x2t=x=>Math.max(0,Math.min(buf.duration,x/cv.clientWidth*buf.duration));
+function draw(){
+  if(!buf){return}
+  wave.style.width=width()+"px";
+  const W=cv.clientWidth,H=cv.clientHeight,dpr=devicePixelRatio||1;cv.width=W*dpr;cv.height=H*dpr;
+  const g=cv.getContext("2d");g.scale(dpr,dpr);g.clearRect(0,0,W,H);
+  // vạch sân
+  g.strokeStyle="#ffffff33";g.lineWidth=1;g.beginPath();g.moveTo(0,H/2);g.lineTo(W,H/2);g.stroke();
+  for(let s=0;s<buf.duration;s+=1){const x=t2x(s);g.fillStyle="#ffffff40";g.fillRect(x,H-8,1,8);if(s%5===0){g.fillStyle="#ffffffaa";g.font="11px Be Vietnam Pro";g.fillText(s+"s",x+3,H-10)}}
+  // gợi ý
+  (segs[pack]||[]).forEach(([a,b],i)=>{const x=t2x(a),w=t2x(b)-x;g.fillStyle="#ffffff14";g.fillRect(x,0,w,H);g.fillStyle="#ffffffcc";g.font="600 12px Be Vietnam Pro";g.fillText(i+1,x+4,14)});
+  // sóng
+  g.fillStyle="#d9f2e5";const n=peaks.length;
+  for(let x=0;x<W;x++){const i=Math.floor(x/W*n),v=peaks[i]*(H/2-14);g.fillRect(x,H/2-v,1,v*2||1)}
+  // vùng chọn
+  if(sel){const x=t2x(sel[0]),w=t2x(sel[1])-x;g.fillStyle="#f2c94c55";g.fillRect(x,0,w,H);g.fillStyle="#f2c94c";g.fillRect(x-1,0,3,H);g.fillRect(x+w-1,0,3,H)}
+  // đầu phát
+  if(playing){const t=playFrom+(ac.currentTime-playStart);g.fillStyle="#fff";g.fillRect(t2x(t),0,2,H)}
+}
+function updSel(){$("selTime").textContent=sel?`${fmt(sel[0])} → ${fmt(sel[1])}  (${(sel[1]-sel[0]).toFixed(2)}s)`:(buf?"Kéo trên sóng âm để chọn":"Chọn một gói để bắt đầu")}
+
+// kéo chọn
+let drag=null;
+cv.addEventListener("pointerdown",e=>{
+  if(!buf)return;const r=cv.getBoundingClientRect(),t=x2t(e.clientX-r.left),tol=x2t(14)-x2t(0);
+  if(sel&&Math.abs(t-sel[0])<tol)drag={m:"s"};else if(sel&&Math.abs(t-sel[1])<tol)drag={m:"e"};
+  else{const hit=(segs[pack]||[]).find(([a,b])=>t>=a&&t<=b&&e.clientY-r.top<22);if(hit){sel=[...hit];updSel();draw();play(sel[0],sel[1]);return}drag={m:"new",a:t};sel=[t,t]}
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener("pointermove",e=>{if(!drag)return;const r=cv.getBoundingClientRect(),t=x2t(e.clientX-r.left);
+  if(drag.m==="new")sel=[Math.min(drag.a,t),Math.max(drag.a,t)];else if(drag.m==="s")sel[0]=Math.min(t,sel[1]-0.05);else sel[1]=Math.max(t,sel[0]+0.05);updSel();draw()});
+cv.addEventListener("pointerup",()=>{if(drag&&sel&&sel[1]-sel[0]<0.08){// chạm 1 cái: chọn đoạn gợi ý chứa điểm đó
+  const t=sel[0],hit=(segs[pack]||[]).find(([a,b])=>t>=a&&t<=b);sel=hit?[...hit]:null;updSel();draw();if(sel)play(sel[0],sel[1])}
+  else if(drag&&sel)play(sel[0],sel[1]);drag=null});
+
+function play(a,b){if(!buf)return;stop();src=ac.createBufferSource();src.buffer=buf;src.connect(ac.destination);
+  playFrom=a;playStart=ac.currentTime;src.start(0,a,b-a);playing=true;src.onended=()=>{playing=false;draw()};tick()}
+function tick(){if(!playing)return;draw();requestAnimationFrame(tick)}
+function stop(){if(src){try{src.stop()}catch{}src=null}playing=false}
+$("playSel").onclick=()=>{ac&&ac.resume();if(sel)play(sel[0],sel[1]);else toast("Chưa chọn đoạn")};
+$("stop").onclick=()=>{stop();draw()};
+$("zoom").oninput=()=>draw();
+$("panL").onclick=()=>scroller.scrollBy({left:-scroller.clientWidth*0.7,behavior:"smooth"});
+$("panR").onclick=()=>scroller.scrollBy({left:scroller.clientWidth*0.7,behavior:"smooth"});
+document.querySelectorAll("[data-n]").forEach(b=>b.onclick=()=>{if(!sel)return toast("Chưa chọn đoạn");const[w,d]=b.dataset.n.split(",");
+  if(w==="s")sel[0]=Math.max(0,Math.min(sel[1]-0.05,sel[0]+ +d));else sel[1]=Math.min(buf.duration,Math.max(sel[0]+0.05,sel[1]+ +d));updSel();draw();play(sel[0],sel[1])});
+
+function lines(){return clips.map(c=>`goi${c.pack} | ${c.a.toFixed(2)}-${c.b.toFixed(2)} | ${c.text} | ${c.grp}`).join("\n")}
+function renderList(){
+  $("cnt").textContent=clips.length;$("out").value=lines();
+  $("list").innerHTML=clips.length?clips.map((c,i)=>`<li><button class="ghost" data-p="${i}" aria-label="Nghe">▶</button><div><div>${esc(c.text)}</div><div class="tag">${esc(PACKS.find(p=>p.k===c.pack)?.name||c.pack)} · ${esc((GROUPS.find(g=>g[0]===c.grp)||[,c.grp])[1])}</div></div><span class="num">${c.a.toFixed(2)}–${c.b.toFixed(2)}</span><button class="ghost" data-d="${i}" aria-label="Xoá">✕</button></li>`).join(""):`<li class="empty">Chưa có clip nào.</li>`;
+  $("list").querySelectorAll("[data-p]").forEach(b=>b.onclick=async()=>{const c=clips[+b.dataset.p];if(pack!==c.pack){if(c.pack.startsWith("file:"))return toast("Mở lại file đó trước");await loadBuffer(fetch(`goi${c.pack}.mp3`).then(r=>r.arrayBuffer()),c.pack)}sel=[c.a,c.b];updSel();draw();play(c.a,c.b)});
+  $("list").querySelectorAll("[data-d]").forEach(b=>b.onclick=()=>{clips.splice(+b.dataset.d,1);store.set("hype_clips",clips);renderList()});
+}
+$("save").onclick=()=>{if(!sel)return toast("Chưa chọn đoạn");const text=$("txt").value.trim();if(!text){$("txt").focus();return toast("Ghi câu trong clip trước")}
+  clips.push({pack,a:+sel[0].toFixed(2),b:+sel[1].toFixed(2),text,grp:$("grp").value});store.set("hype_clips",clips);$("txt").value="";renderList();toast("Đã lưu")};
+$("copy").onclick=async()=>{try{await navigator.clipboard.writeText(lines());toast("Đã copy — dán cho Claude nhé")}catch{document.querySelector("details").open=true;$("out").select();toast("Không copy tự động được, copy tay giúp nhé")}};
+$("clear").onclick=()=>{if($("clear").dataset.sure){clips=[];store.set("hype_clips",clips);renderList();$("clear").textContent="Xoá hết";delete $("clear").dataset.sure}else{$("clear").dataset.sure=1;$("clear").textContent="Bấm lần nữa để xoá";setTimeout(()=>{$("clear").textContent="Xoá hết";delete $("clear").dataset.sure},2500)}};
+new ResizeObserver(()=>draw()).observe(scroller);
+fetch("segs.json").then(r=>r.json()).then(j=>{segs=j;draw()}).catch(()=>{});
+renderPacks();renderList();updSel();
+}
+</script>
+</body>
+</html>
