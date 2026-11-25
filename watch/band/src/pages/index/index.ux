@@ -87,9 +87,22 @@
 
       <!-- ZONE 4: UNDO (BOTTOM - 20%). On a set with no point yet it goes
            back home: the start was tapped by mistake. -->
-      <div class="undo-area" if="{{ screen === 'game' && !isWinnerA && !isWinnerB }}" onclick="onUndo">
+      <div class="undo-area" if="{{ screen === 'game' && !isWinnerA && !isWinnerB }}" onclick="onUndo" onlongpress="onBlindEnter">
         <text class="undo-text">undo</text>
       </div>
+    </div>
+
+    <!-- BLIND MODE: score without looking. The whole screen is one pad:
+         1 tap = Red, 2 taps = Blue, 3 taps = undo; the wrist answers with
+         the same number of short buzzes. Hold to leave (one long buzz).
+         Entered by holding the undo bar. -->
+    <div class="blind" if="{{ blind }}" onclick="onBlindTap" onlongpress="onBlindExit">
+      <text class="blind-score">{{ scoreA }} - {{ scoreB }}</text>
+      <text class="blind-dots">{{ blindTapDots }}</text>
+      <text class="blind-hint">1 tap  RED</text>
+      <text class="blind-hint">2 taps  BLUE</text>
+      <text class="blind-hint">3 taps  UNDO</text>
+      <text class="blind-exit">hold to exit</text>
     </div>
   </stack>
 </template>
@@ -158,6 +171,11 @@
       isWinnerA: false,
       isWinnerB: false,
       lastLongPressTime: 0, // Flag to prevent double trigger
+      // Blind mode (tap count, see onBlindTap).
+      blind: false,
+      blindTaps: 0,
+      blindTapDots: '',
+      blindTimer: null,
       // Consecutive-points streak, owned by the watch so it works with no phone.
       // '' = nobody has scored yet in this match.
       streakTeam: '',
@@ -604,7 +622,8 @@
     // (the screen is the band's biggest draw), hence off by default.
     applyKeepOn() {
       const def = this.$app && this.$app.$def
-      const want = !!(def && def.keepOn) && this.screen === 'game'
+      // Blind mode needs the screen awake: a dark screen ignores taps.
+      const want = (!!(def && def.keepOn) && this.screen === 'game') || this.blind
       if (want === this.keepOnApplied) return
       this.keepOnApplied = want
       try {
@@ -1039,6 +1058,7 @@
       }
       this.stopClock()
       this.stopLinkPoll()
+      this.leaveBlind()
       // Another page or app: let the screen time out there.
       if (this.keepOnApplied) {
         this.keepOnApplied = false
@@ -1302,8 +1322,94 @@
     },
 
     onUndo() {
+      // The release of a long press (blind mode entry) is not an undo.
+      if (Date.now() - this.lastLongPressTime < 500) return
       if (this.isLocked) return
       this.doUndo()
+    },
+
+    // ── Blind mode ───────────────────────────────────────────────────────
+    // Taps are counted until a pause of BLIND_WINDOW ms (a third tap acts at
+    // once). The action is confirmed with as many short buzzes as taps, so
+    // the player knows what was recorded without looking. Uses applyPoint /
+    // doUndo, so the phone, streaks and history behave exactly as usual.
+    blindWindow() { return 600 },
+
+    onBlindEnter() {
+      if (this.screen !== 'game' || this.isWinnerA || this.isWinnerB) return
+      this.lastLongPressTime = Date.now()
+      this.blind = true
+      this.blindTaps = 0
+      this.blindTapDots = ''
+      this.applyKeepOn()
+      this.pulse(2, 'long', 300)
+      this.status('Blind mode')
+    },
+
+    onBlindExit() {
+      this.lastLongPressTime = Date.now()
+      if (!this.blind) return
+      this.leaveBlind()
+      this.pulse(1, 'long', 0)
+      this.status('Blind mode off')
+    },
+
+    leaveBlind() {
+      if (this.blindTimer) { clearTimeout(this.blindTimer); this.blindTimer = null }
+      if (!this.blind) return
+      this.blind = false
+      this.blindTaps = 0
+      this.blindTapDots = ''
+      this.applyKeepOn()
+    },
+
+    onBlindTap() {
+      if (Date.now() - this.lastLongPressTime < 500) return
+      this.blindTaps = this.blindTaps + 1
+      this.blindTapDots = this.blindTaps === 1 ? 'o' : (this.blindTaps === 2 ? 'o o' : 'o o o')
+      if (this.blindTimer) { clearTimeout(this.blindTimer); this.blindTimer = null }
+      if (this.blindTaps >= 3) { this.resolveBlind(); return }
+      this.blindTimer = setTimeout(() => { this.resolveBlind() }, this.blindWindow())
+    },
+
+    resolveBlind() {
+      if (this.blindTimer) { clearTimeout(this.blindTimer); this.blindTimer = null }
+      const n = this.blindTaps
+      this.blindTaps = 0
+      this.blindTapDots = ''
+      if (!this.blind || n < 1) return
+      let ok = false
+      if (n === 1) ok = this.applyPoint('A')
+      else if (n === 2) ok = this.applyPoint('B')
+      else ok = this.doUndo()
+      if (!ok) { this.pulse(1, 'long', 0); return }   // refused: one long buzz
+      if (this.screen !== 'game') {
+        // Undo of a set with no point went back home.
+        this.leaveBlind()
+        this.pulse(1, 'long', 0)
+        return
+      }
+      if (this.isWinnerA || this.isWinnerB) {
+        // Set over: show the win screen, buzz long twice.
+        this.leaveBlind()
+        this.pulse(2, 'long', 400)
+        return
+      }
+      this.pulse(n, 'short', 350)
+    },
+
+    // n buzzes, `gap` ms apart. mode: 'short' | 'long' (system.vibrator).
+    pulse(n, mode, gap) {
+      let i = 0
+      const one = () => {
+        if (i >= n) return
+        i++
+        try {
+          if (vibrator && typeof vibrator.vibrate === 'function') vibrator.vibrate({ mode: mode })
+        } catch (e) { this.diag('vibrate threw: ' + e.message); return }
+        if (i < n) setTimeout(one, gap)
+      }
+      one()
     },
 
     // Shared by the band button and phone commands. Returns false when there
@@ -1385,6 +1491,46 @@
     flex-direction: column;
     width: 100%;
     height: 100%;
+  }
+
+  /* BLIND MODE: full-screen pad over everything (stack child). */
+  .blind {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: #000000;
+  }
+  .blind-score {
+    width: 100%;
+    text-align: center;
+    font-size: 56px;
+    font-weight: bold;
+    color: #FFFFFF;
+  }
+  .blind-dots {
+    width: 100%;
+    height: 44px;
+    text-align: center;
+    font-size: 36px;
+    color: #F2C94C;
+  }
+  .blind-hint {
+    width: 100%;
+    text-align: center;
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  .blind-exit {
+    width: 100%;
+    margin-top: 16px;
+    text-align: center;
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.35);
   }
 
   /* ZONE 1: SETTINGS Area (20%) */

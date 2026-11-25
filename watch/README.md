@@ -547,3 +547,15 @@ Tài liệu Xiaomi Vela chủ yếu là tiếng Trung. Những câu hỏi cần 
 
 Tài liệu tham khảo đã có: `docs/SETUP_GUIDE.md`, `docs/fix_connect.md`,
 `docs/wear_api.md`, `docs/old_logic.md`, `docs/conversation_01.json`.
+
+## Chế độ chạm mù (band) — 26/11/2026
+Bấm điểm không cần nhìn màn hình.
+- **Vào:** trong trận, **giữ lâu thanh `undo`** → band rung 2 nhịp dài, màn hình đen kín.
+- **Dùng:** cả màn hình là một nút. **1 chạm = Đỏ (+A)**, **2 chạm = Xanh (+B)**, **3 chạm = undo**.
+  Đếm chạm tới khi ngừng 0,6 s (chạm thứ 3 chốt ngay). Band xác nhận bằng **đúng số nhịp rung ngắn** (1/2/3).
+  Bị từ chối (vd hết set) → 1 nhịp dài.
+- **Hết set:** tự thoát, rung 2 nhịp dài, hiện màn thắng như thường.
+- **Thoát:** **giữ lâu bất kỳ đâu** → 1 nhịp dài.
+- Màn hình được giữ sáng trong chế độ này (màn tắt thì không nhận chạm) → tốn pin hơn.
+- Dùng chung applyPoint/doUndo nên điện thoại, streak, hype, lịch sử y như bấm thường.
+Code: `band/src/pages/index/index.ux` (onBlindEnter / onBlindTap / resolveBlind / pulse).
