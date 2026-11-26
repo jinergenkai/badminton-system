@@ -107,8 +107,9 @@ textarea{width:100%;min-height:110px;font:13px/1.4 ui-monospace,monospace;border
 const PACKS=[
  {k:"1",name:"Gói 1 · Mở màn"},{k:"2",name:"Gói 2 · Chuỗi thắng"},{k:"10",name:"Gói 10 · Hết sảy"},
  {k:"11",name:"Gói 11 · Khen Gen Z"},{k:"12",name:"Gói 12 · Cà khịa"},{k:"13",name:"Gói 13 · Khí thế"},
- {k:"14",name:"Gói 14 · Mở màn"},{k:"15",name:"Gói 15 · Kết trận"},{k:"16",name:"Gói 16 · Khen"},{k:"17",name:"Gói 17 · Cà khịa"},{k:"18",name:"Gói 18 · Deuce"}];
-const GROUPS=[["first_point_of_match","Bắt đầu trận mới"],["first_point","Điểm đầu tiên của set"],["streak_low","Chuỗi 2–3"],["streak_high","Chuỗi từ 4"],["streak_5_plus","Chuỗi từ 5"],["shutdown","Cắt chuỗi / cà khịa"],["comeback","Lội ngược dòng"],["crucial_moment","Điểm quyết định / deuce"],["match_end","Hết trận"],["any_point","Điểm bình thường (25%)"],["random_meme","Meme (kèm chuỗi từ 2)"],["manual_trigger","Trọng tài bấm (giữ trên band)"]];
+ {k:"14",name:"Gói 14 · Mở màn"},{k:"15",name:"Gói 15 · Kết trận"},{k:"16",name:"Gói 16 · Khen"},{k:"17",name:"Gói 17 · Cà khịa"},{k:"18",name:"Gói 18 · Deuce"},
+ {k:"19",name:"Gói 19 · Out"},{k:"20",name:"Gói 20 · Hụt / lưới"},{k:"21",name:"Gói 21 · Smash"},{k:"22",name:"Gói 22 · Nice shot"},{k:"23",name:"Gói 23 · Ủa alo"},{k:"24",name:"Gói 24 · Vừa khen đã tạch"}];
+const GROUPS=[["first_point_of_match","Bắt đầu trận mới"],["first_point","Điểm đầu tiên của set"],["streak_low","Chuỗi 2–3"],["streak_high","Chuỗi từ 4"],["streak_5_plus","Chuỗi từ 5"],["shutdown","Cắt chuỗi / cà khịa"],["comeback","Lội ngược dòng"],["crucial_moment","Điểm quyết định / deuce"],["match_end","Hết trận"],["any_point","Điểm bình thường (25%)"],["random_meme","Meme (kèm chuỗi từ 2)"],["manual_sieu_pham","Band: Nice shot"],["manual_dap_cau","Band: Smash"],["manual_ra_ngoai","Band: Out"],["manual_hut_luoi","Band: Miss / Net"],["manual_ca_khia","Band: Roast"],["manual_trigger","Band bản cũ (giữ lâu)"]];
 const $=id=>document.getElementById(id);
 const store={get(k,d){try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch{}}};
 let ac,buf=null,peaks=null,pack=null,segs={},sel=null,src=null,playStart=0,playFrom=0,playing=false,clips=store.get("hype_clips",[]);

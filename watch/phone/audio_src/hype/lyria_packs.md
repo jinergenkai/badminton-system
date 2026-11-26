@@ -54,16 +54,19 @@ Ngoại lệ Hùng duyệt: "Đập cầu như đập muỗi" (khen chung chung)
 | 17 Cà khịa / cắt chuỗi | shutdown, random_meme | nữ trẻ lém lỉnh | Toang rồi ông giáo ạ! · Còn đúng cái nịt! · Cay chưa? Cay thì uống nước! · Tạch như chưa từng được tạch! · Mất chuỗi rồi, buồn ghê! · Nín! Để người ta đánh! |
 | 18 Deuce / điểm quyết định | crucial_moment | nam trầm kịch tính | Deuce! Tim ai đập nhanh hơn? · Một điểm bằng cả buổi tập! · Ai cay người đó thua! · Hồi hộp như chờ người yêu rep tin! |
 
-## Gói cho bảng chọn tay trên band (viết 26/11/2026, CHƯA gen — chờ "approve")
+## Gói cho bảng chọn tay trên band (gen 26/11/2026 — bản gốc goi19..24.mp3, chưa cắt clip)
 
 | Gói | Nhóm | Giọng (prompt đầu) | Câu |
 |---|---|---|---|
 | 19 Ra ngoài | manual_ra_ngoai | như gói 12 (nữ trẻ lém lỉnh) | Cầu xin… ra ngoài! · Out như tình cũ! · Tưởng in, ai dè out! · Vạch kẻ cho vui hả? · Cầu đi du lịch rồi! · Mạnh quá, cầu bay qua tỉnh bên! · Ra ngoài hít thở không khí hả? · Out rồi, khỏi cãi nha! |
 | 20 Hụt / lưới | manual_hut_luoi | như gói 12 | Quạt mát ghê! · Vụt cái vèo, cầu vẫn nằm đó! · Trúng lưới như trúng số! · Lưới ăn hết rồi! · Cầu mắc cạn rồi! · Vợt đẹp mà cầu không thương! · Đập vô lưới, lưới cũng tức! · Hụt rồi, về múa quạt đi! |
 | 21 Đập cầu | manual_dap_cau | như gói 13 (nam trẻ phấn khích) | Đập như đập hộp! · Cú đập đi vào lòng đất! · Bùm! Sân rung luôn! · Đập xuyên sàn! · Smash như sấm! · Đập tơi bời khói lửa! · Đỡ bằng niềm tin à? · Một phát ăn ngay! |
-| 22 Siêu phẩm + cà khịa | manual_sieu_pham, manual_ca_khia | 4 câu đầu giọng 13, 4 câu sau giọng 12 (gen 2 lần) | Đẳng cấp là mãi mãi! · Pha này lên sóng giờ vàng! · Ét o ét, đẹp quá trời! · Đóng khung treo phòng khách! — Ủa alo? Ai đánh đó? · Ơ kìa bạn ơi! · Về luyện thêm mười năm nha! · Bình tĩnh, tay đừng run! |
+| 22 Siêu phẩm | manual_sieu_pham | như gói 13 | Đẳng cấp là mãi mãi! · Pha này lên sóng giờ vàng! · Ét o ét, đẹp quá trời! · Đóng khung treo phòng khách! · Siêu phẩm! · Đỉnh của nóc! |
 | 23 Chọc bạn thân — khen kiểu nghi ngờ | manual_sieu_pham | như gói 12, thêm "giọng bạn thân chọc nhau, vừa nói vừa cười" | Ủa alo? Ai đánh đó? · Bữa nay ăn gì mà ghê vậy? · Mọi khi đâu có vậy ta? · Nay được buff hả bạn? · Hack! Báo admin liền! · Ủa có phải ông không vậy? · Tưởng gà, ai dè đại bàng! · Hay vậy mà giấu kỹ ghê! · Bữa nay lên đồ hay lên trình vậy? · Tu luyện ở đâu vậy trời? |
 | 24 Chọc bạn thân — vừa khen đã tạch | manual_ca_khia, manual_hut_luoi, manual_ra_ngoai | như gói 23 | Mới khen xong là tạch! · Gà vẫn hoàn gà! · Ủa, đánh cho ai coi vậy? · Thôi, về nhà tập thêm nha! · Trả cầu lại cho người ta đi! · Tưởng ghê, hóa ra vậy đó hả? · Đánh vậy ai dám nhận là bạn! · Bình tĩnh, có ai giành đâu! |
 
 Prompt = đầu của gói 12 hoặc 13 (VOICES.md) + `Các câu: "…" "…"` + đuôi chung. Giữ kiểu gói 12: KHÔNG thêm
 "Nói đúng từng câu" — để Gemini tự chế thêm câu vần cùng chủ đề (nhóm bấm tay nên câu tả cú đánh là đúng chỗ).
+
+Chat Gemini: 19 7d79dfaa75d91eb8 · 20 6c4b585cf3717891 · 21 f0aa5d98dfd8ec7e · 22 f56e659226d74106 · 23 21c9145b3f166de2 · 24 275be717080461c7
+(prompt y nguyên: đầu gói 12 hoặc 13 trong VOICES.md; gói 23–24 thêm "giọng bạn thân chọc nhau, vừa nói vừa cười khúc khích").
