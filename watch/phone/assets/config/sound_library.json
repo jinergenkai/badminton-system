@@ -803,6 +803,81 @@
       ]
     },
     {
+      "id": "manual_sieu_pham",
+      "priority": 1000,
+      "pool": [
+        "sieu_pham",
+        "g11_sieu_pham1",
+        "g11_dinh_cua_noc",
+        "g11_cu_nay_de_doi_khong_the_tin_noi",
+        "g11_qua_man_nhan_luon",
+        "g11_mot_pha_cau_khong_the_che",
+        "g11_qua_chay_oh_that_day",
+        "g10_tuyet_cu_meo",
+        "cu_danh_dep",
+        "female_pack/cu_danh_dep_f",
+        "female_pack/dep_nhu_mo_f",
+        "female_pack/dinh_cua_chop_f",
+        "female_pack/man_nhan_f",
+        "female_pack/cu_nay_khet_f",
+        "female_pack/khong_the_tin_duoc_f",
+        "did_you_see_that_1"
+      ]
+    },
+    {
+      "id": "manual_dap_cau",
+      "priority": 1000,
+      "pool": [
+        "g16_dap_cau_nhu_dap_muoi",
+        "g15_dap_cau_thay_ba_luon",
+        "g16_ghi_diem_nhu_vat_chanh",
+        "g16_an_diem_nhu_an_keo",
+        "female_pack/cu_dap_ca_map_f",
+        "female_pack/cu_danh_sam_set_f",
+        "female_pack/sam_set_giua_troi_quang_f",
+        "female_pack/mot_phat_chet_tuoi_f"
+      ]
+    },
+    {
+      "id": "manual_ra_ngoai",
+      "priority": 1000,
+      "pool": [
+        "g12_cau_ra_ngoai_san_ma_cu_ngo_trong_vach",
+        "female_pack/qua_tang_mien_phi_f",
+        "g12_oi_doi_oi"
+      ]
+    },
+    {
+      "id": "manual_hut_luoi",
+      "priority": 1000,
+      "pool": [
+        "g12_dap_hut_1_phat_la_nghe_tieng_tach",
+        "g12_cau_bay_veo_veo_tay_cu_do_do",
+        "g11_dap_cau_do_bang_niem_tin_a",
+        "g12_cam_vot_thi_oai_ma_danh_ngu",
+        "female_pack/qua_tang_mien_phi_f"
+      ]
+    },
+    {
+      "id": "manual_ca_khia",
+      "priority": 1000,
+      "pool": [
+        "g2_hahaha",
+        "g2_hahahaha",
+        "g17_ha_hahaha",
+        "g17_cay_chua_cay_thi_uong_nuoc",
+        "g12_nin_nin_luon",
+        "g12_con_dung_cai_nit",
+        "g17_con_dung_cai_nit",
+        "g17_toang_roi_ong_giao_a_oi",
+        "g12_thoi_cat_vot_di_dung_co_co_lam_gi",
+        "g17_danh_nhu_chua_tung_duoc_danh",
+        "g12_gi_cang_vay",
+        "female_pack/de_bep_f",
+        "g15_choi_ky_di_tinh_an_gian_ha_buoi"
+      ]
+    },
+    {
       "id": "match_end",
       "priority": 95,
       "pool": [

@@ -47,7 +47,12 @@ class HypeVoiceController extends GetxController {
   /// [_triggerMatches]; what they play is the Sound Library. A trigger in
   /// sound_library.json that is not listed here never fires.
   static const Map<String, String> triggerLabels = {
-    'manual_trigger': 'Band: long-press a score button',
+    'manual_trigger': 'Band: long-press (old band build)',
+    'manual_sieu_pham': 'Band picker: Siêu phẩm',
+    'manual_dap_cau': 'Band picker: Đập cầu',
+    'manual_ra_ngoai': 'Band picker: Ra ngoài',
+    'manual_hut_luoi': 'Band picker: Hụt / lưới',
+    'manual_ca_khia': 'Band picker: Cà khịa',
     'match_end': 'Set won',
     'crucial_moment': 'Set point / 20-all and up',
     'shutdown': 'Ends an opponent streak of 5+',
@@ -181,7 +186,8 @@ class HypeVoiceController extends GetxController {
       if (deficitA >= _comebackDeficitThreshold) _comebackPendingA = true;
       if (deficitB >= _comebackDeficitThreshold) _comebackPendingB = true;
 
-      if (manualHype != null) {
+      // A picked line on the set-winning point gives way to the set-won call.
+      if (manualHype != null && !_hasWinner(newA, newB)) {
         // Check if manualHype is a trigger ID (for randomization from pool)
         final bool isTrigger = _lib?.trigger(manualHype) != null;
         if (isTrigger) {
@@ -394,6 +400,11 @@ class HypeVoiceController extends GetxController {
 
       case 'first_point_of_match':
       case 'manual_trigger':
+      case 'manual_sieu_pham':
+      case 'manual_dap_cau':
+      case 'manual_ra_ngoai':
+      case 'manual_hut_luoi':
+      case 'manual_ca_khia':
         // Not auto-matched from score events. first_point_of_match is fired
         // explicitly via playStartOfMatchHype(); manual_trigger goes through
         // playManualHype() or the manualHype param.

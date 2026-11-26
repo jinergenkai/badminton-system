@@ -567,3 +567,11 @@ Code: `band/src/pages/index/index.ux` (onBlindEnter / onBlindTap / resolveBlind 
   Hai người trên phone nối cùng một người web vẫn đúng ranking; người thừa vuốt xoá được — trận cũ vẫn đẩy đúng id web.
 - **Tự đẩy sau mỗi set** (Đồng bộ ranking → công tắc, mặc định bật): set 2v2 có tên xong ~8 giây là đẩy;
   mất mạng thì lên cùng set sau. Chỉ chạy khi đã có địa chỉ + token.
+
+## Bảng chọn hype khi giữ thẻ điểm (band) — 26/11/2026
+
+Giữ thẻ ĐỎ hoặc XANH → hiện 5 nhóm: **Siêu phẩm · Đập cầu · Ra ngoài · Hụt / lưới · Cà khịa** (+ "huỷ").
+Chạm một nhóm = +1 cho bên đang giữ và phone phát câu ít phát nhất trong nhóm đó (trigger `manual_*` trong
+`sound_library.json`). Không chọn trong 4 giây hoặc bấm huỷ = không cộng gì. Rung 1 nhịp khi bảng mở.
+Câu chọn tay thay cho hype tự động của điểm đó, trừ điểm kết thúc set (khi đó phát câu hết trận).
+Band bản cũ vẫn gửi `manual_trigger` như trước.
