@@ -570,8 +570,8 @@ Code: `band/src/pages/index/index.ux` (onBlindEnter / onBlindTap / resolveBlind 
 
 ## Bảng chọn hype khi giữ thẻ điểm (band) — 26/11/2026
 
-Giữ thẻ ĐỎ hoặc XANH → hiện 5 nhóm: **Siêu phẩm · Đập cầu · Ra ngoài · Hụt / lưới · Cà khịa** (+ "huỷ").
+Giữ thẻ ĐỎ hoặc XANH → 5 hàng to màu của bên đó: **Siêu phẩm · Đập cầu · Ra ngoài · Hụt / lưới · Cà khịa** (chừa mép trên dưới cho dễ bấm).
 Chạm một nhóm = +1 cho bên đang giữ và phone phát câu ít phát nhất trong nhóm đó (trigger `manual_*` trong
-`sound_library.json`). Không chọn trong 4 giây hoặc bấm huỷ = không cộng gì. Rung 1 nhịp khi bảng mở.
+`sound_library.json`). Không chọn trong 4 giây hoặc vuốt back = không cộng gì (vuốt back cũng thoát chế độ chạm mù thay vì thoát app). Rung 1 nhịp khi bảng mở.
 Câu chọn tay thay cho hype tự động của điểm đó, trừ điểm kết thúc set (khi đó phát câu hết trận).
 Band bản cũ vẫn gửi `manual_trigger` như trước.
