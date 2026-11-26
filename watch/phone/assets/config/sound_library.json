@@ -608,6 +608,26 @@
       "text": "Toang rồi ông giáo ạ ơi!"
     },
     {
+      "id": "g19_out_ranh_ranh_roi_nha",
+      "display": "OUT RÀNH\nRÀNH RỒI NHA",
+      "text": "Out rành rành rồi nha!"
+    },
+    {
+      "id": "g19_out_roi_khoi_cai_nha",
+      "display": "OUT RỒI\nKHỎI CÃI NHA",
+      "text": "Out rồi, khỏi cãi nha!"
+    },
+    {
+      "id": "g19_ra_ngoai_hit_tho_khong_khi_ha",
+      "display": "RA NGOÀI HÍT\nTHỞ KHÔNG KHÍ HẢ",
+      "text": "Ra ngoài hít thở không khí hả?"
+    },
+    {
+      "id": "g19_vach_ke_cho_vui_ha",
+      "display": "VẠCH KẺ\nCHO VUI HẢ",
+      "text": "Vạch kẻ cho vui hả?"
+    },
+    {
       "id": "g1_ai_so_thi_di_ve",
       "display": "AI SỢ\nTHÌ ĐI VỀ",
       "text": "Ai sợ thì đi về!",
@@ -617,6 +637,83 @@
       "id": "g1_vao_san",
       "display": "VÀO SÂN",
       "text": "Vào sân!"
+    },
+    {
+      "id": "g20_trung_luoi_nhu_trung_so",
+      "display": "TRÚNG LƯỚI\nNHƯ TRÚNG SỐ",
+      "text": "Trúng lưới như trúng số!"
+    },
+    {
+      "id": "g21_cu_dap_di_vao_long_dat",
+      "display": "CÚ ĐẬP ĐI\nVÀO LÒNG ĐẤT",
+      "text": "Cú đập đi vào lòng đất!"
+    },
+    {
+      "id": "g21_dap_toi_boi_khoi_lua",
+      "display": "ĐẬP TƠI BỜI\nKHÓI LỬA",
+      "text": "Đập tơi bời khói lửa!"
+    },
+    {
+      "id": "g21_do_bang_niem_tin_a",
+      "display": "ĐỠ BẰNG\nNIỀM TIN À",
+      "text": "Đỡ bằng niềm tin à?"
+    },
+    {
+      "id": "g22_dang_cap_la_mai_mai",
+      "display": "ĐẲNG CẤP\nLÀ MÃI MÃI",
+      "text": "Đẳng cấp là mãi mãi!",
+      "glow": "fire"
+    },
+    {
+      "id": "g22_dong_khung_treo_phong_khach",
+      "display": "ĐÓNG KHUNG TREO\nPHÒNG KHÁCH",
+      "text": "Đóng khung treo phòng khách!"
+    },
+    {
+      "id": "g22_qua_dinh_luon_ban_oi",
+      "display": "QUÁ ĐỈNH\nLUÔN BẠN ƠI",
+      "text": "Quá đỉnh luôn bạn ơi!"
+    },
+    {
+      "id": "g22_qua_ghe_gom_luon",
+      "display": "QUÁ GHÊ\nGỚM LUÔN",
+      "text": "Quá ghê gớm luôn!"
+    },
+    {
+      "id": "g23_bua_nay_an_gi_ma_ghe_vay",
+      "display": "BỮA NAY ĂN\nGÌ MÀ GHÊ VẬY",
+      "text": "Bữa nay ăn gì mà ghê vậy?",
+      "glow": "fire"
+    },
+    {
+      "id": "g24_danh_vay_ai_dam_nhan_la_ban",
+      "display": "ĐÁNH VẬY AI\nDÁM NHẬN LÀ BẠN",
+      "text": "Đánh vậy ai dám nhận là bạn!"
+    },
+    {
+      "id": "g24_do_bang_niem_tin_nha",
+      "display": "ĐỠ BẰNG\nNIỀM TIN NHA",
+      "text": "Đỡ bằng niềm tin nha!"
+    },
+    {
+      "id": "g24_ga_van_hoan_ga",
+      "display": "GÀ VẪN\nHOÀN GÀ",
+      "text": "Gà vẫn hoàn gà!"
+    },
+    {
+      "id": "g24_nghi_choi_nha_ga_van_hoan_ga",
+      "display": "NGHỈ CHƠI NHA\nGÀ VẪN HOÀN GÀ",
+      "text": "Nghỉ chơi nha, gà vẫn hoàn gà!"
+    },
+    {
+      "id": "g24_tuong_ghe_hoa_ra_vay_do_ha",
+      "display": "TƯỞNG GHÊ, HÓA\nRA VẬY ĐÓ HẢ",
+      "text": "Tưởng ghê, hóa ra vậy đó hả?"
+    },
+    {
+      "id": "g24_ve_nha_tap_them_nha",
+      "display": "VỀ NHÀ TẬP\nTHÊM NHA",
+      "text": "Về nhà tập thêm nha!"
     },
     {
       "id": "g2_coi_ne_coi_ne",
@@ -821,7 +918,12 @@
         "female_pack/man_nhan_f",
         "female_pack/cu_nay_khet_f",
         "female_pack/khong_the_tin_duoc_f",
-        "did_you_see_that_1"
+        "did_you_see_that_1",
+        "g22_dang_cap_la_mai_mai",
+        "g22_dong_khung_treo_phong_khach",
+        "g22_qua_ghe_gom_luon",
+        "g22_qua_dinh_luon_ban_oi",
+        "g23_bua_nay_an_gi_ma_ghe_vay"
       ]
     },
     {
@@ -835,7 +937,11 @@
         "female_pack/cu_dap_ca_map_f",
         "female_pack/cu_danh_sam_set_f",
         "female_pack/sam_set_giua_troi_quang_f",
-        "female_pack/mot_phat_chet_tuoi_f"
+        "female_pack/mot_phat_chet_tuoi_f",
+        "g21_cu_dap_di_vao_long_dat",
+        "g21_dap_toi_boi_khoi_lua",
+        "g21_do_bang_niem_tin_a",
+        "g24_do_bang_niem_tin_nha"
       ]
     },
     {
@@ -844,7 +950,11 @@
       "pool": [
         "g12_cau_ra_ngoai_san_ma_cu_ngo_trong_vach",
         "female_pack/qua_tang_mien_phi_f",
-        "g12_oi_doi_oi"
+        "g12_oi_doi_oi",
+        "g19_vach_ke_cho_vui_ha",
+        "g19_ra_ngoai_hit_tho_khong_khi_ha",
+        "g19_out_roi_khoi_cai_nha",
+        "g19_out_ranh_ranh_roi_nha"
       ]
     },
     {
@@ -855,7 +965,9 @@
         "g12_cau_bay_veo_veo_tay_cu_do_do",
         "g11_dap_cau_do_bang_niem_tin_a",
         "g12_cam_vot_thi_oai_ma_danh_ngu",
-        "female_pack/qua_tang_mien_phi_f"
+        "female_pack/qua_tang_mien_phi_f",
+        "g20_trung_luoi_nhu_trung_so",
+        "g24_danh_vay_ai_dam_nhan_la_ban"
       ]
     },
     {
@@ -874,7 +986,12 @@
         "g17_danh_nhu_chua_tung_duoc_danh",
         "g12_gi_cang_vay",
         "female_pack/de_bep_f",
-        "g15_choi_ky_di_tinh_an_gian_ha_buoi"
+        "g15_choi_ky_di_tinh_an_gian_ha_buoi",
+        "g24_ga_van_hoan_ga",
+        "g24_ve_nha_tap_them_nha",
+        "g24_tuong_ghe_hoa_ra_vay_do_ha",
+        "g24_danh_vay_ai_dam_nhan_la_ban",
+        "g24_nghi_choi_nha_ga_van_hoan_ga"
       ]
     },
     {
@@ -930,7 +1047,9 @@
         "g17_toang_roi_ong_giao_a_oi",
         "g17_con_dung_cai_nit",
         "g17_cay_chua_cay_thi_uong_nuoc",
-        "g17_mat_chuoi_roi"
+        "g17_mat_chuoi_roi",
+        "g24_ga_van_hoan_ga",
+        "g24_tuong_ghe_hoa_ra_vay_do_ha"
       ]
     },
     {
@@ -975,7 +1094,9 @@
         "g13_ba_khi_qua_vay",
         "g13_mot_minh_can_het",
         "g15_ra_day_solo_ne",
-        "g16_an_diem_nhu_an_keo"
+        "g16_an_diem_nhu_an_keo",
+        "g22_dang_cap_la_mai_mai",
+        "g23_bua_nay_an_gi_ma_ghe_vay"
       ]
     },
     {
@@ -1027,7 +1148,9 @@
         "g11_qua_chay_oh_that_day",
         "g15_dap_cau_thay_ba_luon",
         "g16_dap_cau_nhu_dap_muoi",
-        "g16_ghi_diem_nhu_vat_chanh"
+        "g16_ghi_diem_nhu_vat_chanh",
+        "g22_qua_ghe_gom_luon",
+        "g22_qua_dinh_luon_ban_oi"
       ]
     },
     {
