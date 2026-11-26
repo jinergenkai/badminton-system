@@ -48,11 +48,11 @@ class HypeVoiceController extends GetxController {
   /// sound_library.json that is not listed here never fires.
   static const Map<String, String> triggerLabels = {
     'manual_trigger': 'Band: long-press (old band build)',
-    'manual_sieu_pham': 'Band picker: Siêu phẩm',
-    'manual_dap_cau': 'Band picker: Đập cầu',
-    'manual_ra_ngoai': 'Band picker: Ra ngoài',
-    'manual_hut_luoi': 'Band picker: Hụt / lưới',
-    'manual_ca_khia': 'Band picker: Cà khịa',
+    'manual_sieu_pham': 'Band picker: Nice shot',
+    'manual_dap_cau': 'Band picker: Smash',
+    'manual_ra_ngoai': 'Band picker: Out',
+    'manual_hut_luoi': 'Band picker: Miss / Net',
+    'manual_ca_khia': 'Band picker: Roast',
     'match_end': 'Set won',
     'crucial_moment': 'Set point / 20-all and up',
     'shutdown': 'Ends an opponent streak of 5+',

@@ -111,11 +111,11 @@
          bottom edges. No pick within a few seconds, or a swipe back, =
          nothing happens. -->
     <div class="pick" if="{{ pick && screen === 'game' }}">
-      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_sieu_pham')"><text class="pick-text">Siêu phẩm</text></div>
-      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_dap_cau')"><text class="pick-text">Đập cầu</text></div>
-      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_ra_ngoai')"><text class="pick-text">Ra ngoài</text></div>
-      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_hut_luoi')"><text class="pick-text">Hụt / lưới</text></div>
-      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_ca_khia')"><text class="pick-text">Cà khịa</text></div>
+      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_sieu_pham')"><text class="pick-text">Nice shot</text></div>
+      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_dap_cau')"><text class="pick-text">Smash</text></div>
+      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_ra_ngoai')"><text class="pick-text">Out</text></div>
+      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_hut_luoi')"><text class="pick-text">Miss / Net</text></div>
+      <div class="pick-row {{ pick === 'A' ? 'pick-a' : 'pick-b' }}" onclick="onPickCat('manual_ca_khia')"><text class="pick-text">Roast</text></div>
     </div>
   </stack>
 </template>
