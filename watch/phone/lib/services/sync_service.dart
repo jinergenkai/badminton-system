@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -16,11 +17,19 @@ import 'player_service.dart';
 class SyncService extends GetxService {
   static const _kBase = 'sync_base';
   static const _kToken = 'sync_token';
+  static const _kAuto = 'sync_auto_push';
 
   final RxString baseUrl = ''.obs;
   final RxString token = ''.obs;
   final RxnString lastResult = RxnString();
   final RxBool busy = false.obs;
+
+  /// Push by itself after every finished named set (needs address + token).
+  final RxBool autoPush = true.obs;
+
+  /// Result of the last automatic push, shown in SyncScreen.
+  final RxnString lastAuto = RxnString();
+  Timer? _autoTimer;
 
   static SyncService get to => Get.find<SyncService>();
 
@@ -36,6 +45,7 @@ class SyncService extends GetxService {
     baseUrl.value = (saved == null || saved.isEmpty) ? _envBase : saved;
     final savedTok = prefs.getString(_kToken);
     token.value = (savedTok == null || savedTok.isEmpty) ? _envToken : savedTok;
+    autoPush.value = prefs.getBool(_kAuto) ?? true;
     return this;
   }
 
@@ -45,6 +55,38 @@ class SyncService extends GetxService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kBase, baseUrl.value);
     await prefs.setString(_kToken, token.value);
+  }
+
+  Future<void> setAutoPush(bool v) async {
+    autoPush.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAuto, v);
+  }
+
+  bool get canPush => baseUrl.value.isNotEmpty && token.value.isNotEmpty;
+
+  /// Called when a named set is saved. Waits a little (the band may send a
+  /// corrected record right after) and pushes everything finished — a set
+  /// that failed for lack of signal simply goes up with the next one.
+  /// Never throws and never blocks the court: errors are only recorded.
+  void schedulePush() {
+    if (!autoPush.value || !canPush) return;
+    _autoTimer?.cancel();
+    _autoTimer = Timer(const Duration(seconds: 8), () async {
+      if (busy.value) {
+        schedulePush();
+        return;
+      }
+      final t = DateTime.now();
+      final hm = '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+      try {
+        final n = await pushMatches();
+        lastAuto.value = '$hm · tự đẩy $n trận';
+      } catch (e) {
+        lastAuto.value = '$hm · chưa đẩy được (sẽ thử lại sau set tới): $e';
+        print('☁️ [Sync] auto push failed: $e');
+      }
+    });
   }
 
   Uri _u(String path) => Uri.parse('${baseUrl.value}$path');
@@ -109,7 +151,7 @@ class SyncService extends GetxService {
     busy.value = true;
     try {
       final ps = PlayerService.to;
-      String ext(String phoneId) => ps.byId(phoneId)?.externalId ?? phoneId;
+      String ext(String phoneId) => ps.webIdOf(phoneId);
 
       final matches = DatabaseService.getAllMatches().where((m) =>
           m.status == 'completed' &&

@@ -559,3 +559,11 @@ Bấm điểm không cần nhìn màn hình.
 - Màn hình được giữ sáng trong chế độ này (màn tắt thì không nhận chạm) → tốn pin hơn.
 - Dùng chung applyPoint/doUndo nên điện thoại, streak, hype, lịch sử y như bấm thường.
 Code: `band/src/pages/index/index.ux` (onBlindEnter / onBlindTap / resolveBlind / pulse).
+
+## Người chơi & đồng bộ web (11/2026)
+
+- **Không cần server để chơi:** màn Players (icon 👥) → ＋ thêm người → chạm = có mặt hôm nay → Send to band → chọn cặp trên band lúc 0-0.
+- **Nối với web:** sau "Kéo danh bạ", mỗi người hiện "web: …" hoặc "chưa nối web". Giữ lâu tên → chọn "Người trên web".
+  Hai người trên phone nối cùng một người web vẫn đúng ranking; người thừa vuốt xoá được — trận cũ vẫn đẩy đúng id web.
+- **Tự đẩy sau mỗi set** (Đồng bộ ranking → công tắc, mặc định bật): set 2v2 có tên xong ~8 giây là đẩy;
+  mất mạng thì lên cùng set sau. Chỉ chạy khi đã có địa chỉ + token.

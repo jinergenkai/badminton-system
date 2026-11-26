@@ -71,6 +71,20 @@ class _SyncScreenState extends State<SyncScreen> {
                   ),
                 ],
               )),
+          const SizedBox(height: 10),
+          Obx(() => SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: s.autoPush.value,
+                onChanged: (v) => s.setAutoPush(v),
+                title: const Text('Tự đẩy sau mỗi set'),
+                subtitle: Text(
+                  s.lastAuto.value ??
+                      (s.canPush
+                          ? 'Set đủ 2v2 có tên xong là tự đẩy; mất mạng thì đẩy cùng set sau.'
+                          : 'Cần địa chỉ + token ở trên (bấm một nút bất kỳ để lưu).'),
+                  style: const TextStyle(fontSize: 12, color: Colors.white54),
+                ),
+              )),
           const SizedBox(height: 20),
           Obx(() => s.busy.value
               ? const Padding(

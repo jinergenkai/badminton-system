@@ -43,6 +43,7 @@ class _PlayersScreenState extends State<PlayersScreen> {
     final nameCtl = TextEditingController(text: player?.name ?? '');
     final shortCtl = TextEditingController(text: player?.short ?? '');
     bool shortTouched = player != null;
+    String? ext = player?.externalId;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -71,6 +72,31 @@ class _PlayersScreenState extends State<PlayersScreen> {
                 decoration: const InputDecoration(labelText: 'Band name (max 8)'),
                 onChanged: (_) => shortTouched = true,
               ),
+              if (_svc.web.isNotEmpty) ...[
+                const SizedBox(height: 4),
+                DropdownButtonFormField<String>(
+                  value: _svc.webPerson(ext) == null ? '' : ext,
+                  isExpanded: true,
+                  dropdownColor: Ui.sheet,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(labelText: 'Người trên web (ranking)'),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('— chưa nối —')),
+                    ...([..._svc.web]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase())))
+                        .map((w) => DropdownMenuItem(value: w.id, child: Text(w.name, overflow: TextOverflow.ellipsis))),
+                  ],
+                  onChanged: (v) => setLocal(() => ext = (v == null || v.isEmpty) ? null : v),
+                ),
+                if (ext != null && _svc.linkedTo(ext!, except: player?.id).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      'Đã có "${_svc.linkedTo(ext!, except: player?.id).map((p) => p.name).join(', ')}" nối với người này '
+                      '— vẫn đúng ranking; người thừa vuốt xoá được, trận cũ không mất.',
+                      style: const TextStyle(color: Colors.orangeAccent, fontSize: 12),
+                    ),
+                  ),
+              ],
             ],
           ),
           actions: [
@@ -85,9 +111,11 @@ class _PlayersScreenState extends State<PlayersScreen> {
     );
     if (ok != true || nameCtl.text.trim().isEmpty) return;
     if (player == null) {
-      await _svc.add(nameCtl.text, short: shortCtl.text);
+      final p = await _svc.add(nameCtl.text, short: shortCtl.text);
+      if (ext != null) await _svc.link(p.id, ext);
     } else {
       await _svc.edit(player.id, name: nameCtl.text, short: shortCtl.text);
+      if (ext != player.externalId) await _svc.link(player.id, ext);
     }
   }
 
@@ -211,6 +239,13 @@ class _PlayersScreenState extends State<PlayersScreen> {
                               color: isToday ? Colors.greenAccent : Colors.white38,
                             ),
                             title: Text(p.name, style: const TextStyle(color: Colors.white)),
+                            subtitle: _svc.web.isEmpty
+                                ? null
+                                : (_svc.webPerson(p.externalId) != null
+                                    ? Text('web: ${_svc.webPerson(p.externalId)!.name}',
+                                        style: const TextStyle(color: Colors.white38, fontSize: 12))
+                                    : const Text('chưa nối web — giữ để nối',
+                                        style: TextStyle(color: Colors.orangeAccent, fontSize: 12))),
                             trailing: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(

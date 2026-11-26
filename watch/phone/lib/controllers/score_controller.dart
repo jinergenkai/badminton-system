@@ -12,6 +12,7 @@ import '../services/watch_connectivity_service.dart';
 import '../services/music_service.dart';
 import '../services/audio_settings.dart';
 import '../services/player_service.dart';
+import '../services/sync_service.dart';
 import '../services/sound_check_service.dart';
 import '../services/voice_clip_service.dart';
 import '../services/sound_library_service.dart';
@@ -583,6 +584,10 @@ class ScoreController extends GetxController {
       receiver0: lu?.rcv ?? '',
       lineupMode: lu?.mode ?? '',
     ));
+    // Finished 2v2 with names: what the web ranks. Pushed in the background.
+    if (status == 'completed' && lu != null && Get.isRegistered<SyncService>()) {
+      SyncService.to.schedulePush();
+    }
   }
 
   void _announceScoreChange(int a, int b, String team) {
