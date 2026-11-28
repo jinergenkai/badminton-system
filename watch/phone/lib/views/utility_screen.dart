@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import '../features/camera/board_recorder.dart';
+import '../features/camera/camera_beacon.dart';
 import '../features/camera/camera_link_service.dart';
 import '../features/camera/camera_platform.dart';
+import '../features/camera/camera_qr.dart';
+import '../features/camera/camera_qr_scan_screen.dart';
 import '../features/camera/camera_rig.dart';
 import '../features/camera/camera_settings.dart';
 import '../features/camera/video_gallery_screen.dart';
@@ -90,6 +93,20 @@ class _LinkPanelState extends State<_LinkPanel> {
     super.dispose();
   }
 
+  /// The camera phone shows a QR code with its addresses while unlinked.
+  Future<void> _scan() async {
+    final hosts = await Navigator.of(context).push<List<String>>(
+      MaterialPageRoute(builder: (_) => const CameraQrScanScreen()),
+    );
+    if (hosts == null || !mounted) return;
+    final h = CameraQr.pick(hosts, await CameraBeacon.myAddresses());
+    _host.text = h;
+    await widget.link.setHostOverride(h);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Camera address set: $h')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = widget.link;
@@ -122,18 +139,28 @@ class _LinkPanelState extends State<_LinkPanel> {
             '• Hotspot: turn on the camera phone\'s hotspot, join it from this device.\n'
             '• Same Wi-Fi: both devices on one Wi-Fi; the camera announces itself.\n'
             'Then open camera mode on the phone. If it is not found (some Wi-Fi '
-            'blocks announcements), type the address the camera screen shows.',
+            'blocks announcements), scan the QR code the camera screen shows (or type its address).',
             style: TextStyle(color: Colors.white54, fontSize: 13, height: 1.4),
           ),
           const SizedBox(height: 8),
-          TextField(
-            controller: _host,
-            decoration: const InputDecoration(
-              labelText: 'Camera address',
-              hintText: 'empty = automatic',
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _host,
+                decoration: const InputDecoration(
+                  labelText: 'Camera address',
+                  hintText: 'empty = automatic',
+                ),
+                onSubmitted: l.setHostOverride,
+              ),
             ),
-            onSubmitted: l.setHostOverride,
-          ),
+            const SizedBox(width: 12),
+            FilledButton.icon(
+              onPressed: _scan,
+              icon: const Icon(Icons.qr_code_scanner),
+              label: const Text('Scan QR'),
+            ),
+          ]),
         ],
       ),
     );

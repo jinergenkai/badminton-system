@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../../views/ui_kit.dart';
 import 'camera_beacon.dart';
 import 'camera_platform.dart';
+import 'camera_qr.dart';
 import 'camera_rig.dart';
 import 'camera_server.dart';
 import 'camera_settings.dart';
@@ -184,6 +186,23 @@ class CameraScreen extends StatelessWidget {
               _row(Icons.tablet_android, c.server.connected
                   ? 'Board linked · clock ${clock.offsetMs} ms (rtt ${clock.rttMs})'
                   : 'Board not linked · this phone: $addr'),
+              // Scanned from the board (Utility > camera > Scan QR): nobody
+              // types the address. White quiet zone so any camera reads it.
+              if (!c.server.connected && c.addresses.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Center(
+                    child: Container(
+                      color: Colors.white,
+                      padding: const EdgeInsets.all(12),
+                      child: QrImageView(
+                        data: CameraQr.encode(c.addresses, CameraServer.port),
+                        size: 200,
+                        backgroundColor: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
               _row(Icons.sports_tennis,
                   m == null ? 'No set in this file' : 'Set ${m.scoreA} - ${m.scoreB}${m.ended ? ' (ended)' : ''}'),
               _row(Icons.sd_storage, '${free.toStringAsFixed(1)} GB free'),
