@@ -93,8 +93,10 @@ class CameraRig with WidgetsBindingObserver {
         overlay: overlay,
         quality: quality,
       );
-      _pushOverlay();
+      // opened first: _pushOverlay() is a no-op while it is false, so a score
+      // that arrived during open() was never put on the picture.
       opened.value = true;
+      _pushOverlay();
       final st = await platform.deviceStatus();
       session.deviceInfo['device'] = st['model'];
       session.deviceInfo['lens'] = lens;
