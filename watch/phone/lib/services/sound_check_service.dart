@@ -79,7 +79,7 @@ class SoundCheckService extends GetxService {
       }, Duration.zero),
       SoundCheckStep('Score (15 – 13)', () => _announcer.announceScore(15, 13, 'A'),
           const Duration(milliseconds: 2800)),
-      SoundCheckStep('Winner', () => _announcer.announceWinner(pair, 21, 18),
+      SoundCheckStep('Winner', () => _announcer.announceWinner(pair, 21, 18, winnerTeam: 'A'),
           const Duration(milliseconds: 5000)),
       SoundCheckStep('Hype voice', () => _hype.preview(), const Duration(milliseconds: 3500)),
       SoundCheckStep('Hype TTS line', () => _hype.previewTtsLine(), const Duration(milliseconds: 3500)),

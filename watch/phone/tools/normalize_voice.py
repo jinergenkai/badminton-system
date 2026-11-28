@@ -51,7 +51,7 @@ MAX_BOOST_DB = 6.0
 # compress=False: ElevenLabs renders come out already even (~-16 LUFS) and the
 # 2:1 compressor only flattens their delivery — they get trim, gain, limiter.
 SETS = [
-    ('score/vi', 'assets/audio/score/vi'),
+    ('score/vi', 'assets/audio/score/vi', False),   # Mai Anh, ElevenLabs
     ('score/en', 'assets/audio/score/en'),
     ('hype', 'assets/audio/hype'),
     ('hype/female_pack', 'assets/audio/hype/female_pack'),

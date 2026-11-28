@@ -180,20 +180,28 @@ class ScoreAnnouncerService extends GetxService {
     await _playSequence(myJob, files, fallback);
   }
 
-  /// Winner announcement contains the dynamic team name — no MP3 path can
-  /// cover it. Centralized here so the same cancel + completion chain applies;
-  /// implementation always delegates to TTS.
+  /// Winner announcement. In Vietnamese with a known team ([winnerTeam] 'A'
+  /// red / 'B' blue) it is all bundled clips in the score voice: "Đội đỏ
+  /// thắng" + the winner's score + the loser's. Player names are not read
+  /// there (they could only come from TTS, a second voice in the same line).
+  /// Otherwise: "<winnerName> thắng" as a rendered TTS clip + the scores.
   Future<void> announceWinner(
     String winnerName,
     int teamAScore,
-    int teamBScore,
-  ) async {
+    int teamBScore, {
+    String? winnerTeam,
+  }) async {
     final int myJob = ++_currentJob;
     await _cancelInFlight();
     if (myJob != _currentJob) return;
 
-    // Boosted clip + bundled number clips when ready; plain TTS otherwise.
+    Future<void> fallback() =>
+        _fallbackTts(() => Get.find<TtsService>().announceWinner(winnerName, teamAScore, teamBScore));
     final lang = currentLanguage.value;
+    final files = winnerFiles(lang, winnerTeam, teamAScore, teamBScore);
+    if (files != null) return _playSequence(myJob, files, fallback);
+
+    // Boosted clip + bundled number clips when ready; plain TTS otherwise.
     final clip = await _clip(winnerLine(winnerName, lang));
     if (myJob != _currentJob) return;
     if (clip != null && _inRange(teamAScore) && _inRange(teamBScore)) {
@@ -207,6 +215,39 @@ class ScoreAnnouncerService extends GetxService {
     }
     await _fallbackTts(
         () => Get.find<TtsService>().announceWinner(winnerName, teamAScore, teamBScore));
+  }
+
+  /// The all-clip winner line, or null when it cannot be built (English, no
+  /// team, score out of range).
+  static List<String>? winnerFiles(String lang, String? winnerTeam, int a, int b) {
+    if (lang != 'vi' || (winnerTeam != 'A' && winnerTeam != 'B')) return null;
+    if (a < 0 || b < 0 || a > _maxScore || b > _maxScore) return null;
+    final red = winnerTeam == 'A';
+    return [
+      'audio/score/vi/${red ? 'win_red' : 'win_blue'}.mp3',
+      'audio/score/vi/${red ? a : b}.mp3',
+      'audio/score/vi/${red ? b : a}.mp3',
+    ];
+  }
+
+  /// "Hết giờ đánh rồi, nhớ lấy đồ nha!" — the pack-up reminder. Played at
+  /// full volume whatever the master says, and does not start a hype line.
+  Future<void> announceReminder() async {
+    final int myJob = ++_currentJob;
+    await _cancelInFlight();
+    if (myJob != _currentJob) return;
+    Future<void> tts() async {
+      try {
+        await Get.find<TtsService>().speak('Het gio danh. Nho lay do.');
+      } catch (_) {}
+    }
+    if (currentLanguage.value != 'vi') return tts();
+    await _player.setVolume(1.0);
+    try {
+      await _playSequence(myJob, ['audio/score/vi/het_gio.mp3'], tts, notify: false);
+    } finally {
+      await _player.setVolume(_scaled(_ownVolume));
+    }
   }
 
   bool _inRange(int score) => score >= 0 && score <= _maxScore;
@@ -224,8 +265,9 @@ class ScoreAnnouncerService extends GetxService {
   Future<void> _playSequence(
     int myJob,
     List<String> files,
-    Future<void> Function() onFallback,
-  ) async {
+    Future<void> Function() onFallback, {
+    bool notify = true,
+  }) async {
     // Pre-flight: verify every file is actually bundled. Cheaper than failing
     // mid-chain (which would leave the hype callback un-fired).
     for (final f in files) {
@@ -256,7 +298,7 @@ class ScoreAnnouncerService extends GetxService {
         await done.future;
         if (myJob != _currentJob) return;
       }
-      onAnnouncementCompleted?.call();
+      if (notify) onAnnouncementCompleted?.call();
     } catch (e) {
       print('🔊 [ScoreAnnouncer] Playback error: $e — falling back to TTS');
       if (myJob != _currentJob) return;

@@ -746,7 +746,8 @@ class ScoreController extends GetxController {
       _musicService.stopMusic(fadeOut: true);
       
       if (scoreAnnouncementsEnabled.value) {
-        _scoreAnnouncer.announceWinner(_winnerSpoken(), gameState.teamAScore, gameState.teamBScore);
+        _scoreAnnouncer.announceWinner(_winnerSpoken(), gameState.teamAScore, gameState.teamBScore,
+            winnerTeam: gameState.winner);
       } else {
         _hypeController.playHype();
       }

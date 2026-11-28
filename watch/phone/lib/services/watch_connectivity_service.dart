@@ -5,6 +5,7 @@ import 'package:get/get.dart';
 import 'package:voice_counter/controllers/score_controller.dart';
 import '../models/game_state.dart';
 import 'music_service.dart';
+import 'score_announcer_service.dart';
 import 'audio_settings.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 
@@ -288,10 +289,9 @@ class WatchConnectivityService extends GetxService {
     try {
       // Spoken at full volume regardless of the master, and repeated: this is
       // the one sound that matters more than the mix.
-      final tts = Get.find<ScoreController>().ttsService;
-      tts.speak('Het gio danh. Nho lay do.');
-      Future.delayed(const Duration(seconds: 4),
-          () => tts.speak('Het gio danh. Nho lay do.'));
+      final announcer = Get.find<ScoreAnnouncerService>();
+      announcer.announceReminder();
+      Future.delayed(const Duration(seconds: 4), announcer.announceReminder);
     } catch (e) {
       print('⌚ [WatchService] Reminder speak failed: $e');
     }
