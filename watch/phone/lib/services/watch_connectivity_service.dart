@@ -99,6 +99,12 @@ class WatchConnectivityService extends GetxService {
             print('⌚ [WatchService] Event stream error: $error');
           },
         );
+
+        // The band pushes its score only when ITS app starts or reconnects
+        // (band_ready). When only the phone app restarted, the board sat at
+        // 0-0 until the next press: ask for the score (answered as
+        // state_reply, the same as "Refresh From Band").
+        sendScoreCommand('request_current_state');
       } else {
         print('⌚ [WatchService] Initialization failed: ${report['error']}');
       }
