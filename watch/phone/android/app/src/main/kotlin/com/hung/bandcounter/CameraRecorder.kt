@@ -270,7 +270,7 @@ class CameraRecorder(
                     val fx = OverlayEffect(targets, 0, Handler(Looper.getMainLooper())) { t ->
                         Log.w(TAG, "overlay: ${t.message}")
                     }
-                    fx.setOnDrawListener { frame -> drawOverlay(frame.overlayCanvas); true }
+                    fx.setOnDrawListener { frame -> drawOverlay(frame.overlayCanvas, frame.rotationDegrees); true }
                     group.addEffect(fx)
                     overlay = fx
                 }
@@ -290,14 +290,26 @@ class CameraRecorder(
      * frame height so it reads the same at any resolution. Small on purpose:
      * the analysis looks at the court, not the corner.
      */
-    private fun drawOverlay(c: android.graphics.Canvas) {
+    private fun drawOverlay(c: android.graphics.Canvas, rotationDegrees: Int) {
         c.drawColor(Color.TRANSPARENT, PorterDuff.Mode.CLEAR)
+        // The canvas is the camera buffer, which is shown (and the file is
+        // played) rotated by rotationDegrees, so draw in the upright frame.
+        // Seen on the Redmi held the other way round: boxes upside down in
+        // the bottom-right corner of the preview.
+        val rot = ((-rotationDegrees) % 360 + 360) % 360
+        val upright = rot % 180 == 0
+        val lw = if (upright) c.width.toFloat() else c.height.toFloat()
+        val lh = if (upright) c.height.toFloat() else c.width.toFloat()
+        c.save()
+        c.translate(c.width / 2f, c.height / 2f)
+        c.rotate(rot.toFloat())
+        c.translate(-lw / 2f, -lh / 2f)
         // The canvas is the shared camera stream (4:3 on the Redmi 13C); the
         // 16:9 video is its centre band. Measured: drawn at the canvas top,
         // the score boxes were cut off in the file. So place everything in
         // the 16:9 band, which both the video and the preview contain.
-        val cw = c.width.toFloat()
-        val ch = c.height.toFloat()
+        val cw = lw
+        val ch = lh
         val bandH = minOf(ch, cw * 9f / 16f)
         val bandW = minOf(cw, ch * 16f / 9f)
         val top = (ch - bandH) / 2f
@@ -323,6 +335,7 @@ class CameraRecorder(
         val w = ovClock.measureText("00:00:00")
         c.drawRoundRect(RectF(x, clockY - unit * 0.75f, x + w + unit * 0.5f, clockY + unit * 0.25f), unit * 0.2f, unit * 0.2f, ovBox)
         c.drawText(clockFmt.format(java.util.Date()), x + unit * 0.25f, clockY, ovClock)
+        c.restore()
     }
 
     fun close() {
