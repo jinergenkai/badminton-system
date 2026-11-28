@@ -349,12 +349,6 @@
       "voice": "lyria_nu"
     },
     {
-      "id": "g17_con_dung_cai_nit",
-      "display": "CÒN ĐÚNG\nCÁI NỊT",
-      "text": "Còn đúng cái nịt!",
-      "voice": "lyria_nu"
-    },
-    {
       "id": "g17_danh_nhu_chua_tung_duoc_danh",
       "display": "ĐÁNH NHƯ CHƯA\nTỪNG ĐƯỢC ĐÁNH",
       "text": "Đánh như chưa từng được đánh!",
@@ -975,6 +969,84 @@
       "text": "Đánh như cục cứt luôn á!",
       "voice": "mai_anh",
       "spicy": true
+    },
+    {
+      "id": "mai_anh/long_tranh_ho_dau",
+      "display": "LONG TRANH HỔ ĐẤU",
+      "text": "Long tranh hổ đấu!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cang_vay_sao_may_ma",
+      "display": "CĂNG VẬY SAO MẤY MÁ",
+      "text": "Căng vậy sao mấy má!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/khong_ai_chiu_ai_luon",
+      "display": "KHÔNG AI CHỊU AI LUÔN",
+      "text": "Không ai chịu ai luôn!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/ke_tam_lang_nguoi_nua_can",
+      "display": "KẺ TÁM LẠNG\nNGƯỜI NỬA CÂN",
+      "text": "Kẻ tám lạng, người nửa cân!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/nghet_tho_luon",
+      "display": "NGHẸT THỞ LUÔN",
+      "text": "Nghẹt thở luôn!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/tim_toi_chiu_khong_noi",
+      "display": "TIM TÔI CHỊU KHÔNG NỔI",
+      "text": "Tim tôi chịu không nổi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/mot_diem_nua_thoi",
+      "display": "MỘT ĐIỂM NỮA THÔI",
+      "text": "Một điểm nữa thôi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/chot_ha_di_nao",
+      "display": "CHỐT HẠ ĐI NÀO",
+      "text": "Chốt hạ đi nào!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/run_tay_la_toang_nha",
+      "display": "RUN TAY LÀ TOANG NHA",
+      "text": "Run tay là toang nha!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/rong_bay_phuong_mua",
+      "display": "RỒNG BAY PHƯỢNG MÚA",
+      "text": "Rồng bay phượng múa!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/ba_khi_ngut_troi",
+      "display": "BÁ KHÍ NGÚT TRỜI",
+      "text": "Bá khí ngút trời!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cho_nhay_ga_bay",
+      "display": "CHÓ NHẢY GÀ BAY",
+      "text": "Chó nhảy gà bay!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/host_quay_xe",
+      "display": "HOST, QUAY XE",
+      "text": "Host, quay xe!",
+      "voice": "mai_anh"
     }
   ],
   "triggers": [
@@ -1024,7 +1096,9 @@
         "mai_anh/dinh_vai_noi",
         "mai_anh/ao_vai_lin_luon_a",
         "mai_anh/ghe_vai_chuong",
-        "mai_anh/gat_vai_ca_dan"
+        "mai_anh/gat_vai_ca_dan",
+        "mai_anh/rong_bay_phuong_mua",
+        "mai_anh/ba_khi_ngut_troi"
       ]
     },
     {
@@ -1085,7 +1159,6 @@
         "g17_cay_chua_cay_thi_uong_nuoc",
         "g12_nin_nin_luon",
         "g12_con_dung_cai_nit",
-        "g17_con_dung_cai_nit",
         "g17_toang_roi_ong_giao_a_oi",
         "g12_thoi_cat_vot_di_dung_co_co_lam_gi",
         "g17_danh_nhu_chua_tung_duoc_danh",
@@ -1114,7 +1187,9 @@
         "mai_anh/ga_vai_lon",
         "mai_anh/ham_vai_chuong",
         "mai_anh/cay_khong_cay_thi_khoc_di",
-        "mai_anh/danh_nhu_cuc_cut"
+        "mai_anh/danh_nhu_cuc_cut",
+        "g12_diem_so_10_0_roi_con_tiec_nuoi_chi",
+        "mai_anh/cho_nhay_ga_bay"
       ]
     },
     {
@@ -1140,10 +1215,29 @@
       "id": "crucial_moment",
       "priority": 80,
       "pool": [
-        "female_pack/phong_do_dinh_cao_f",
         "g14_tran_nay_cang_a_nha",
-        "mai_anh/dinh_cua_chop",
         "mai_anh/kho_nha_bro_kho_nha"
+      ]
+    },
+    {
+      "id": "deuce",
+      "priority": 80,
+      "pool": [
+        "mai_anh/long_tranh_ho_dau",
+        "mai_anh/cang_vay_sao_may_ma",
+        "mai_anh/khong_ai_chiu_ai_luon",
+        "mai_anh/ke_tam_lang_nguoi_nua_can",
+        "mai_anh/nghet_tho_luon",
+        "mai_anh/tim_toi_chiu_khong_noi"
+      ]
+    },
+    {
+      "id": "set_point",
+      "priority": 80,
+      "pool": [
+        "mai_anh/mot_diem_nua_thoi",
+        "mai_anh/chot_ha_di_nao",
+        "mai_anh/run_tay_la_toang_nha"
       ]
     },
     {
@@ -1163,7 +1257,6 @@
         "g12_thoi_cat_vot_di_dung_co_co_lam_gi",
         "g12_nin_nin_luon",
         "g17_toang_roi_ong_giao_a_oi",
-        "g17_con_dung_cai_nit",
         "g17_cay_chua_cay_thi_uong_nuoc",
         "g17_mat_chuoi_roi",
         "g24_ga_van_hoan_ga",
@@ -1182,7 +1275,8 @@
       "pool": [
         "female_pack/quay_xe_cuc_gat_f",
         "g13_thang_doi_1_0",
-        "mai_anh/lat_keo"
+        "mai_anh/lat_keo",
+        "mai_anh/host_quay_xe"
       ]
     },
     {
@@ -1201,7 +1295,9 @@
         "g23_bua_nay_an_gi_ma_ghe_vay",
         "mai_anh/khong_the_tin_duoc",
         "mai_anh/giam_suc_manh_con_tuong_nay",
-        "mai_anh/ai_so_thi_di_ve"
+        "mai_anh/ai_so_thi_di_ve",
+        "female_pack/phong_do_dinh_cao_f",
+        "mai_anh/ba_khi_ngut_troi"
       ]
     },
     {
@@ -1235,16 +1331,12 @@
         "g11_dinh_cua_noc",
         "g11_qua_man_nhan_luon",
         "g11_qua_chay_oh_that_day",
-        "g15_dap_cau_thay_ba_luon",
-        "g16_dap_cau_nhu_dap_muoi",
         "g16_ghi_diem_nhu_vat_chanh",
         "g22_qua_ghe_gom_luon",
         "g22_qua_dinh_luon_ban_oi",
         "mai_anh/sieu_pham",
         "mai_anh/cu_danh_dep",
         "mai_anh/cu_nay_khet",
-        "mai_anh/cu_dap_ca_map",
-        "mai_anh/mot_phat_chet_tuoi",
         "mai_anh/cu_nay_khet_len_let"
       ]
     },
@@ -1281,7 +1373,8 @@
         "mo_man_lyria_3",
         "g14_mo_hang_may_man",
         "g14_diem_dau_tien_hon_roi_do_nha",
-        "mai_anh/ai_so_thi_di_ve"
+        "mai_anh/ai_so_thi_di_ve",
+        "g12_vua_moi_vao_san_da_toe_toat"
       ]
     },
     {
@@ -1290,18 +1383,15 @@
       "pool": [
         "g11_nhin_doi_chan_thoan_thoat_vai",
         "g12_cam_vot_thi_oai_ma_danh_ngu",
-        "g12_vua_moi_vao_san_da_toe_toat",
         "g12_cau_bay_veo_veo_tay_cu_do_do",
         "g12_chay_loang_qua_loang_quang",
         "g12_oi_doi_oi",
-        "g12_diem_so_10_0_roi_con_tiec_nuoi_chi",
         "g17_cay_chua_cay_thi_uong_nuoc",
         "g17_danh_nhu_chua_tung_duoc_danh",
         "g17_ha_hahaha",
         "mai_anh/man_nhan",
         "mai_anh/cay_chua_cay_thi_uong_nuoc",
         "mai_anh/danh_nhu_chua_tung_duoc_danh",
-        "mai_anh/dap_cau_do_bang_niem_tin_a",
         "mai_anh/ha_ha_ha_ha",
         "mai_anh/chay_the_nho"
       ]

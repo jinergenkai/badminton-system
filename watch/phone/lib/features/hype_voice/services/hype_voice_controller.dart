@@ -55,6 +55,8 @@ class HypeVoiceController extends GetxController {
     'manual_ca_khia': 'Band picker: Roast',
     'match_end': 'Set won',
     'crucial_moment': 'Set point / 20-all and up',
+    'deuce': 'Tied at 20-all and up',
+    'set_point': 'One point from winning the set (leading)',
     'shutdown': 'Ends an opponent streak of 5+',
     'comeback': 'Back level after trailing by 4+',
     'streak_5_plus': 'Streak of 5 or more',
@@ -357,6 +359,12 @@ class HypeVoiceController extends GetxController {
         if (newB == _setPoint - 1 && newB > newA) return true;
         return false;
 
+      case 'deuce':
+        return isDeuce(newA, newB);
+
+      case 'set_point':
+        return isSetPoint(newA, newB);
+
       case 'streak_high':
         return streakCount.value >= 4;
 
@@ -413,11 +421,22 @@ class HypeVoiceController extends GetxController {
     return false;
   }
 
-  bool _hasWinner(int a, int b) {
+  bool _hasWinner(int a, int b) => setWon(a, b);
+
+  static bool setWon(int a, int b) {
     if (a == 30 || b == 30) return true;
     if (a >= _setPoint && (a - b) >= 2) return true;
     if (b >= _setPoint && (b - a) >= 2) return true;
     return false;
+  }
+
+  /// Tied at 20-all or later.
+  static bool isDeuce(int a, int b) => a == b && a >= _setPoint - 1;
+
+  /// The leader's next point wins the set (20-18, 22-21, 29-28...).
+  static bool isSetPoint(int a, int b) {
+    if (a == b || setWon(a, b)) return false;
+    return a > b ? setWon(a + 1, b) : setWon(a, b + 1);
   }
 
   void _prepareHype(List<String> triggerIds) {
