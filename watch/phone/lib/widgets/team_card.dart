@@ -170,8 +170,14 @@ class _TeamCardState extends State<TeamCard> {
                 child: Stack(
                   children: [
                     // ── Active Corner Highlight (Strobing) ──
+                    // Every optional layer is keyed: they come and go (serve
+                    // moves, streak starts), and unkeyed Positioned siblings
+                    // were matched by position — the layers slid one slot,
+                    // so the score flash was rebuilt on the card that lost
+                    // the serve and cut short on the one that won it.
                     if (isServing)
                       Positioned.fill(
+                        key: const ValueKey('serve'),
                         child: AnimatedBuilder(
                           animation: _servicePulseCtrl,
                           builder: (context, child) {
@@ -193,6 +199,7 @@ class _TeamCardState extends State<TeamCard> {
                     // ── Original fire effect (streak >= 2) ────────────────
                     if (onStreak && fxHigh)
                       Positioned.fill(
+                        key: const ValueKey('fire'),
                         child: _ModernFireEffect(
                           color: widget.primaryColor.withOpacity(0.35 + intensity * 0.25),
                         ),
@@ -201,6 +208,7 @@ class _TeamCardState extends State<TeamCard> {
                     // ── Balloon celebration (streak >= 3) ─────────────────
                     if (streak >= 3 && fxHigh)
                       Positioned.fill(
+                        key: const ValueKey('balloons'),
                         child: _BalloonEffect(
                           color: widget.accentColor.withOpacity(0.20 + intensity * 0.20),
                         ),
@@ -211,8 +219,8 @@ class _TeamCardState extends State<TeamCard> {
 
                     if (_flash > 0)
                       Positioned.fill(
+                        key: ValueKey('flash$_flash'),
                         child: _ScoreFlash(
-                          key: ValueKey(_flash),
                           color: _flashUp ? Colors.greenAccent : Colors.amber,
                         ),
                       ),
@@ -248,6 +256,7 @@ class _TeamCardState extends State<TeamCard> {
   Widget _buildWatermark(String asset, double w, double h, double intensity) {
     final double size = (w * 0.85).clamp(80.0, 360.0).clamp(0.0, h * 0.65);
     return Positioned(
+      key: const ValueKey('watermark'),
       bottom: -size * 0.08,
       right: -size * 0.05,
       child: Opacity(
@@ -793,7 +802,7 @@ class _BalloonPainter extends CustomPainter {
 }
 
 /// A one-shot wash + thick border over a team card. Timer-driven like the K.O
-/// overlay: held in full for 1.1 s of real time (long enough to catch from
+/// overlay: held in full for 3 s of real time (long enough to catch from
 /// the court), then faded, so it stays visible even with system animations
 /// turned off.
 class _ScoreFlash extends StatefulWidget {
@@ -811,7 +820,7 @@ class _ScoreFlashState extends State<_ScoreFlash> {
   @override
   void initState() {
     super.initState();
-    _t = Timer(const Duration(milliseconds: 1100), () {
+    _t = Timer(const Duration(seconds: 3), () {
       if (mounted) setState(() => _opacity = 0.0);
     });
   }
