@@ -418,6 +418,19 @@ class SettingsScreen extends StatelessWidget {
       }),
       _div(),
       Obx(() => _tile(
+            icon: Icons.pets,
+            title: 'Hype picture',
+            subtitle: fx.hypeOverlay.value
+                ? 'Dog / cat K.O over the board on a hype line'
+                : 'Off: the board stays on the score, the line still plays',
+            trailing: Switch(
+              value: fx.hypeOverlay.value,
+              onChanged: fx.setHypeOverlay,
+              activeColor: Colors.amber,
+            ),
+          )),
+      _div(),
+      Obx(() => _tile(
             icon: Icons.swap_horiz,
             title: 'Swap Sides',
             subtitle: controller.sidesSwapped.value

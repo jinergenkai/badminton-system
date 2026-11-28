@@ -17,6 +17,11 @@ class DisplaySettings extends GetxService {
 
   final RxString level = low.obs;
 
+  /// The dog/cat K.O picture over the board on a hype line. Off on a court
+  /// where people only look at the score: the line still plays.
+  final RxBool hypeOverlay = true.obs;
+  static const _overlayPref = 'hype_overlay';
+
   bool get isHigh => level.value == high;
 
   /// Frame rate of the long-running effects.
@@ -29,7 +34,14 @@ class DisplaySettings extends GetxService {
   Future<DisplaySettings> init() async {
     final prefs = await SharedPreferences.getInstance();
     level.value = prefs.getString(_pref) ?? low;
+    hypeOverlay.value = prefs.getBool(_overlayPref) ?? true;
     return this;
+  }
+
+  Future<void> setHypeOverlay(bool v) async {
+    hypeOverlay.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_overlayPref, v);
   }
 
   Future<void> setLevel(String v) async {

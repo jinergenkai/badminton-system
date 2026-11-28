@@ -6,6 +6,7 @@ import '../controllers/score_controller.dart';
 import '../features/hype_voice/services/hype_voice_controller.dart';
 import '../widgets/team_card.dart';
 import '../widgets/kill_overlay.dart';
+import '../services/display_settings.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'history_screen.dart';
 import 'settings_screen.dart';
@@ -68,6 +69,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
                         // laid out in, so the board matches the court.
                         final swapped = controller.sidesSwapped.value;
                         final cardA = Expanded(
+                          key: const ValueKey('cardA'),
                           flex: 10,
                           child: TeamCard(
                             teamId: 'A',
@@ -83,6 +85,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
                           ),
                         );
                         final cardB = Expanded(
+                          key: const ValueKey('cardB'),
                           flex: 10,
                           child: TeamCard(
                             teamId: 'B',
@@ -133,6 +136,7 @@ class _ScoreScreenState extends State<ScoreScreen> {
             final hype = Get.find<HypeVoiceController>();
             final event = hype.displayEvent.value;
             if (event == null) return const SizedBox.shrink();
+            if (!(DisplaySettings.maybe?.hypeOverlay.value ?? true)) return const SizedBox.shrink();
             final mascot = event.team == 'A'
                 ? 'assets/image/dog_smash.png'
                 : 'assets/image/cat_dropshot.png';

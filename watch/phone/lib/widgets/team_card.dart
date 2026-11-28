@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import '../services/display_settings.dart';
 import 'frame_clock.dart';
@@ -76,6 +77,21 @@ class _TeamCardState extends State<TeamCard> {
       _servicePulseCtrl.start();
     } else {
       _servicePulseCtrl.stop();
+    }
+  }
+
+  /// Bumped on every score change: keys a one-shot flash so whoever pressed
+  /// the band sees at a glance that the point went in (white) or came off
+  /// (amber, undo). Distinct from the slow serve-side blink.
+  int _flash = 0;
+  bool _flashUp = true;
+
+  @override
+  void didUpdateWidget(covariant TeamCard old) {
+    super.didUpdateWidget(old);
+    if (widget.score != old.score) {
+      _flash++;
+      _flashUp = widget.score > old.score;
     }
   }
 
@@ -189,6 +205,14 @@ class _TeamCardState extends State<TeamCard> {
 
                     if (widget.mascotAsset != null)
                       _buildWatermark(widget.mascotAsset!, width, height, intensity),
+
+                    if (_flash > 0)
+                      Positioned.fill(
+                        child: _ScoreFlash(
+                          key: ValueKey(_flash),
+                          color: _flashUp ? Colors.white : Colors.amber,
+                        ),
+                      ),
 
                     _buildScoreArea(width, height, isTablet, streak, intensity, fxHigh),
 
@@ -763,4 +787,52 @@ class _BalloonPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _BalloonPainter old) =>
       old.progress != progress || old.color != color;
+}
+
+/// A one-shot wash + thick border over a team card. Timer-driven like the K.O
+/// overlay: shown in full for 350 ms of real time, then faded, so it stays
+/// visible even with system animations turned off.
+class _ScoreFlash extends StatefulWidget {
+  final Color color;
+  const _ScoreFlash({super.key, required this.color});
+
+  @override
+  State<_ScoreFlash> createState() => _ScoreFlashState();
+}
+
+class _ScoreFlashState extends State<_ScoreFlash> {
+  double _opacity = 1.0;
+  Timer? _t;
+
+  @override
+  void initState() {
+    super.initState();
+    _t = Timer(const Duration(milliseconds: 350), () {
+      if (mounted) setState(() => _opacity = 0.0);
+    });
+  }
+
+  @override
+  void dispose() {
+    _t?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedOpacity(
+        opacity: _opacity,
+        duration: const Duration(milliseconds: 450),
+        curve: Curves.easeIn,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: widget.color.withOpacity(0.28),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: widget.color, width: 10),
+          ),
+        ),
+      ),
+    );
+  }
 }
