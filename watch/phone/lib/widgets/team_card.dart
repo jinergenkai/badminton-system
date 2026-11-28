@@ -81,15 +81,18 @@ class _TeamCardState extends State<TeamCard> {
   }
 
   /// Bumped on every score change: keys a one-shot flash so whoever pressed
-  /// the band sees at a glance that the point went in (white) or came off
-  /// (amber, undo). Distinct from the slow serve-side blink.
+  /// the band sees at a glance that the point went in (green) or came off
+  /// (amber, undo). Not white: the serving card already wears a white border,
+  /// and a white flash beside it read as both cards lighting up.
   int _flash = 0;
   bool _flashUp = true;
 
   @override
   void didUpdateWidget(covariant TeamCard old) {
     super.didUpdateWidget(old);
-    if (widget.score != old.score) {
+    // Exactly one point on or off. A sync that jumps (band reconnect 0-0 →
+    // 3-3, a reset) changes both cards at once and is not a press to confirm.
+    if ((widget.score - old.score).abs() == 1) {
       _flash++;
       _flashUp = widget.score > old.score;
     }
@@ -210,7 +213,7 @@ class _TeamCardState extends State<TeamCard> {
                       Positioned.fill(
                         child: _ScoreFlash(
                           key: ValueKey(_flash),
-                          color: _flashUp ? Colors.white : Colors.amber,
+                          color: _flashUp ? Colors.greenAccent : Colors.amber,
                         ),
                       ),
 
@@ -790,8 +793,9 @@ class _BalloonPainter extends CustomPainter {
 }
 
 /// A one-shot wash + thick border over a team card. Timer-driven like the K.O
-/// overlay: shown in full for 350 ms of real time, then faded, so it stays
-/// visible even with system animations turned off.
+/// overlay: held in full for 1.1 s of real time (long enough to catch from
+/// the court), then faded, so it stays visible even with system animations
+/// turned off.
 class _ScoreFlash extends StatefulWidget {
   final Color color;
   const _ScoreFlash({super.key, required this.color});
@@ -807,7 +811,7 @@ class _ScoreFlashState extends State<_ScoreFlash> {
   @override
   void initState() {
     super.initState();
-    _t = Timer(const Duration(milliseconds: 350), () {
+    _t = Timer(const Duration(milliseconds: 1100), () {
       if (mounted) setState(() => _opacity = 0.0);
     });
   }
@@ -823,13 +827,13 @@ class _ScoreFlashState extends State<_ScoreFlash> {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: _opacity,
-        duration: const Duration(milliseconds: 450),
+        duration: const Duration(milliseconds: 600),
         curve: Curves.easeIn,
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: widget.color.withOpacity(0.28),
+            color: widget.color.withOpacity(0.22),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: widget.color, width: 10),
+            border: Border.all(color: widget.color, width: 14),
           ),
         ),
       ),

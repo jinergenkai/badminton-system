@@ -623,7 +623,9 @@ class CameraRecorder(
     @Suppress("DEPRECATION")
     private fun gateway(): String? {
         val wm = activity.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val g = wm.dhcpInfo?.gateway ?: 0
+        // Polled every 2 s: without ACCESS_WIFI_STATE this threw (and logged a
+        // stack trace) on every call.
+        val g = try { wm.dhcpInfo?.gateway ?: 0 } catch (e: SecurityException) { 0 }
         if (g == 0) return null
         return "${g and 0xff}.${g shr 8 and 0xff}.${g shr 16 and 0xff}.${g shr 24 and 0xff}"
     }

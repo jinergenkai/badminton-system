@@ -11,6 +11,9 @@ Per clip:
      MAX_BOOST_DB up: a quiet source stays a bit quiet instead of being
      dragged up into noise
   4. limit peaks to -1.5 dBFS (the MP3 re-encode overshoots ~1 dB)
+  5. put LEAD_S of silence back in front: a speaker that has gone idle (the
+     Bluetooth link, the phone's own amplifier) swallows the first 100-300 ms
+     when it wakes, and with the trim the first syllable started at ~0 ms.
 
 How loud it plays on court is the job of the volume sliders and the speaker,
 not of this script. 2026-11: the old "loud" profile (-10 LUFS, 6:1 at -28 dB,
@@ -64,9 +67,11 @@ TRIM = ('silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03,
         'areverse')
 COMPRESS = 'acompressor=threshold=-18dB:ratio=2:attack=10:release=120'
 LIMIT = 'alimiter=limit=0.841:level=false'  # 0.841 = -1.5 dBFS
+LEAD_S = 0.15
+LEAD = f'adelay=delays={int(LEAD_S * 1000)}:all=1'
 
 # Part of every fingerprint: changing any of these redoes every clip.
-SETTINGS_TAG = f'clean1|{TRIM}|{COMPRESS}|{LIMIT}|{TARGET_LUFS}|{MAX_BOOST_DB}|128k'
+SETTINGS_TAG = f'clean2|{TRIM}|{COMPRESS}|{LIMIT}|{LEAD}|{TARGET_LUFS}|{MAX_BOOST_DB}|128k'
 
 
 def mean_max(path, pre_filter=''):
@@ -97,12 +102,14 @@ def process(src, dst, target, compress=True):
         return None
     gain = min(target - m, MAX_BOOST_DB)
 
-    def render(g):
-        chain = f'{base},volume={g:.2f}dB,{LIMIT}'
+    def render(g, lead):
+        chain = f'{base},volume={g:.2f}dB,{LIMIT}' + (f',{LEAD}' if lead else '')
         subprocess.run([FFMPEG, '-hide_banner', '-loglevel', 'error', '-y', '-i', src,
                         '-af', chain, '-c:a', 'libmp3lame', '-b:a', '128k', dst], check=True)
 
-    render(gain)
+    # Levelled without the lead-in: lufs() loops the clip, and silence inside
+    # every loop would read as quieter.
+    render(gain, lead=False)
     # The limiter takes back a little on peaky clips: up to two correction
     # passes land them on the target — still never above MAX_BOOST_DB.
     for _ in range(2):
@@ -113,7 +120,8 @@ def process(src, dst, target, compress=True):
         if abs(new_gain - gain) < 0.05:
             break  # capped: cannot get closer
         gain = new_gain
-        render(gain)
+        render(gain, lead=False)
+    render(gain, lead=True)
     return gain
 
 
@@ -180,7 +188,7 @@ def main():
             done += 1
             a = mean_max(dst)
             print(f'{sub + "/" + name:44} {b[0]:6.1f}/{b[1]:6.1f} {gain:+6.1f} {a[0]:6.1f}/{a[1]:6.1f}'
-                  f'  {lufs(dst) or 0:6.1f} LUFS')
+                  f'  {lufs(dst) or 0:6.1f} LUFS (incl. lead-in)')
     if not dry:
         with open(STAMP, 'w', encoding='utf-8', newline='\n') as f:
             json.dump(stamps, f, indent=1, sort_keys=True)

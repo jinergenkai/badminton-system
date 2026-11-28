@@ -2,6 +2,8 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- google_fonts fetches a font the first time it is used -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- CameraRecorder.gateway(): finds the camera phone on its hotspot. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Corner camera: asked for only when its screen is opened -->
     <uses-permission android:name="android.permission.CAMERA" />
