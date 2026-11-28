@@ -39,6 +39,11 @@ android {
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Real phones and tablets only: the QR scanner's bundled ML Kit
+        // model alone added ~5 MB per ABI, x86 builds are emulator-only.
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     buildTypes {
