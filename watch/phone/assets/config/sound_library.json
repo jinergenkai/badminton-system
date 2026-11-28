@@ -7,11 +7,6 @@
       "text": "Chấm dứt!"
     },
     {
-      "id": "cu_danh_dep",
-      "display": "CÚ ĐÁNH ĐẸP",
-      "text": "Cú đánh đẹp!"
-    },
-    {
       "id": "female_pack/can_loi_can_y_f",
       "display": "CẢN LỜI\nCẢN Ý",
       "text": "Cản lời cản ý!"
@@ -20,31 +15,6 @@
       "id": "female_pack/chan_buoc_di_dau_khong_quay_lai",
       "display": "CHÂN BƯỚC\nKHÔNG QUAY LẠI",
       "text": "Chân bước không quay lại!"
-    },
-    {
-      "id": "female_pack/chay_the_nho_f",
-      "display": "CHẠY THẾ NHỚ",
-      "text": "Chạy thế nhớ!"
-    },
-    {
-      "id": "female_pack/cu_danh_dep_f",
-      "display": "CÚ ĐÁNH ĐẸP",
-      "text": "Cú đánh đẹp!"
-    },
-    {
-      "id": "female_pack/cu_dap_ca_map_f",
-      "display": "CÚ ĐẬP\nCÁ MẬP",
-      "text": "Cú đập cá mập!"
-    },
-    {
-      "id": "female_pack/cu_nay_khet_f",
-      "display": "CÚ NÀY KHÉT",
-      "text": "Cú này khét!"
-    },
-    {
-      "id": "female_pack/dinh_cua_chop_f",
-      "display": "ĐỈNH CỦA CHÓP",
-      "text": "Đỉnh của chóp!"
     },
     {
       "id": "female_pack/khet_let_f",
@@ -57,34 +27,9 @@
       "text": "Cao nhân ẩn thế!"
     },
     {
-      "id": "female_pack/khong_ngung_bo_cuoc_f",
-      "display": "KHÔNG NGỪNG\nBỎ CUỘC",
-      "text": "Không ngừng bỏ cuộc!"
-    },
-    {
-      "id": "female_pack/khong_the_tin_duoc_f",
-      "display": "KHÔNG THỂ\nTIN ĐƯỢC",
-      "text": "Không thể tin được!"
-    },
-    {
-      "id": "female_pack/lat_keo_f",
-      "display": "LẬT KÈO",
-      "text": "Lật kèo!"
-    },
-    {
-      "id": "female_pack/man_nhan_f",
-      "display": "MÃN NHÃN",
-      "text": "Mãn nhãn!"
-    },
-    {
       "id": "female_pack/manh_ho_vo_moi_f",
       "display": "MÃNH HỔ\nVÔ MỒI",
       "text": "Mãnh hổ vô mồi!"
-    },
-    {
-      "id": "female_pack/mot_phat_chet_tuoi_f",
-      "display": "MỘT PHÁT\nCHẾT TƯƠI",
-      "text": "Một phát chết tươi!"
     },
     {
       "id": "female_pack/phong_do_dinh_cao_f",
@@ -100,11 +45,6 @@
       "id": "female_pack/thuc_tinh_he_thong_f",
       "display": "THỨC TỈNH\nHỆ THỐNG",
       "text": "Thức tỉnh hệ thống!"
-    },
-    {
-      "id": "female_pack/vo_dich_thien_ha_f",
-      "display": "VÔ ĐỊCH\nTHIÊN HẠ",
-      "text": "Vô địch thiên hạ!"
     },
     {
       "id": "female_pack/xuat_quy_nhap_than_f",
@@ -153,11 +93,6 @@
       "display": "CÚ NÀY ĐỂ ĐỜI!\nKHÔNG THỂ TIN NỔI",
       "text": "Cú này để đời! Không thể tin nổi!",
       "glow": "fire"
-    },
-    {
-      "id": "g11_dap_cau_do_bang_niem_tin_a",
-      "display": "ĐẬP CẦU ĐÓ\nBẰNG NIỀM TIN À",
-      "text": "Đập cầu đó bằng niềm tin à?"
     },
     {
       "id": "g11_dinh_cua_noc",
@@ -468,31 +403,15 @@
       "voice": "lyria_nu"
     },
     {
-      "id": "g1_ai_so_thi_di_ve",
-      "display": "AI SỢ\nTHÌ ĐI VỀ",
-      "text": "Ai sợ thì đi về!",
-      "glow": "fire"
-    },
-    {
       "id": "g20_trung_luoi_nhu_trung_so",
       "display": "TRÚNG LƯỚI\nNHƯ TRÚNG SỐ",
       "text": "Trúng lưới như trúng số!",
       "voice": "lyria_nu"
     },
     {
-      "id": "g21_cu_dap_di_vao_long_dat",
-      "display": "CÚ ĐẬP ĐI\nVÀO LÒNG ĐẤT",
-      "text": "Cú đập đi vào lòng đất!"
-    },
-    {
       "id": "g21_dap_toi_boi_khoi_lua",
       "display": "ĐẬP TƠI BỜI\nKHÓI LỬA",
       "text": "Đập tơi bời khói lửa!"
-    },
-    {
-      "id": "g21_do_bang_niem_tin_a",
-      "display": "ĐỠ BẰNG\nNIỀM TIN À",
-      "text": "Đỡ bằng niềm tin à?"
     },
     {
       "id": "g22_dang_cap_la_mai_mai",
@@ -590,9 +509,472 @@
       "glow": "danger"
     },
     {
-      "id": "sieu_pham",
+      "id": "mai_anh/hay_vay_ba",
+      "display": "HAY VẬY BÀ",
+      "text": "Hay vậy bà!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/gi_ghe_vay",
+      "display": "GÌ GHÊ VẬY",
+      "text": "Gì ghê vậy!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/ua_alo_danh_vay_ai_choi_lai",
+      "display": "ỦA ALO\nĐÁNH VẬY AI CHƠI LẠI",
+      "text": "Ủa alo, đánh vậy ai chơi lại?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/et_o_et",
+      "display": "ÉT Ô ÉT",
+      "text": "Ét ô ét!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/ve_ke_khong_ai_tin",
+      "display": "VỀ KỂ KHÔNG AI TIN",
+      "text": "Về kể không ai tin!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/xin_loi_hit_chung_khong_khi",
+      "display": "XIN LỖI VÌ ĐÃ HÍT CHUNG KHÔNG KHÍ",
+      "text": "Xin lỗi vì đã hít chung không khí!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/thuyet_hong_ha_ba_tho",
+      "display": "THUYỆT HÔNG HẢ BÀ THƠ",
+      "text": "Thuyệt hông hả bà Thơ!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/uong_nham_thuoc_ha",
+      "display": "ỦA\nHÔM NAY UỐNG NHẦM THUỐC HẢ",
+      "text": "Ủa, hôm nay uống nhầm thuốc hả?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/incredible_dinh_cua_chop",
+      "display": "INCREDIBLE\nUNBELIEVABLE, ĐỈNH CỦA CHÓP, SO GOOD",
+      "text": "Incredible, unbelievable, đỉnh của chóp, so good!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/amazing_gut_chop_em",
+      "display": "AMAZING GÚT CHÓP EM",
+      "text": "Amazing gút chóp em!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/sieu_pham",
       "display": "SIÊU PHẨM",
-      "text": "Siêu phẩm!"
+      "text": "Siêu phẩm!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/dinh_cua_chop",
+      "display": "ĐỈNH CỦA CHÓP",
+      "text": "Đỉnh của chóp!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/man_nhan",
+      "display": "MÃN NHÃN",
+      "text": "Mãn nhãn!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/khong_the_tin_duoc",
+      "display": "KHÔNG THỂ TIN ĐƯỢC",
+      "text": "Không thể tin được!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cu_danh_dep",
+      "display": "CÚ ĐÁNH ĐẸP",
+      "text": "Cú đánh đẹp!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/con_dung_cai_nit",
+      "display": "CÒN ĐÚNG CÁI NỊT",
+      "text": "Còn đúng cái nịt!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/toang_roi_ong_giao_a",
+      "display": "TOANG RỒI ÔNG GIÁO Ạ",
+      "text": "Toang rồi ông giáo ạ!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cay_chua_cay_thi_uong_nuoc",
+      "display": "CAY CHƯA? CAY THÌ UỐNG NƯỚC",
+      "text": "Cay chưa? Cay thì uống nước!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/danh_nhu_chua_tung_duoc_danh",
+      "display": "ĐÁNH NHƯ CHƯA TỪNG ĐƯỢC ĐÁNH",
+      "text": "Đánh như chưa từng được đánh!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/mat_chuoi_roi",
+      "display": "MẤT CHUỖI RỒI",
+      "text": "Mất chuỗi rồi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/khong_ngung_bo_cuoc",
+      "display": "KHÔNG NGỪNG BỎ CUỘC",
+      "text": "Không ngừng bỏ cuộc!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/dap_cau_do_bang_niem_tin_a",
+      "display": "ĐẬP CẦU ĐÓ BẰNG NIỀM TIN À",
+      "text": "Đập cầu đó bằng niềm tin à?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/do_bang_niem_tin_a",
+      "display": "ĐỠ BẰNG NIỀM TIN À",
+      "text": "Đỡ bằng niềm tin à?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/ha_ha_ha_ha",
+      "display": "HA HA HA HA",
+      "text": "Ha ha ha ha!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/chay_the_nho",
+      "display": "CHẠY THẾ NHỚ",
+      "text": "Chạy thế nhớ!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/ve_que_nuoi_ca_di",
+      "display": "ĐÁNH VẬY VỀ QUÊ NUÔI CÁ ĐI",
+      "text": "Đánh vậy về quê nuôi cá đi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/trinh_nay_di_cho_thoi",
+      "display": "TRÌNH NÀY ĐI CHỢ THÔI",
+      "text": "Trình này đi chợ thôi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/tap_them_muoi_nam_nua_nha",
+      "display": "TẬP THÊM MƯỜI NĂM NỮA NHA",
+      "text": "Tập thêm mười năm nữa nha!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/vot_may_trieu_trinh_may_chuc",
+      "display": "VỢT MẤY TRIỆU\nTRÌNH MẤY CHỤC",
+      "text": "Vợt mấy triệu, trình mấy chục!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/do_nghe_full_set_trinh_full_loi",
+      "display": "ĐỒ NGHỀ FULL SET\nTRÌNH ĐỘ FULL LỖI",
+      "text": "Đồ nghề full set, trình độ full lỗi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/co_cau_vang_tren_san_a",
+      "display": "CÓ CẬU VÀNG ĐÂU ĐÓ TRÊN SÂN À",
+      "text": "Có cậu Vàng đâu đó trên sân à?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/dong_doi_hay_gian_diep",
+      "display": "MÀY LÀ ĐỒNG ĐỘI HAY GIÁN ĐIỆP VẬY",
+      "text": "Mày là đồng đội hay gián điệp vậy?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/tuong_dai_bang_hoa_ra_ga",
+      "display": "TƯỞNG ĐẠI BÀNG\nHÓA RA GÀ CÔNG NGHIỆP",
+      "text": "Tưởng đại bàng, hóa ra gà công nghiệp!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/bot_ao_tuong_di_ma",
+      "display": "BỚT ẢO TƯỞNG ĐI MÁ",
+      "text": "Bớt ảo tưởng đi má!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/chua_co_du_wow",
+      "display": "CHƯA CÓ ĐỦ WOW",
+      "text": "Chưa có đủ wow!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/kinh_thua_hoi_dong_xet_xu",
+      "display": "KÍNH THƯA HỘI ĐỒNG XÉT XỬ",
+      "text": "Kính thưa hội đồng xét xử!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/tat_mic_no_dum_em",
+      "display": "TẮT MIC NÓ DÙM EM",
+      "text": "Tắt mic nó dùm em!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/xin_moi_doan_minh_len_nui",
+      "display": "XIN MỜI ĐOÀN MÌNH DI CHUYỂN LÊN NÚI",
+      "text": "Xin mời đoàn mình di chuyển lên núi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/vach_trang_to_vay_ma",
+      "display": "VẠCH TRẮNG TO VẬY MÀ KHÔNG THẤY",
+      "text": "Vạch trắng to vậy mà không thấy?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/huong_noi_het_phan_doi",
+      "display": "HƯỚNG NỘI HẾT PHẦN ĐỜI CÒN LẠI",
+      "text": "Hướng nội hết phần đời còn lại!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cau_di_nghi_mat_roi",
+      "display": "CẦU ĐI NGHỈ MÁT RỒI",
+      "text": "Cầu đi nghỉ mát rồi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/danh_cho_san_ben_canh_ha",
+      "display": "ỦA\nĐÁNH CHO SÂN BÊN CẠNH HẢ",
+      "text": "Ủa, đánh cho sân bên cạnh hả?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/hoi_xa_nha_ban_oi",
+      "display": "HƠI XA NHA BẠN ƠI",
+      "text": "Hơi xa nha bạn ơi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/out_mat_de_dau_do",
+      "display": "OUT! MẮT ĐỂ ĐÂU ĐÓ",
+      "text": "Out! Mắt để đâu đó?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/trung_luoi_nhu_trung_so",
+      "display": "TRÚNG LƯỚI NHƯ TRÚNG SỐ",
+      "text": "Trúng lưới như trúng số!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/anh_em_minh_cu_the_thoi_he_he",
+      "display": "ANH EM MÌNH CỨ THẾ THÔI\nHẸ HẸ HẸ",
+      "text": "Anh em mình cứ thế thôi, hẹ hẹ hẹ!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/he_thong_chac_chan_co_he_thong",
+      "display": "HỆ THỐNG\nCHẮC CHẮN CÓ HỆ THỐNG",
+      "text": "Hệ thống, chắc chắn có hệ thống!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/giam_suc_manh_con_tuong_nay",
+      "display": "GIẢM SỨC MẠNH CON TƯỚNG NÀY GIÚP EM",
+      "text": "Giảm sức mạnh con tướng này giúp em!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/trung_sinh_chac_luon",
+      "display": "TRÙNG SINH CHẮC LUÔN",
+      "text": "Trùng sinh chắc luôn!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cu_nay_khet",
+      "display": "CÚ NÀY KHÉT",
+      "text": "Cú này khét!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cu_dap_ca_map",
+      "display": "CÚ ĐẬP CÁ MẬP",
+      "text": "Cú đập cá mập!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cu_dap_di_vao_long_dat",
+      "display": "CÚ ĐẬP ĐI VÀO LÒNG ĐẤT",
+      "text": "Cú đập đi vào lòng đất!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/mot_phat_chet_tuoi",
+      "display": "MỘT PHÁT CHẾT TƯƠI",
+      "text": "Một phát chết tươi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cu_nay_dau_a_nha",
+      "display": "CÚ NÀY ĐAU À NHA",
+      "text": "Cú này đau à nha!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/lat_keo",
+      "display": "LẬT KÈO",
+      "text": "Lật kèo!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/vo_dich_thien_ha",
+      "display": "VÔ ĐỊCH THIÊN HẠ",
+      "text": "Vô địch thiên hạ!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/ai_so_thi_di_ve",
+      "display": "AI SỢ THÌ ĐI VỀ",
+      "text": "Ai sợ thì đi về!",
+      "glow": "fire",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/kho_nha_bro_kho_nha",
+      "display": "KHÓ NHA BRO\nKHÓ NHA",
+      "text": "Khó nha bro, khó nha!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/com_nuoc_gi_chua_nguoi_dep",
+      "display": "CƠM NƯỚC GÌ CHƯA NGƯỜI ĐẸP",
+      "text": "Cơm nước gì chưa người đẹp?",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/tam_ba_tam_sau_thang_roi",
+      "display": "TÁM BA TÁM SÁU\nTHẮNG RỒI",
+      "text": "Tám ba tám sáu, thắng rồi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cu_nay_khet_len_let",
+      "display": "CÚ NÀY KHÉT LÈN LẸT",
+      "text": "Cú này khét lèn lẹt!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/thua_thi_tra_tien_cau",
+      "display": "THUA THÌ TRẢ TIỀN CẦU\nKHỎI CÃI",
+      "text": "Thua thì trả tiền cầu, khỏi cãi!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/het_phim_di_ve",
+      "display": "HẾT PHIM, ĐI VỀ",
+      "text": "Hết phim, đi về!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/thang_roi_khao_tra_da",
+      "display": "THẮNG RỒI\nKHAO TRÀ ĐÁ",
+      "text": "Thắng rồi, khao trà đá!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/cang_det",
+      "display": "CĂNG ĐÉT",
+      "text": "Căng đét!",
+      "voice": "mai_anh"
+    },
+    {
+      "id": "mai_anh/hay_vai_lon",
+      "display": "HAY VÃI LON",
+      "text": "Hay vãi lon!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/dinh_vai_noi",
+      "display": "ĐỈNH VÃI NỒI",
+      "text": "Đỉnh vãi nồi!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/ao_vai_lin_luon_a",
+      "display": "ẢO VÃI LÌN LUÔN Á",
+      "text": "Ảo vãi lìn luôn á!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/ghe_vai_chuong",
+      "display": "GHÊ VÃI CHƯỞNG",
+      "text": "Ghê vãi chưởng!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/gat_vai_ca_dan",
+      "display": "GẮT VÃI CẢ ĐẠN",
+      "text": "Gắt vãi cả đạn!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/ga_vai_lon",
+      "display": "GÀ VÃI LON",
+      "text": "Gà vãi lon!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/danh_nhu_hach",
+      "display": "ĐÁNH NHƯ HẠCH",
+      "text": "Đánh như hạch!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/ham_vai_chuong",
+      "display": "HÃM VÃI CHƯỞNG",
+      "text": "Hãm vãi chưởng!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/cay_khong_cay_thi_khoc_di",
+      "display": "CAY KHÔNG? CAY THÌ KHÓC ĐI",
+      "text": "Cay không? Cay thì khóc đi!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/out_roi_mat_mui_kieu_gi",
+      "display": "OUT RỒI\nMẮT MŨI KIỂU GÌ VẬY MÁ",
+      "text": "Out rồi, mắt mũi kiểu gì vậy má!",
+      "voice": "mai_anh",
+      "spicy": true
+    },
+    {
+      "id": "mai_anh/danh_nhu_cuc_cut",
+      "display": "ĐÁNH NHƯ CỤC CỨT LUÔN Á",
+      "text": "Đánh như cục cứt luôn á!",
+      "voice": "mai_anh",
+      "spicy": true
     }
   ],
   "triggers": [
@@ -600,16 +982,15 @@
       "id": "manual_trigger",
       "priority": 1000,
       "pool": [
-        "cu_danh_dep",
         "g12_cau_ra_ngoai_san_ma_cu_ngo_trong_vach",
-        "g12_dap_hut_1_phat_la_nghe_tieng_tach"
+        "g12_dap_hut_1_phat_la_nghe_tieng_tach",
+        "mai_anh/cu_danh_dep"
       ]
     },
     {
       "id": "manual_sieu_pham",
       "priority": 1000,
       "pool": [
-        "sieu_pham",
         "g11_sieu_pham1",
         "g11_dinh_cua_noc",
         "g11_cu_nay_de_doi_khong_the_tin_noi",
@@ -617,17 +998,33 @@
         "g11_mot_pha_cau_khong_the_che",
         "g11_qua_chay_oh_that_day",
         "g10_tuyet_cu_meo",
-        "cu_danh_dep",
-        "female_pack/cu_danh_dep_f",
-        "female_pack/dinh_cua_chop_f",
-        "female_pack/man_nhan_f",
-        "female_pack/cu_nay_khet_f",
-        "female_pack/khong_the_tin_duoc_f",
         "g22_dang_cap_la_mai_mai",
         "g22_dong_khung_treo_phong_khach",
         "g22_qua_ghe_gom_luon",
         "g22_qua_dinh_luon_ban_oi",
-        "g23_bua_nay_an_gi_ma_ghe_vay"
+        "g23_bua_nay_an_gi_ma_ghe_vay",
+        "mai_anh/hay_vay_ba",
+        "mai_anh/gi_ghe_vay",
+        "mai_anh/ua_alo_danh_vay_ai_choi_lai",
+        "mai_anh/et_o_et",
+        "mai_anh/ve_ke_khong_ai_tin",
+        "mai_anh/xin_loi_hit_chung_khong_khi",
+        "mai_anh/thuyet_hong_ha_ba_tho",
+        "mai_anh/uong_nham_thuoc_ha",
+        "mai_anh/incredible_dinh_cua_chop",
+        "mai_anh/amazing_gut_chop_em",
+        "mai_anh/sieu_pham",
+        "mai_anh/dinh_cua_chop",
+        "mai_anh/man_nhan",
+        "mai_anh/khong_the_tin_duoc",
+        "mai_anh/cu_danh_dep",
+        "mai_anh/cu_nay_khet",
+        "mai_anh/cu_nay_khet_len_let",
+        "mai_anh/hay_vai_lon",
+        "mai_anh/dinh_vai_noi",
+        "mai_anh/ao_vai_lin_luon_a",
+        "mai_anh/ghe_vai_chuong",
+        "mai_anh/gat_vai_ca_dan"
       ]
     },
     {
@@ -637,12 +1034,12 @@
         "g16_dap_cau_nhu_dap_muoi",
         "g15_dap_cau_thay_ba_luon",
         "g16_ghi_diem_nhu_vat_chanh",
-        "female_pack/cu_dap_ca_map_f",
-        "female_pack/mot_phat_chet_tuoi_f",
-        "g21_cu_dap_di_vao_long_dat",
         "g21_dap_toi_boi_khoi_lua",
-        "g21_do_bang_niem_tin_a",
-        "g24_do_bang_niem_tin_nha"
+        "g24_do_bang_niem_tin_nha",
+        "mai_anh/do_bang_niem_tin_a",
+        "mai_anh/cu_dap_ca_map",
+        "mai_anh/mot_phat_chet_tuoi",
+        "mai_anh/cu_nay_dau_a_nha"
       ]
     },
     {
@@ -654,7 +1051,13 @@
         "g19_vach_ke_cho_vui_ha",
         "g19_ra_ngoai_hit_tho_khong_khi_ha",
         "g19_out_roi_khoi_cai_nha",
-        "g19_out_ranh_ranh_roi_nha"
+        "g19_out_ranh_ranh_roi_nha",
+        "mai_anh/vach_trang_to_vay_ma",
+        "mai_anh/cau_di_nghi_mat_roi",
+        "mai_anh/danh_cho_san_ben_canh_ha",
+        "mai_anh/hoi_xa_nha_ban_oi",
+        "mai_anh/out_mat_de_dau_do",
+        "mai_anh/out_roi_mat_mui_kieu_gi"
       ]
     },
     {
@@ -663,10 +1066,15 @@
       "pool": [
         "g12_dap_hut_1_phat_la_nghe_tieng_tach",
         "g12_cau_bay_veo_veo_tay_cu_do_do",
-        "g11_dap_cau_do_bang_niem_tin_a",
         "g12_cam_vot_thi_oai_ma_danh_ngu",
         "g20_trung_luoi_nhu_trung_so",
-        "g24_danh_vay_ai_dam_nhan_la_ban"
+        "g24_danh_vay_ai_dam_nhan_la_ban",
+        "mai_anh/dap_cau_do_bang_niem_tin_a",
+        "mai_anh/xin_moi_doan_minh_len_nui",
+        "mai_anh/huong_noi_het_phan_doi",
+        "mai_anh/trung_luoi_nhu_trung_so",
+        "mai_anh/cu_dap_di_vao_long_dat",
+        "mai_anh/danh_nhu_hach"
       ]
     },
     {
@@ -686,7 +1094,27 @@
         "g24_ve_nha_tap_them_nha",
         "g24_tuong_ghe_hoa_ra_vay_do_ha",
         "g24_danh_vay_ai_dam_nhan_la_ban",
-        "g24_nghi_choi_nha_ga_van_hoan_ga"
+        "g24_nghi_choi_nha_ga_van_hoan_ga",
+        "mai_anh/con_dung_cai_nit",
+        "mai_anh/toang_roi_ong_giao_a",
+        "mai_anh/cay_chua_cay_thi_uong_nuoc",
+        "mai_anh/danh_nhu_chua_tung_duoc_danh",
+        "mai_anh/ha_ha_ha_ha",
+        "mai_anh/ve_que_nuoi_ca_di",
+        "mai_anh/trinh_nay_di_cho_thoi",
+        "mai_anh/tap_them_muoi_nam_nua_nha",
+        "mai_anh/vot_may_trieu_trinh_may_chuc",
+        "mai_anh/do_nghe_full_set_trinh_full_loi",
+        "mai_anh/co_cau_vang_tren_san_a",
+        "mai_anh/dong_doi_hay_gian_diep",
+        "mai_anh/tuong_dai_bang_hoa_ra_ga",
+        "mai_anh/bot_ao_tuong_di_ma",
+        "mai_anh/chua_co_du_wow",
+        "mai_anh/kinh_thua_hoi_dong_xet_xu",
+        "mai_anh/ga_vai_lon",
+        "mai_anh/ham_vai_chuong",
+        "mai_anh/cay_khong_cay_thi_khoc_di",
+        "mai_anh/danh_nhu_cuc_cut"
       ]
     },
     {
@@ -694,14 +1122,18 @@
       "priority": 95,
       "pool": [
         "female_pack/chan_buoc_di_dau_khong_quay_lai",
-        "female_pack/vo_dich_thien_ha_f",
         "g10_cam_on_ca_nha_nhieu_nhe",
         "g11_cam_on_moi_nguoi_da_theo_doi_nha",
         "g12_di_ve_di",
         "g12_the_thoi_nha_thang_roi",
         "g12_di_ve_nha_bye_bye",
         "g15_vo_dinh_thien_ha_trong_san_nay_thoi",
-        "g15_e_nho_keo_chau_nuoc_nghe_khong_co_quyt_dau_do"
+        "g15_e_nho_keo_chau_nuoc_nghe_khong_co_quyt_dau_do",
+        "mai_anh/vo_dich_thien_ha",
+        "mai_anh/tam_ba_tam_sau_thang_roi",
+        "mai_anh/thua_thi_tra_tien_cau",
+        "mai_anh/het_phim_di_ve",
+        "mai_anh/thang_roi_khao_tra_da"
       ]
     },
     {
@@ -709,8 +1141,9 @@
       "priority": 80,
       "pool": [
         "female_pack/phong_do_dinh_cao_f",
-        "female_pack/dinh_cua_chop_f",
-        "g14_tran_nay_cang_a_nha"
+        "g14_tran_nay_cang_a_nha",
+        "mai_anh/dinh_cua_chop",
+        "mai_anh/kho_nha_bro_kho_nha"
       ]
     },
     {
@@ -720,7 +1153,6 @@
         "shutdown_4",
         "cham_dut",
         "female_pack/can_loi_can_y_f",
-        "female_pack/khong_ngung_bo_cuoc_f",
         "g12_gi_cang_vay",
         "g12_toang_roi",
         "g12_oi_doi_oi",
@@ -735,7 +1167,13 @@
         "g17_cay_chua_cay_thi_uong_nuoc",
         "g17_mat_chuoi_roi",
         "g24_ga_van_hoan_ga",
-        "g24_tuong_ghe_hoa_ra_vay_do_ha"
+        "g24_tuong_ghe_hoa_ra_vay_do_ha",
+        "mai_anh/con_dung_cai_nit",
+        "mai_anh/toang_roi_ong_giao_a",
+        "mai_anh/cay_chua_cay_thi_uong_nuoc",
+        "mai_anh/mat_chuoi_roi",
+        "mai_anh/khong_ngung_bo_cuoc",
+        "mai_anh/tat_mic_no_dum_em"
       ]
     },
     {
@@ -743,8 +1181,8 @@
       "priority": 60,
       "pool": [
         "female_pack/quay_xe_cuc_gat_f",
-        "female_pack/lat_keo_f",
-        "g13_thang_doi_1_0"
+        "g13_thang_doi_1_0",
+        "mai_anh/lat_keo"
       ]
     },
     {
@@ -752,9 +1190,7 @@
       "priority": 50,
       "pool": [
         "female_pack/xuat_quy_nhap_than_f",
-        "female_pack/khong_the_tin_duoc_f",
         "female_pack/thuc_tinh_he_thong_f",
-        "g1_ai_so_thi_di_ve",
         "g11_mot_pha_cau_khong_the_che",
         "g11_cu_nay_de_doi_khong_the_tin_noi",
         "g13_ai_so_thi_di_ve",
@@ -762,13 +1198,18 @@
         "g13_mot_minh_can_het",
         "g15_ra_day_solo_ne",
         "g22_dang_cap_la_mai_mai",
-        "g23_bua_nay_an_gi_ma_ghe_vay"
+        "g23_bua_nay_an_gi_ma_ghe_vay",
+        "mai_anh/khong_the_tin_duoc",
+        "mai_anh/giam_suc_manh_con_tuong_nay",
+        "mai_anh/ai_so_thi_di_ve"
       ]
     },
     {
       "id": "streak_4",
       "priority": 50,
-      "pool": []
+      "pool": [
+        "mai_anh/giam_suc_manh_con_tuong_nay"
+      ]
     },
     {
       "id": "streak_5_plus",
@@ -776,20 +1217,15 @@
       "pool": [
         "female_pack/manh_ho_vo_moi_f",
         "female_pack/khoi_can_ban_cao_nhan_an_the_f",
-        "g13_khong_ai_can_noi"
+        "g13_khong_ai_can_noi",
+        "mai_anh/trung_sinh_chac_luon"
       ]
     },
     {
       "id": "streak_low",
       "priority": 50,
       "pool": [
-        "sieu_pham",
-        "cu_danh_dep",
-        "female_pack/cu_danh_dep_f",
-        "female_pack/cu_nay_khet_f",
         "female_pack/khet_let_f",
-        "female_pack/mot_phat_chet_tuoi_f",
-        "female_pack/cu_dap_ca_map_f",
         "g2_het_say_ba_bay",
         "g10_hey_het_say_con_ba_bay",
         "g10_hey_ngon_lanh_canh_dao",
@@ -803,25 +1239,36 @@
         "g16_dap_cau_nhu_dap_muoi",
         "g16_ghi_diem_nhu_vat_chanh",
         "g22_qua_ghe_gom_luon",
-        "g22_qua_dinh_luon_ban_oi"
+        "g22_qua_dinh_luon_ban_oi",
+        "mai_anh/sieu_pham",
+        "mai_anh/cu_danh_dep",
+        "mai_anh/cu_nay_khet",
+        "mai_anh/cu_dap_ca_map",
+        "mai_anh/mot_phat_chet_tuoi",
+        "mai_anh/cu_nay_khet_len_let"
       ]
     },
     {
       "id": "streak_2",
       "priority": 50,
-      "pool": []
+      "pool": [
+        "mai_anh/anh_em_minh_cu_the_thoi_he_he"
+      ]
     },
     {
       "id": "streak_3",
       "priority": 50,
-      "pool": []
+      "pool": [
+        "mai_anh/he_thong_chac_chan_co_he_thong"
+      ]
     },
     {
       "id": "random_meme",
       "priority": 50,
       "pool": [
-        "female_pack/chay_the_nho_f",
-        "female_pack/man_nhan_f"
+        "mai_anh/man_nhan",
+        "mai_anh/chay_the_nho",
+        "mai_anh/cang_det"
       ]
     },
     {
@@ -833,17 +1280,15 @@
         "mo_man_lyria_2",
         "mo_man_lyria_3",
         "g14_mo_hang_may_man",
-        "g14_diem_dau_tien_hon_roi_do_nha"
+        "g14_diem_dau_tien_hon_roi_do_nha",
+        "mai_anh/ai_so_thi_di_ve"
       ]
     },
     {
       "id": "any_point",
       "priority": 10,
       "pool": [
-        "female_pack/chay_the_nho_f",
-        "female_pack/man_nhan_f",
         "g11_nhin_doi_chan_thoan_thoat_vai",
-        "g11_dap_cau_do_bang_niem_tin_a",
         "g12_cam_vot_thi_oai_ma_danh_ngu",
         "g12_vua_moi_vao_san_da_toe_toat",
         "g12_cau_bay_veo_veo_tay_cu_do_do",
@@ -852,7 +1297,13 @@
         "g12_diem_so_10_0_roi_con_tiec_nuoi_chi",
         "g17_cay_chua_cay_thi_uong_nuoc",
         "g17_danh_nhu_chua_tung_duoc_danh",
-        "g17_ha_hahaha"
+        "g17_ha_hahaha",
+        "mai_anh/man_nhan",
+        "mai_anh/cay_chua_cay_thi_uong_nuoc",
+        "mai_anh/danh_nhu_chua_tung_duoc_danh",
+        "mai_anh/dap_cau_do_bang_niem_tin_a",
+        "mai_anh/ha_ha_ha_ha",
+        "mai_anh/chay_the_nho"
       ]
     },
     {
@@ -863,14 +1314,15 @@
         "here_we_go_1",
         "mo_man_lyria_2",
         "mo_man_lyria_3",
-        "g1_ai_so_thi_di_ve",
         "g2_tran_dau_bat_dau",
         "g11_san_cau_long_bung_no_day",
         "g11_ai_da_san_sang_cho_cu_smash",
         "g12_nao_xem_ai_thang_nha",
         "g14_tran_nay_cang_a_nha",
         "g15_group_minh_du_tu_chua_vay_may_cha",
-        "g17_bat_dau_nha"
+        "g17_bat_dau_nha",
+        "mai_anh/ai_so_thi_di_ve",
+        "mai_anh/com_nuoc_gi_chua_nguoi_dep"
       ]
     }
   ]

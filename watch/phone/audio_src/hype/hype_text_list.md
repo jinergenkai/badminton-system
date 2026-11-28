@@ -28,6 +28,7 @@ Không cần sửa file — câu nào dở / muốn đổi chữ / muốn thêm,
 5. Bớt ảo tưởng đi má!
 6. Chưa có đủ wow!
 7. Kính thưa hội đồng xét xử!
+8. Có cậu Vàng đâu đó trên sân à?
 
 **Mặn — cho hội bạn thân (đề xuất để sau công tắc "Chế độ mặn", mặc định tắt)**
 1. Đỉnh vãi nồi!

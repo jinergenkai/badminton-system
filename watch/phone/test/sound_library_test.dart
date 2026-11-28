@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:voice_counter/services/sound_library_service.dart';
 
@@ -128,6 +131,31 @@ void main() {
       expect(d.toJson(), containsPair('spicy', true));
       expect(voiced().sound('old_en')!.toJson().containsKey('voice'), isFalse);
     });
+  });
+
+  test('the shipped sound_library.json is consistent with its MP3s', () {
+    final j = json.decode(File('assets/config/sound_library.json').readAsStringSync()) as Map<String, dynamic>;
+    final sounds = [for (final s in j['sounds'] as List) SoundDef.fromJson(Map<String, dynamic>.from(s))];
+    final ids = {for (final s in sounds) s.id};
+    expect(ids.length, sounds.length, reason: 'duplicate ids');
+    for (final t in j['triggers'] as List) {
+      for (final p in t['pool'] as List) {
+        expect(ids, contains(p), reason: '${t['id']} names an unknown sound');
+      }
+    }
+    for (final s in sounds) {
+      expect(File('assets/audio/hype/${s.id}.mp3').existsSync(), isTrue, reason: '${s.id}.mp3 missing');
+      if (s.voice == HypeVoice.maiAnh) {
+        expect(File('audio_src/hype/${s.id}.mp3').existsSync(), isTrue, reason: '${s.id}: no source to re-level');
+      }
+    }
+    // Spicy lines stay on the hand-picked band menu, never on automatic moments.
+    for (final t in j['triggers'] as List) {
+      if ((t['id'] as String).startsWith('manual_')) continue;
+      for (final p in t['pool'] as List) {
+        expect(sounds.firstWhere((s) => s.id == p).spicy, isFalse, reason: '$p is spicy in ${t['id']}');
+      }
+    }
   });
 
   test('bundled beats TTS', () async {

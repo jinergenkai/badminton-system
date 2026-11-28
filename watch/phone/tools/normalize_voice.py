@@ -47,12 +47,15 @@ TARGET_LUFS = -16.0
 # Kept in step with kMaxBoostDb in lib/services/wav_gain.dart.
 MAX_BOOST_DB = 6.0
 
-# (source dir under audio_src, output dir)
+# (source dir under audio_src, output dir[, compress])
+# compress=False: ElevenLabs renders come out already even (~-16 LUFS) and the
+# 2:1 compressor only flattens their delivery — they get trim, gain, limiter.
 SETS = [
     ('score/vi', 'assets/audio/score/vi'),
     ('score/en', 'assets/audio/score/en'),
     ('hype', 'assets/audio/hype'),
     ('hype/female_pack', 'assets/audio/hype/female_pack'),
+    ('hype/mai_anh', 'assets/audio/hype/mai_anh', False),
 ]
 
 TRIM = ('silenceremove=start_periods=1:start_threshold=-45dB:start_silence=0.03,'
@@ -87,8 +90,8 @@ def lufs(path, pre_filter=''):
     return v if v is not None and v > -70 else None
 
 
-def process(src, dst, target):
-    base = TRIM + ',' + COMPRESS
+def process(src, dst, target, compress=True):
+    base = TRIM + (',' + COMPRESS if compress else '')
     m = lufs(src, base)
     if m is None:
         return None
@@ -130,9 +133,10 @@ def warn_old_levels():
         print(f'note: audio_src/levels.json louder_db={v:g} is ignored (feature removed)')
 
 
-def fingerprint(src):
+def fingerprint(src, compress=True):
     h = hashlib.sha1(open(src, 'rb').read())
-    h.update(SETTINGS_TAG.encode())
+    # Compressed sets keep the old tag, so this change redoes none of them.
+    h.update((SETTINGS_TAG if compress else SETTINGS_TAG + '|nocomp').encode())
     return h.hexdigest()
 
 
@@ -148,7 +152,8 @@ def main():
         stamps = json.load(open(STAMP, encoding='utf-8'))
     done = 0
     print(f'{"file":44} {"before":>14} {"gain":>7} {"after":>14}')
-    for sub, out_dir in SETS:
+    for sub, out_dir, *opt in SETS:
+        compress = opt[0] if opt else True
         src_dir = os.path.join('audio_src', sub)
         if not os.path.isdir(src_dir):
             print(f'-- missing {src_dir}, skipped')
@@ -159,7 +164,7 @@ def main():
             src = os.path.join(src_dir, name)
             dst = os.path.join(out_dir, name)
             key = dst.replace(os.sep, '/')
-            fp = fingerprint(src)
+            fp = fingerprint(src, compress)
             if changed_only and os.path.exists(dst) and stamps.get(key) == fp:
                 continue
             b = mean_max(src)
@@ -167,7 +172,7 @@ def main():
                 print(f'{sub + "/" + name:44} {b[0]:6.1f}/{b[1]:6.1f}')
                 continue
             os.makedirs(out_dir, exist_ok=True)
-            gain = process(src, dst, TARGET_LUFS)
+            gain = process(src, dst, TARGET_LUFS, compress)
             if gain is None:
                 print(f'{sub + "/" + name:44} unreadable, skipped')
                 continue
