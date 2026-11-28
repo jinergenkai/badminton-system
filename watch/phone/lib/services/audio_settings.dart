@@ -1,6 +1,8 @@
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'sound_library_service.dart' show HypeVoice;
+
 /// Playback mode. The two are mutually exclusive on purpose.
 ///
 /// Music and speech share the room, not the mixer: talking over a song that is
@@ -35,6 +37,15 @@ class AudioSettings extends GetxService {
   /// their full name — "không" would say nothing useful.
   final RxBool shortScore = true.obs;
 
+  /// Voices hype lines may play in (see [HypeVoice]); all on by default.
+  /// Turning one off never silences a moment: a trigger with no line left in
+  /// the chosen voices plays from all of them.
+  final RxSet<String> hypeVoices = <String>{...HypeVoice.all}.obs;
+
+  /// Rude-but-friendly lines ("Hay vãi lon!") — for a court of friends only,
+  /// so off by default.
+  final RxBool spicyHype = false.obs;
+
   /// The number to say for [n]. Only Vietnamese is shortened: English has no
   /// such habit ("five three" for 15-13 would just be wrong).
   static int spokenScore(int n, String lang) {
@@ -60,6 +71,13 @@ class AudioSettings extends GetxService {
     // switched on per session (phone or band) and not remembered.
     mode.value = PlayMode.commentary;
     shortScore.value = prefs.getBool('${_pref}short_score') ?? true;
+    final voices = prefs.getStringList('${_pref}hype_voices');
+    if (voices != null) {
+      hypeVoices
+        ..clear()
+        ..addAll(voices.where(HypeVoice.all.contains));
+    }
+    spicyHype.value = prefs.getBool('${_pref}spicy_hype') ?? false;
     // Left by settings that no longer exist.
     for (final k in const ['haptic_feedback_enabled', 'hype_ko_enabled', 'voice_boost', '${_pref}mode']) {
       if (prefs.containsKey(k)) await prefs.remove(k);
@@ -77,6 +95,19 @@ class AudioSettings extends GetxService {
     shortScore.value = v;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('${_pref}short_score', v);
+  }
+
+  Future<void> setHypeVoice(String voice, bool on) async {
+    if (!HypeVoice.all.contains(voice)) return;
+    on ? hypeVoices.add(voice) : hypeVoices.remove(voice);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('${_pref}hype_voices', hypeVoices.toList()..sort());
+  }
+
+  Future<void> setSpicyHype(bool v) async {
+    spicyHype.value = v;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('${_pref}spicy_hype', v);
   }
 
   Future<void> setMode(String m) async {

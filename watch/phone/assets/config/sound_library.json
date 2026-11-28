@@ -2,26 +2,9 @@
   "_doc": "Every hype sound and which trigger pools it is in. A sound plays, in order: an MP3 dropped on the phone (<files>/sounds/<id>.mp3), the bundled assets/audio/hype/<id>.mp3, else its text via cached TTS. When a trigger fires is code (HypeVoiceController._triggerMatches); what it plays is here. Changes made on the phone are merged back with tools/pull_sound_library.py.",
   "sounds": [
     {
-      "id": "ap_dao_1",
-      "display": "ÁP ĐẢO",
-      "text": "Áp đảo!"
-    },
-    {
-      "id": "badminton_slayer_1",
-      "display": "BADMINTON\nSLAYER",
-      "text": "Badminton slayer!",
-      "glow": "fire"
-    },
-    {
       "id": "cham_dut",
       "display": "CHẤM DỨT",
       "text": "Chấm dứt!"
-    },
-    {
-      "id": "comeback_king_1",
-      "display": "COMEBACK\nKING",
-      "text": "Comeback king!",
-      "glow": "legendary"
     },
     {
       "id": "cu_danh_dep",
@@ -29,45 +12,9 @@
       "text": "Cú đánh đẹp!"
     },
     {
-      "id": "did_you_see_that_1",
-      "display": "DID YOU\nSEE THAT?",
-      "text": "Did you see that?",
-      "glow": "fire"
-    },
-    {
-      "id": "double_kill_1",
-      "display": "DOUBLE KILL",
-      "text": "Double kill!"
-    },
-    {
-      "id": "double_shot_1",
-      "display": "DOUBLE SHOT",
-      "text": "Double shot!"
-    },
-    {
-      "id": "female_pack/ai_can_noi_f",
-      "display": "AI CẢN NỔI",
-      "text": "Ai cản nổi!"
-    },
-    {
-      "id": "female_pack/an_sung_troi_ban_f",
-      "display": "ĂN SÚNG\nTRỜI BAN",
-      "text": "Ăn súng trời ban!"
-    },
-    {
       "id": "female_pack/can_loi_can_y_f",
       "display": "CẢN LỜI\nCẢN Ý",
       "text": "Cản lời cản ý!"
-    },
-    {
-      "id": "female_pack/cao_thu_cao_thu_f",
-      "display": "CAO THỦ\nCAO THỦ",
-      "text": "Cao thủ cao thủ!"
-    },
-    {
-      "id": "female_pack/cham_dut_f",
-      "display": "CHẤM DỨT",
-      "text": "Chấm dứt!"
     },
     {
       "id": "female_pack/chan_buoc_di_dau_khong_quay_lai",
@@ -80,24 +27,9 @@
       "text": "Chạy thế nhớ!"
     },
     {
-      "id": "female_pack/co_may_ghi_diem_f",
-      "display": "CỖ MÁY\nGHI ĐIỂM",
-      "text": "Cỗ máy ghi điểm!"
-    },
-    {
-      "id": "female_pack/con_mua_ban_thang_f",
-      "display": "CƠN MƯA\nBÀN THẮNG",
-      "text": "Cơn mưa bàn thắng!"
-    },
-    {
       "id": "female_pack/cu_danh_dep_f",
       "display": "CÚ ĐÁNH ĐẸP",
       "text": "Cú đánh đẹp!"
-    },
-    {
-      "id": "female_pack/cu_danh_sam_set_f",
-      "display": "CÚ ĐÁNH\nSẤM SÉT",
-      "text": "Cú đánh sấm sét!"
     },
     {
       "id": "female_pack/cu_dap_ca_map_f",
@@ -110,39 +42,9 @@
       "text": "Cú này khét!"
     },
     {
-      "id": "female_pack/de_bep_f",
-      "display": "DẸP BẸP",
-      "text": "Dẹp bẹp!"
-    },
-    {
-      "id": "female_pack/dep_nhu_mo_f",
-      "display": "ĐẸP NHƯ MƠ",
-      "text": "Đẹp như mơ!"
-    },
-    {
-      "id": "female_pack/dinh_cao_phong_do_f",
-      "display": "ĐỈNH CAO\nPHONG ĐỘ",
-      "text": "Đỉnh cao phong độ!"
-    },
-    {
       "id": "female_pack/dinh_cua_chop_f",
       "display": "ĐỈNH CỦA CHÓP",
       "text": "Đỉnh của chóp!"
-    },
-    {
-      "id": "female_pack/dinh_noc_kich_tran_f",
-      "display": "ĐỈNH NÓC\nKÍCH TRẦN",
-      "text": "Đỉnh nóc kích trần!"
-    },
-    {
-      "id": "female_pack/dinh_the_nho_f",
-      "display": "ĐỈNH THẾ NHỜ",
-      "text": "Đỉnh thế nhờ!"
-    },
-    {
-      "id": "female_pack/duong_cau_lam_tho_f",
-      "display": "ĐƯỜNG CẦU\nLÀM THƠ",
-      "text": "Đường cầu làm thơ!"
     },
     {
       "id": "female_pack/khet_let_f",
@@ -180,29 +82,9 @@
       "text": "Mãnh hổ vô mồi!"
     },
     {
-      "id": "female_pack/manh_ho_xuat_son_f",
-      "display": "MÃNH HỔ\nXUẤT SƠN",
-      "text": "Mãnh hổ xuất sơn!"
-    },
-    {
       "id": "female_pack/mot_phat_chet_tuoi_f",
       "display": "MỘT PHÁT\nCHẾT TƯƠI",
       "text": "Một phát chết tươi!"
-    },
-    {
-      "id": "female_pack/mua_rao_giua_ha_f",
-      "display": "MƯA RÀO\nGIỮA HẠ",
-      "text": "Mưa rào giữa hạ!"
-    },
-    {
-      "id": "female_pack/nhu_dieu_dut_day_f",
-      "display": "NHƯ DIỀU\nĐỨT DÂY",
-      "text": "Như diều đứt dây!"
-    },
-    {
-      "id": "female_pack/nhu_tron_khong_nguoi_f",
-      "display": "NHƯ TRỐNG\nKHÔNG NGƯỜI",
-      "text": "Như trống không người!"
     },
     {
       "id": "female_pack/phong_do_dinh_cao_f",
@@ -210,29 +92,9 @@
       "text": "Phong độ đỉnh cao!"
     },
     {
-      "id": "female_pack/qua_tang_mien_phi_f",
-      "display": "QUÀ TẶNG\nMIỄN PHÍ",
-      "text": "Quà tặng miễn phí!"
-    },
-    {
       "id": "female_pack/quay_xe_cuc_gat_f",
       "display": "QUAY XE\nCỰC GẮT",
       "text": "Quay xe cực gắt!"
-    },
-    {
-      "id": "female_pack/sam_set_giua_troi_quang_f",
-      "display": "SẤM SÉT\nGIỮA TRỜI QUANG",
-      "text": "Sấm sét giữa trời quang!"
-    },
-    {
-      "id": "female_pack/sao_bang_xe_troi_f",
-      "display": "SAO BĂNG\nXẸT TRỜI",
-      "text": "Sao băng xẹt trời!"
-    },
-    {
-      "id": "female_pack/sao_ma_hay_vay_troi_f",
-      "display": "SAO MÀ HAY\nVẬY TRỜI",
-      "text": "Sao mà hay vậy trời!"
     },
     {
       "id": "female_pack/thuc_tinh_he_thong_f",
@@ -240,24 +102,9 @@
       "text": "Thức tỉnh hệ thống!"
     },
     {
-      "id": "female_pack/toi_cong_chuyen_f",
-      "display": "TÔI CÔNG\nCHUYÊN",
-      "text": "Tôi công chuyên!"
-    },
-    {
-      "id": "female_pack/tro_lai_tu_dong_tro_tan_f",
-      "display": "TRỞ LẠI TỪ\nĐỐNG TRO TÀN",
-      "text": "Trở lại từ đống tro tàn!"
-    },
-    {
       "id": "female_pack/vo_dich_thien_ha_f",
       "display": "VÔ ĐỊCH\nTHIÊN HẠ",
       "text": "Vô địch thiên hạ!"
-    },
-    {
-      "id": "female_pack/xinh_trai_co_gi_sai_f",
-      "display": "XINH TRAI\nCÓ GÌ SAI",
-      "text": "Xinh trai có gì sai!"
     },
     {
       "id": "female_pack/xuat_quy_nhap_than_f",
@@ -351,105 +198,125 @@
     {
       "id": "g12_cam_vot_thi_oai_ma_danh_ngu",
       "display": "CẦM VỢT THÌ\nOAI MÀ ĐÁNH NGU",
-      "text": "Cầm vợt thì oai mà đánh ngu!"
+      "text": "Cầm vợt thì oai mà đánh ngu!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_cau_bay_veo_veo_tay_cu_do_do",
       "display": "CẦU BAY VÈO VÈO\nTAY CỨ ĐƠ ĐƠ",
-      "text": "Cầu bay vèo vèo, tay cứ đơ đơ!"
+      "text": "Cầu bay vèo vèo, tay cứ đơ đơ!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_cau_ra_ngoai_san_ma_cu_ngo_trong_vach",
       "display": "CẦU RA NGOÀI SÂN MÀ\nCỨ NGỠ TRONG VẠCH",
-      "text": "Cầu ra ngoài sân mà cứ ngỡ trong vạch!"
+      "text": "Cầu ra ngoài sân mà cứ ngỡ trong vạch!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_chay_loang_qua_loang_quang",
       "display": "CHẠY LOẠNG QUẠNG\nLOẠNG QUẠNG",
-      "text": "Chạy loạng quạng loạng quạng!"
+      "text": "Chạy loạng quạng loạng quạng!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_con_dung_cai_nit",
       "display": "CÒN ĐÚNG\nCÁI NỊT",
-      "text": "Còn đúng cái nịt!"
+      "text": "Còn đúng cái nịt!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_dap_hut_1_phat_la_nghe_tieng_tach",
       "display": "ĐẬP HỤT MỘT PHÁT\nLÀ NGHE TIẾNG TẠCH",
-      "text": "Đập hụt một phát là nghe tiếng tạch!"
+      "text": "Đập hụt một phát là nghe tiếng tạch!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_di_ve_di",
       "display": "ĐI VỀ ĐI",
       "text": "Đi về đi!",
-      "glow": "legendary"
+      "glow": "legendary",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_di_ve_nha_bye_bye",
       "display": "ĐI VỀ NHÀ\nBYE BYE",
       "text": "Đi về nhà, bye bye!",
-      "glow": "legendary"
+      "glow": "legendary",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_diem_so_10_0_roi_con_tiec_nuoi_chi",
       "display": "ĐIỂM SỐ 10-0 RỒI\nCÒN TIẾC NUỐI CHI",
-      "text": "Điểm số 10-0 rồi còn tiếc nuối chi!"
+      "text": "Điểm số 10-0 rồi còn tiếc nuối chi!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_gi_cang_vay",
       "display": "GÌ CĂNG VẬY",
-      "text": "Gì căng vậy!"
+      "text": "Gì căng vậy!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_het_cuu",
       "display": "HẾT CỨU",
-      "text": "Hết cứu!"
+      "text": "Hết cứu!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_nao_xem_ai_thang_nha",
       "display": "NÀO, XEM AI\nTHẮNG NHA",
-      "text": "Nào, xem ai thắng nha!"
+      "text": "Nào, xem ai thắng nha!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_nin_nin_luon",
       "display": "NÍN!\nNÍN LUÔN",
-      "text": "Nín! Nín luôn!"
+      "text": "Nín! Nín luôn!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_oi_doi_oi",
       "display": "ỐI DỒI ÔI",
-      "text": "Ối dồi ôi!"
+      "text": "Ối dồi ôi!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_tach_roi",
       "display": "TẠCH RỒI",
-      "text": "Tạch rồi!"
+      "text": "Tạch rồi!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_the_thoi_nha_thang_roi",
       "display": "THẾ THÔI NHA\nTHẮNG RỒI",
       "text": "Thế thôi nha, thắng rồi!",
-      "glow": "legendary"
+      "glow": "legendary",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_thoi_cat_vot_di_dung_co_co_lam_gi",
       "display": "THÔI CẤT VỢT ĐI\nĐỪNG CỐ CÓ LÀM GÌ",
-      "text": "Thôi cất vợt đi, đừng cố có làm gì!"
+      "text": "Thôi cất vợt đi, đừng cố có làm gì!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_thoi_xong",
       "display": "THÔI XONG",
-      "text": "Thôi xong!"
+      "text": "Thôi xong!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_toang_roi",
       "display": "TOANG RỒI",
-      "text": "Toang rồi!"
+      "text": "Toang rồi!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g12_vua_moi_vao_san_da_toe_toat",
       "display": "VỪA MỚI VÀO\nSÂN ĐÃ TÓE TOÁT",
-      "text": "Vừa mới vào sân đã tóe toát!"
+      "text": "Vừa mới vào sân đã tóe toát!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g13_ai_so_thi_di_ve",
@@ -470,12 +337,6 @@
       "glow": "fire"
     },
     {
-      "id": "g13_len_luon_len_luon",
-      "display": "LÊN LUÔN!\nLÊN LUÔN",
-      "text": "Lên luôn! Lên luôn!",
-      "glow": "fire"
-    },
-    {
       "id": "g13_mot_minh_can_het",
       "display": "MỘT MÌNH\nCÂN HẾT",
       "text": "Một mình cân hết!",
@@ -486,11 +347,6 @@
       "display": "THẮNG ĐỜI\nMỘT KHÔNG",
       "text": "Thắng đời một không!",
       "glow": "legendary"
-    },
-    {
-      "id": "g14_ai_so_thi_di_ve_ne",
-      "display": "AI SỢ THÌ\nĐI VỀ NÈ",
-      "text": "Ai sợ thì đi về nè!"
     },
     {
       "id": "g14_diem_dau_tien_hon_roi_do_nha",
@@ -506,22 +362,6 @@
       "id": "g14_tran_nay_cang_a_nha",
       "display": "TRẬN NÀY\nCĂNG À NHA",
       "text": "Trận này căng à nha!"
-    },
-    {
-      "id": "g14_vao_san_la_phai_co_lua",
-      "display": "VÀO SÂN LÀ\nPHẢI CÓ LỬA",
-      "text": "Vào sân là phải có lửa!"
-    },
-    {
-      "id": "g15_choi_ky_di_tinh_an_gian_ha_buoi",
-      "display": "CHƠI KỲ ĐI, TÍNH\nĂN GIAN HẢ BƯỞI",
-      "text": "Chơi kỳ đi, tính ăn gian hả bưởi?"
-    },
-    {
-      "id": "g15_coi_chung_cai_gio_nha",
-      "display": "COI CHỪNG\nCÁI GIÒ NHA",
-      "text": "Coi chừng cái giò nha!",
-      "glow": "legendary"
     },
     {
       "id": "g15_dap_cau_thay_ba_luon",
@@ -540,11 +380,6 @@
       "text": "Group mình dữ chưa vậy mấy cha!"
     },
     {
-      "id": "g15_nhac_dao_dau",
-      "display": "MỞ MÀN",
-      "text": "Mở màn!"
-    },
-    {
       "id": "g15_ra_day_solo_ne",
       "display": "RA ĐÂY\nSOLO NÈ",
       "text": "Ra đây solo nè!",
@@ -555,12 +390,6 @@
       "display": "VÔ ĐỊCH THIÊN HẠ\nTRONG SÂN NÀY THÔI",
       "text": "Vô địch thiên hạ, trong sân này thôi!",
       "glow": "legendary"
-    },
-    {
-      "id": "g16_an_diem_nhu_an_keo",
-      "display": "ĂN ĐIỂM\nNHƯ ĂN KẸO",
-      "text": "Ăn điểm như ăn kẹo!",
-      "glow": "fire"
     },
     {
       "id": "g16_dap_cau_nhu_dap_muoi",
@@ -575,57 +404,68 @@
     {
       "id": "g17_bat_dau_nha",
       "display": "BẮT ĐẦU NHA",
-      "text": "Bắt đầu nha!"
+      "text": "Bắt đầu nha!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g17_cay_chua_cay_thi_uong_nuoc",
       "display": "CAY CHƯA? CAY\nTHÌ UỐNG NƯỚC",
-      "text": "Cay chưa? Cay thì uống nước!"
+      "text": "Cay chưa? Cay thì uống nước!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g17_con_dung_cai_nit",
       "display": "CÒN ĐÚNG\nCÁI NỊT",
-      "text": "Còn đúng cái nịt!"
+      "text": "Còn đúng cái nịt!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g17_danh_nhu_chua_tung_duoc_danh",
       "display": "ĐÁNH NHƯ CHƯA\nTỪNG ĐƯỢC ĐÁNH",
-      "text": "Đánh như chưa từng được đánh!"
+      "text": "Đánh như chưa từng được đánh!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g17_ha_hahaha",
       "display": "HA HAHAHA",
-      "text": "Ha hahaha!"
+      "text": "Ha hahaha!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g17_mat_chuoi_roi",
       "display": "MẤT\nCHUỖI RỒI",
-      "text": "Mất chuỗi rồi!"
+      "text": "Mất chuỗi rồi!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g17_toang_roi_ong_giao_a_oi",
       "display": "TOANG RỒI\nÔNG GIÁO Ạ ƠI",
-      "text": "Toang rồi ông giáo ạ ơi!"
+      "text": "Toang rồi ông giáo ạ ơi!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g19_out_ranh_ranh_roi_nha",
       "display": "OUT RÀNH\nRÀNH RỒI NHA",
-      "text": "Out rành rành rồi nha!"
+      "text": "Out rành rành rồi nha!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g19_out_roi_khoi_cai_nha",
       "display": "OUT RỒI\nKHỎI CÃI NHA",
-      "text": "Out rồi, khỏi cãi nha!"
+      "text": "Out rồi, khỏi cãi nha!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g19_ra_ngoai_hit_tho_khong_khi_ha",
       "display": "RA NGOÀI HÍT\nTHỞ KHÔNG KHÍ HẢ",
-      "text": "Ra ngoài hít thở không khí hả?"
+      "text": "Ra ngoài hít thở không khí hả?",
+      "voice": "lyria_nu"
     },
     {
       "id": "g19_vach_ke_cho_vui_ha",
       "display": "VẠCH KẺ\nCHO VUI HẢ",
-      "text": "Vạch kẻ cho vui hả?"
+      "text": "Vạch kẻ cho vui hả?",
+      "voice": "lyria_nu"
     },
     {
       "id": "g1_ai_so_thi_di_ve",
@@ -634,14 +474,10 @@
       "glow": "fire"
     },
     {
-      "id": "g1_vao_san",
-      "display": "VÀO SÂN",
-      "text": "Vào sân!"
-    },
-    {
       "id": "g20_trung_luoi_nhu_trung_so",
       "display": "TRÚNG LƯỚI\nNHƯ TRÚNG SỐ",
-      "text": "Trúng lưới như trúng số!"
+      "text": "Trúng lưới như trúng số!",
+      "voice": "lyria_nu"
     },
     {
       "id": "g21_cu_dap_di_vao_long_dat",
@@ -716,21 +552,6 @@
       "text": "Về nhà tập thêm nha!"
     },
     {
-      "id": "g2_coi_ne_coi_ne",
-      "display": "COI NÈ\nCOI NÈ",
-      "text": "Coi nè coi nè!"
-    },
-    {
-      "id": "g2_hahaha",
-      "display": "HAHAHA",
-      "text": "Hahaha!"
-    },
-    {
-      "id": "g2_hahahaha",
-      "display": "HAHAHAHA",
-      "text": "Hahahaha!"
-    },
-    {
       "id": "g2_het_say_ba_bay",
       "display": "HẾT SẢY\nBÀ BẢY",
       "text": "Hết sảy bà bảy!"
@@ -741,53 +562,14 @@
       "text": "Trận đấu bắt đầu!"
     },
     {
-      "id": "game_on_1",
-      "display": "GAME ON",
-      "text": "Game on!"
-    },
-    {
-      "id": "game_on_2",
-      "display": "GAME ON",
-      "text": "Game on!"
-    },
-    {
-      "id": "godlike_1",
-      "display": "GODLIKE",
-      "text": "Godlike!",
-      "glow": "legendary"
-    },
-    {
       "id": "here_we_go_1",
       "display": "HERE WE GO",
       "text": "Here we go!"
     },
     {
-      "id": "khong_the_can",
-      "display": "KHÔNG THỂ\nCẢN",
-      "text": "Không thể cản!"
-    },
-    {
-      "id": "legendary_1",
-      "display": "LEGENDARY",
-      "text": "Legendary!",
-      "glow": "legendary"
-    },
-    {
-      "id": "legendary_2",
-      "display": "LEGENDARY",
-      "text": "Legendary!",
-      "glow": "legendary"
-    },
-    {
       "id": "lets_dance_1",
       "display": "LET'S DANCE",
       "text": "Let's dance!"
-    },
-    {
-      "id": "mo_man_lyria_1",
-      "display": "CẦU BAY\nLƯỚI RUNG",
-      "text": "Cầu bay, lưới rung!",
-      "glow": "fire"
     },
     {
       "id": "mo_man_lyria_2",
@@ -802,41 +584,6 @@
       "glow": "fire"
     },
     {
-      "id": "mom_are_you_watching_1",
-      "display": "MOM, ARE YOU\nWATCHING?",
-      "text": "Mom, are you watching?",
-      "glow": "legendary"
-    },
-    {
-      "id": "penta_shot_1",
-      "display": "PENTA SHOT",
-      "text": "Penta shot!",
-      "glow": "fire"
-    },
-    {
-      "id": "quadra_shot_1",
-      "display": "QUADRA SHOT",
-      "text": "Quadra shot!"
-    },
-    {
-      "id": "rampage_1",
-      "display": "RAMPAGE",
-      "text": "Rampage!",
-      "glow": "fire"
-    },
-    {
-      "id": "shutdown_1",
-      "display": "SHUTDOWN!",
-      "text": "Shutdown!",
-      "glow": "danger"
-    },
-    {
-      "id": "shutdown_3",
-      "display": "SHUTDOWN!",
-      "text": "Shutdown!",
-      "glow": "danger"
-    },
-    {
       "id": "shutdown_4",
       "display": "SHUTDOWN!",
       "text": "Shutdown!",
@@ -846,46 +593,6 @@
       "id": "sieu_pham",
       "display": "SIÊU PHẨM",
       "text": "Siêu phẩm!"
-    },
-    {
-      "id": "the_chosen_one_1",
-      "display": "THE CHOSEN ONE",
-      "text": "The chosen one!",
-      "glow": "legendary"
-    },
-    {
-      "id": "triple_kill_1",
-      "display": "TRIPLE KILL",
-      "text": "Triple kill!"
-    },
-    {
-      "id": "triple_shot_1",
-      "display": "TRIPLE SHOT",
-      "text": "Triple shot!"
-    },
-    {
-      "id": "unbelievable_1",
-      "display": "UNBELIEVABLE",
-      "text": "Unbelievable!",
-      "glow": "legendary"
-    },
-    {
-      "id": "unbelievable_2",
-      "display": "UNBELIEVABLE",
-      "text": "Unbelievable!",
-      "glow": "legendary"
-    },
-    {
-      "id": "unstoppable_1",
-      "display": "UNSTOPPABLE",
-      "text": "Unstoppable!",
-      "glow": "fire"
-    },
-    {
-      "id": "unstoppable_2",
-      "display": "UNSTOPPABLE",
-      "text": "Unstoppable!",
-      "glow": "fire"
     }
   ],
   "triggers": [
@@ -894,7 +601,6 @@
       "priority": 1000,
       "pool": [
         "cu_danh_dep",
-        "did_you_see_that_1",
         "g12_cau_ra_ngoai_san_ma_cu_ngo_trong_vach",
         "g12_dap_hut_1_phat_la_nghe_tieng_tach"
       ]
@@ -913,12 +619,10 @@
         "g10_tuyet_cu_meo",
         "cu_danh_dep",
         "female_pack/cu_danh_dep_f",
-        "female_pack/dep_nhu_mo_f",
         "female_pack/dinh_cua_chop_f",
         "female_pack/man_nhan_f",
         "female_pack/cu_nay_khet_f",
         "female_pack/khong_the_tin_duoc_f",
-        "did_you_see_that_1",
         "g22_dang_cap_la_mai_mai",
         "g22_dong_khung_treo_phong_khach",
         "g22_qua_ghe_gom_luon",
@@ -933,10 +637,7 @@
         "g16_dap_cau_nhu_dap_muoi",
         "g15_dap_cau_thay_ba_luon",
         "g16_ghi_diem_nhu_vat_chanh",
-        "g16_an_diem_nhu_an_keo",
         "female_pack/cu_dap_ca_map_f",
-        "female_pack/cu_danh_sam_set_f",
-        "female_pack/sam_set_giua_troi_quang_f",
         "female_pack/mot_phat_chet_tuoi_f",
         "g21_cu_dap_di_vao_long_dat",
         "g21_dap_toi_boi_khoi_lua",
@@ -949,7 +650,6 @@
       "priority": 1000,
       "pool": [
         "g12_cau_ra_ngoai_san_ma_cu_ngo_trong_vach",
-        "female_pack/qua_tang_mien_phi_f",
         "g12_oi_doi_oi",
         "g19_vach_ke_cho_vui_ha",
         "g19_ra_ngoai_hit_tho_khong_khi_ha",
@@ -965,7 +665,6 @@
         "g12_cau_bay_veo_veo_tay_cu_do_do",
         "g11_dap_cau_do_bang_niem_tin_a",
         "g12_cam_vot_thi_oai_ma_danh_ngu",
-        "female_pack/qua_tang_mien_phi_f",
         "g20_trung_luoi_nhu_trung_so",
         "g24_danh_vay_ai_dam_nhan_la_ban"
       ]
@@ -974,8 +673,6 @@
       "id": "manual_ca_khia",
       "priority": 1000,
       "pool": [
-        "g2_hahaha",
-        "g2_hahahaha",
         "g17_ha_hahaha",
         "g17_cay_chua_cay_thi_uong_nuoc",
         "g12_nin_nin_luon",
@@ -985,8 +682,6 @@
         "g12_thoi_cat_vot_di_dung_co_co_lam_gi",
         "g17_danh_nhu_chua_tung_duoc_danh",
         "g12_gi_cang_vay",
-        "female_pack/de_bep_f",
-        "g15_choi_ky_di_tinh_an_gian_ha_buoi",
         "g24_ga_van_hoan_ga",
         "g24_ve_nha_tap_them_nha",
         "g24_tuong_ghe_hoa_ra_vay_do_ha",
@@ -1013,13 +708,8 @@
       "id": "crucial_moment",
       "priority": 80,
       "pool": [
-        "unbelievable_1",
-        "unbelievable_2",
-        "did_you_see_that_1",
         "female_pack/phong_do_dinh_cao_f",
-        "female_pack/dinh_cao_phong_do_f",
         "female_pack/dinh_cua_chop_f",
-        "female_pack/sam_set_giua_troi_quang_f",
         "g14_tran_nay_cang_a_nha"
       ]
     },
@@ -1027,13 +717,9 @@
       "id": "shutdown",
       "priority": 70,
       "pool": [
-        "shutdown_1",
-        "shutdown_3",
         "shutdown_4",
         "cham_dut",
-        "female_pack/de_bep_f",
         "female_pack/can_loi_can_y_f",
-        "female_pack/cham_dut_f",
         "female_pack/khong_ngung_bo_cuoc_f",
         "g12_gi_cang_vay",
         "g12_toang_roi",
@@ -1056,45 +742,25 @@
       "id": "comeback",
       "priority": 60,
       "pool": [
-        "comeback_king_1",
-        "unbelievable_1",
-        "unbelievable_2",
-        "mom_are_you_watching_1",
-        "female_pack/tro_lai_tu_dong_tro_tan_f",
         "female_pack/quay_xe_cuc_gat_f",
         "female_pack/lat_keo_f",
-        "g13_thang_doi_1_0",
-        "g15_coi_chung_cai_gio_nha"
+        "g13_thang_doi_1_0"
       ]
     },
     {
       "id": "streak_high",
       "priority": 50,
       "pool": [
-        "rampage_1",
-        "unstoppable_1",
-        "unstoppable_2",
-        "badminton_slayer_1",
-        "khong_the_can",
-        "ap_dao_1",
-        "did_you_see_that_1",
-        "female_pack/dinh_noc_kich_tran_f",
-        "female_pack/ai_can_noi_f",
-        "female_pack/nhu_tron_khong_nguoi_f",
-        "female_pack/manh_ho_xuat_son_f",
         "female_pack/xuat_quy_nhap_than_f",
-        "female_pack/co_may_ghi_diem_f",
         "female_pack/khong_the_tin_duoc_f",
         "female_pack/thuc_tinh_he_thong_f",
         "g1_ai_so_thi_di_ve",
         "g11_mot_pha_cau_khong_the_che",
         "g11_cu_nay_de_doi_khong_the_tin_noi",
-        "g13_len_luon_len_luon",
         "g13_ai_so_thi_di_ve",
         "g13_ba_khi_qua_vay",
         "g13_mot_minh_can_het",
         "g15_ra_day_solo_ne",
-        "g16_an_diem_nhu_an_keo",
         "g22_dang_cap_la_mai_mai",
         "g23_bua_nay_an_gi_ma_ghe_vay"
       ]
@@ -1102,21 +768,12 @@
     {
       "id": "streak_4",
       "priority": 50,
-      "pool": [
-        "quadra_shot_1"
-      ]
+      "pool": []
     },
     {
       "id": "streak_5_plus",
       "priority": 50,
       "pool": [
-        "penta_shot_1",
-        "godlike_1",
-        "legendary_1",
-        "legendary_2",
-        "the_chosen_one_1",
-        "mom_are_you_watching_1",
-        "female_pack/cao_thu_cao_thu_f",
         "female_pack/manh_ho_vo_moi_f",
         "female_pack/khoi_can_ban_cao_nhan_an_the_f",
         "g13_khong_ai_can_noi"
@@ -1133,10 +790,6 @@
         "female_pack/khet_let_f",
         "female_pack/mot_phat_chet_tuoi_f",
         "female_pack/cu_dap_ca_map_f",
-        "female_pack/mua_rao_giua_ha_f",
-        "female_pack/sao_bang_xe_troi_f",
-        "female_pack/dinh_the_nho_f",
-        "g2_coi_ne_coi_ne",
         "g2_het_say_ba_bay",
         "g10_hey_het_say_con_ba_bay",
         "g10_hey_ngon_lanh_canh_dao",
@@ -1156,46 +809,27 @@
     {
       "id": "streak_2",
       "priority": 50,
-      "pool": [
-        "double_kill_1",
-        "double_shot_1",
-        "female_pack/cu_danh_sam_set_f"
-      ]
+      "pool": []
     },
     {
       "id": "streak_3",
       "priority": 50,
-      "pool": [
-        "triple_kill_1",
-        "triple_shot_1"
-      ]
+      "pool": []
     },
     {
       "id": "random_meme",
       "priority": 50,
       "pool": [
         "female_pack/chay_the_nho_f",
-        "female_pack/xinh_trai_co_gi_sai_f",
-        "female_pack/qua_tang_mien_phi_f",
-        "female_pack/an_sung_troi_ban_f",
-        "female_pack/toi_cong_chuyen_f",
-        "female_pack/nhu_dieu_dut_day_f",
-        "female_pack/duong_cau_lam_tho_f",
-        "female_pack/con_mua_ban_thang_f",
-        "female_pack/man_nhan_f",
-        "female_pack/dep_nhu_mo_f",
-        "female_pack/sao_ma_hay_vay_troi_f"
+        "female_pack/man_nhan_f"
       ]
     },
     {
       "id": "first_point",
       "priority": 40,
       "pool": [
-        "game_on_1",
-        "game_on_2",
         "lets_dance_1",
         "here_we_go_1",
-        "mo_man_lyria_1",
         "mo_man_lyria_2",
         "mo_man_lyria_3",
         "g14_mo_hang_may_man",
@@ -1207,18 +841,7 @@
       "priority": 10,
       "pool": [
         "female_pack/chay_the_nho_f",
-        "female_pack/xinh_trai_co_gi_sai_f",
-        "female_pack/qua_tang_mien_phi_f",
-        "female_pack/an_sung_troi_ban_f",
-        "female_pack/toi_cong_chuyen_f",
-        "female_pack/nhu_dieu_dut_day_f",
-        "female_pack/duong_cau_lam_tho_f",
-        "female_pack/con_mua_ban_thang_f",
         "female_pack/man_nhan_f",
-        "female_pack/dep_nhu_mo_f",
-        "female_pack/sao_ma_hay_vay_troi_f",
-        "g2_hahaha",
-        "g2_hahahaha",
         "g11_nhin_doi_chan_thoan_thoat_vai",
         "g11_dap_cau_do_bang_niem_tin_a",
         "g12_cam_vot_thi_oai_ma_danh_ngu",
@@ -1227,7 +850,6 @@
         "g12_chay_loang_qua_loang_quang",
         "g12_oi_doi_oi",
         "g12_diem_so_10_0_roi_con_tiec_nuoi_chi",
-        "g15_choi_ky_di_tinh_an_gian_ha_buoi",
         "g17_cay_chua_cay_thi_uong_nuoc",
         "g17_danh_nhu_chua_tung_duoc_danh",
         "g17_ha_hahaha"
@@ -1237,24 +859,17 @@
       "id": "first_point_of_match",
       "priority": 0,
       "pool": [
-        "game_on_1",
-        "game_on_2",
         "lets_dance_1",
         "here_we_go_1",
-        "mo_man_lyria_1",
         "mo_man_lyria_2",
         "mo_man_lyria_3",
-        "g1_vao_san",
         "g1_ai_so_thi_di_ve",
         "g2_tran_dau_bat_dau",
         "g11_san_cau_long_bung_no_day",
         "g11_ai_da_san_sang_cho_cu_smash",
         "g12_nao_xem_ai_thang_nha",
-        "g14_vao_san_la_phai_co_lua",
-        "g14_ai_so_thi_di_ve_ne",
         "g14_tran_nay_cang_a_nha",
         "g15_group_minh_du_tu_chua_vay_may_cha",
-        "g15_nhac_dao_dau",
         "g17_bat_dau_nha"
       ]
     }

@@ -24,12 +24,21 @@ class SoundDef {
   /// Made on the phone (Sound Library), not bundled.
   final bool custom;
 
+  /// Whose voice it is, for the voice switches in Settings: [HypeVoice.maiAnh],
+  /// [HypeVoice.lyriaNu], or anything else ([HypeVoice.other], the default).
+  final String voice;
+
+  /// Rude-but-friendly line ("Hay vãi lon!"): plays only in spicy mode.
+  final bool spicy;
+
   const SoundDef({
     required this.id,
     required this.text,
     required this.display,
     this.glow,
     this.custom = false,
+    this.voice = HypeVoice.other,
+    this.spicy = false,
   });
 
   factory SoundDef.fromJson(Map<String, dynamic> j, {bool custom = false}) => SoundDef(
@@ -38,6 +47,8 @@ class SoundDef {
     display: (j['display'] ?? j['text'] ?? j['id']).toString(),
     glow: j['glow']?.toString(),
     custom: custom,
+    voice: HypeVoice.normalize(j['voice']?.toString()),
+    spicy: j['spicy'] == true,
   );
 
   Map<String, dynamic> toJson() => {
@@ -45,6 +56,8 @@ class SoundDef {
     'display': display,
     'text': text,
     if (glow != null) 'glow': glow,
+    if (voice != HypeVoice.other) 'voice': voice,
+    if (spicy) 'spicy': true,
   };
 
   /// A sound known only from an MP3 file: its name is all there is.
@@ -52,6 +65,22 @@ class SoundDef {
     final words = id.split('/').last.replaceAll(RegExp(r'_\d+$'), '').replaceAll('_', ' ');
     return SoundDef(id: id, text: words, display: words.toUpperCase(), custom: true);
   }
+}
+
+/// The voices a hype line can be in; each has a switch in Settings.
+class HypeVoice {
+  /// ElevenLabs "Mai Anh" — the app's own voice, used for every new line.
+  static const maiAnh = 'mai_anh';
+
+  /// Lyria packs 12/17/19/20: the cheeky young female voice.
+  static const lyriaNu = 'lyria_nu';
+
+  /// Every other pack, recording and TTS line.
+  static const other = 'khac';
+
+  static const all = [maiAnh, lyriaNu, other];
+
+  static String normalize(String? v) => all.contains(v) ? v! : other;
 }
 
 class TriggerDef {
@@ -287,6 +316,22 @@ class SoundLibraryService extends GetxService {
     return out;
   }
 
+  /// What a trigger plays in a match: [pool], minus spicy lines unless
+  /// [spicy], keeping only the [voices] switched on. If no line of those
+  /// voices is left, every voice is allowed again — a moment never goes
+  /// silent because of the voice switches (spicy mode still holds).
+  List<String> playablePool(String triggerId, {Set<String> voices = const {...HypeVoice.all}, bool spicy = false}) {
+    final clean = [
+      for (final id in pool(triggerId))
+        if (spicy || !(sound(id)?.spicy ?? false)) id,
+    ];
+    final voiced = [
+      for (final id in clean)
+        if (voices.contains(sound(id)?.voice ?? HypeVoice.other)) id,
+    ];
+    return voiced.isNotEmpty ? voiced : clean;
+  }
+
   /// Triggers a sound is in (whether or not it is switched off).
   Set<String> triggersOf(String id) => {
     for (final t in _triggers)
@@ -375,6 +420,8 @@ class SoundLibraryService extends GetxService {
       display: _displayOf(text, display),
       glow: glow ?? old.glow,
       custom: true,
+      voice: old.voice,
+      spicy: old.spicy,
     );
     await _save();
     VoiceClipService.maybe?.prepare(text.trim());

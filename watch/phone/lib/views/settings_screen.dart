@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../services/music_service.dart';
 import '../services/audio_settings.dart';
+import '../services/sound_library_service.dart' show HypeVoice;
 import '../services/tts_service.dart';
 import '../services/sound_check_service.dart';
 import '../services/display_settings.dart';
@@ -191,6 +192,34 @@ class SettingsScreen extends StatelessWidget {
               value: audio.shortScore.value,
               onChanged: audio.setShortScore,
               activeColor: Colors.amber,
+            ),
+          )),
+      _div(),
+      for (final (voice, title, subtitle) in const [
+        (HypeVoice.maiAnh, 'Hype voice: Mai Anh', 'The app\'s own voice (ElevenLabs)'),
+        (HypeVoice.lyriaNu, 'Hype voice: Lyria nữ', 'Cheeky young girl (Lyria packs 12/17/19/20)'),
+        (HypeVoice.other, 'Hype voice: others', 'Every other pack and recording'),
+      ]) ...[
+        Obx(() => _tile(
+              icon: Icons.record_voice_over,
+              title: title,
+              subtitle: subtitle,
+              trailing: Switch(
+                value: audio.hypeVoices.contains(voice),
+                onChanged: (v) => audio.setHypeVoice(voice, v),
+                activeColor: Colors.amber,
+              ),
+            )),
+        _div(),
+      ],
+      Obx(() => _tile(
+            icon: Icons.local_fire_department,
+            title: 'Spicy hype',
+            subtitle: 'Lines for a court of friends ("Hay vãi lon!")',
+            trailing: Switch(
+              value: audio.spicyHype.value,
+              onChanged: audio.setSpicyHype,
+              activeColor: Colors.deepOrange,
             ),
           )),
       _div(),

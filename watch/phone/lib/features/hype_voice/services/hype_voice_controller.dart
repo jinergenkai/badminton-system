@@ -426,8 +426,15 @@ class HypeVoiceController extends GetxController {
     // Merge pools (deduped, order-preserved) across all matched triggers.
     final List<String> mergedPool = [];
     final Set<String> seen = {};
+    final settings = AudioSettings.maybe;
     for (final id in triggerIds) {
-      for (final f in _lib?.pool(id) ?? const <String>[]) {
+      final pool = _lib?.playablePool(
+            id,
+            voices: settings?.hypeVoices.toSet() ?? const {...HypeVoice.all},
+            spicy: settings?.spicyHype.value ?? false,
+          ) ??
+          const <String>[];
+      for (final f in pool) {
         if (seen.add(f)) mergedPool.add(f);
       }
     }

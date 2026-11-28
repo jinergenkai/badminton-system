@@ -78,6 +78,58 @@ void main() {
     expect(l.pool('streak_5_plus'), ['godlike_1']);
   });
 
+  group('playablePool: voices and spicy mode', () {
+    SoundLibraryService voiced() => SoundLibraryService()
+      ..applyDefaults({
+        'sounds': [
+          {'id': 'ma_hay', 'text': 'Hay vậy bà!', 'voice': 'mai_anh'},
+          {'id': 'ma_vai', 'text': 'Hay vãi lon!', 'voice': 'mai_anh', 'spicy': true},
+          {'id': 'g12_nin', 'text': 'Nín!', 'voice': 'lyria_nu'},
+          {'id': 'old_en', 'text': 'Godlike!'},
+          {'id': 'weird', 'text': 'x', 'voice': 'nobody'},
+        ],
+        'triggers': [
+          {'id': 'any', 'priority': 0, 'pool': ['ma_hay', 'ma_vai', 'g12_nin', 'old_en', 'weird']},
+          {'id': 'only_old', 'priority': 0, 'pool': ['old_en']},
+          {'id': 'only_spicy', 'priority': 0, 'pool': ['ma_vai']},
+        ],
+      });
+
+    test('defaults: every voice, no spicy line', () {
+      expect(voiced().playablePool('any'), ['ma_hay', 'g12_nin', 'old_en', 'weird']);
+    });
+
+    test('unknown voice counts as "others"', () {
+      expect(voiced().sound('weird')!.voice, HypeVoice.other);
+    });
+
+    test('spicy mode adds the rude lines', () {
+      expect(voiced().playablePool('any', spicy: true), ['ma_hay', 'ma_vai', 'g12_nin', 'old_en', 'weird']);
+    });
+
+    test('voice switches keep only the chosen voices', () {
+      expect(voiced().playablePool('any', voices: {HypeVoice.maiAnh}), ['ma_hay']);
+      expect(voiced().playablePool('any', voices: {HypeVoice.maiAnh, HypeVoice.lyriaNu}, spicy: true),
+          ['ma_hay', 'ma_vai', 'g12_nin']);
+    });
+
+    test('no line in the chosen voices: all voices again, never silent', () {
+      expect(voiced().playablePool('only_old', voices: {HypeVoice.maiAnh}), ['old_en']);
+      expect(voiced().playablePool('any', voices: const {}), ['ma_hay', 'g12_nin', 'old_en', 'weird']);
+    });
+
+    test('spicy stays off even when it is the only line', () {
+      expect(voiced().playablePool('only_spicy'), isEmpty);
+    });
+
+    test('voice and spicy survive the JSON round trip', () {
+      final d = voiced().sound('ma_vai')!;
+      expect(d.toJson(), containsPair('voice', 'mai_anh'));
+      expect(d.toJson(), containsPair('spicy', true));
+      expect(voiced().sound('old_en')!.toJson().containsKey('voice'), isFalse);
+    });
+  });
+
   test('bundled beats TTS', () async {
     final l = lib()..applyUser({'custom': [{'id': 'u_x', 'text': 'x'}]});
     expect((await l.source('double_kill_1'))!.kind, SoundKind.asset);
