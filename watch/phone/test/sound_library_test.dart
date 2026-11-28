@@ -143,7 +143,11 @@ void main() {
         expect(ids, contains(p), reason: '${t['id']} names an unknown sound');
       }
     }
+    // Flutter bundles only the folders pubspec names, not their subfolders.
+    final pubspec = File('pubspec.yaml').readAsLinesSync().map((l) => l.trim()).join('\n') + '\n';
     for (final s in sounds) {
+      final dir = 'assets/audio/hype/${s.id.contains('/') ? '${s.id.substring(0, s.id.lastIndexOf('/'))}/' : ''}';
+      expect(pubspec, contains('- $dir\n'), reason: '$dir not in pubspec.yaml: ${s.id} would fall back to TTS');
       expect(File('assets/audio/hype/${s.id}.mp3').existsSync(), isTrue, reason: '${s.id}.mp3 missing');
       if (s.voice == HypeVoice.maiAnh) {
         expect(File('audio_src/hype/${s.id}.mp3').existsSync(), isTrue, reason: '${s.id}: no source to re-level');

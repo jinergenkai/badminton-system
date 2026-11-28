@@ -42,6 +42,7 @@ flutter:
   assets:
     - assets/audio/hype/
     - assets/audio/hype/female_pack/
+    - assets/audio/hype/mai_anh/
     - assets/audio/music/
     - assets/audio/score/vi/
     - assets/audio/score/en/
